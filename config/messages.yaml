@@ -1,0 +1,38 @@
+# Bot 回复话术配置
+# 所有用户可见的文案集中在此处，便于多语言维护
+
+registration:
+  welcome: |
+    欢迎！请提交您的马来西亚身份证号码（格式：XXXXXX-XX-XXXX）以完成注册。
+  ic_invalid: |
+    身份证格式不正确，请重新输入（格式：XXXXXX-XX-XXXX）。
+  ic_duplicate: |
+    此身份证号码已注册过，请联系客服。
+  success: |
+    注册成功！请发送您的消费收据截图。
+
+receipt:
+  not_registered: |
+    请先完成注册，发送您的身份证号码（格式：XXXXXX-XX-XXXX）开始注册。
+  processing: |
+    正在识别收据，请稍候...
+  qualified: |
+    ✅ 恭喜！您的收据已通过验证。
+    单据号：{receipt_no}
+    品牌：{brand}
+    金额：RM {amount}
+  not_qualified: |
+    ❌ 抱歉，您的收据未能通过验证。
+    原因：{reason}
+  ocr_failed: |
+    收据识别失败，请确保图片清晰后重新发送。
+  daily_limit_exceeded: |
+    您今日已达到最大提交次数（{max}次），请明日再试。
+  low_confidence: |
+    收据图片质量较低，识别结果可能不准确。已记录，等待人工审核。
+
+errors:
+  service_unavailable: |
+    系统暂时不可用，请稍后再试。
+  unknown: |
+    处理失败，请重试或联系客服。

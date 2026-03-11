@@ -1,0 +1,70 @@
+# 核心业务配置 - 所有模块的单一配置来源
+# 修改此文件即可调整业务规则，无需改代码
+
+eligibility:
+  # 品牌白名单（模糊匹配，不区分大小写）
+  eligible_brands:
+    - "Samsung"
+    - "Apple"
+    - "Dyson"
+    - "Panasonic"
+    - "Sony"
+  # 最低消费门槛（马币 RM）
+  minimum_amount: 500.00
+  # 品牌模糊匹配阈值（百分比），低于此值视为不匹配
+  brand_match_threshold: 85
+
+ocr:
+  # EasyOCR 支持的语言列表
+  languages:
+    - "en"
+    - "ms"
+  # OCR 置信度门槛，低于此值的识别结果会被标注为低可信度
+  confidence_threshold: 0.5
+  # OpenCV 图像预处理选项
+  preprocessing:
+    grayscale: true
+    enhance_contrast: true  # CLAHE 自适应直方图均衡
+    denoise: true           # 非局部均值去噪
+
+bot:
+  # 用户会话超时时间（分钟），超时后需重新注册
+  session_timeout_minutes: 30
+  # 每个用户每天最多提交收据次数（防刷）
+  max_receipts_per_day: 5
+  # OCR 服务请求超时时间（秒）
+  ocr_timeout_seconds: 30
+  # OCR 请求失败时的最大重试次数
+  ocr_max_retries: 3
+
+services:
+  # Python OCR 服务地址
+  ocr_service_url: "http://localhost:8000"
+
+excel:
+  # Excel 文件路径（相对于项目根目录）
+  file_path: "data/excel/records.xlsx"
+  sheets:
+    registrations:
+      name: "Registrations"
+      columns:
+        - "序号"
+        - "注册时间"
+        - "手机号码"
+        - "身份证号码"
+        - "状态"
+    receipts:
+      name: "Receipts"
+      columns:
+        - "序号"
+        - "提交时间"
+        - "手机号码"
+        - "身份证号码"
+        - "单据号"
+        - "识别品牌"
+        - "匹配品牌"
+        - "消费金额(RM)"
+        - "是否合格"
+        - "不合格原因"
+        - "OCR置信度"
+        - "图片路径"
