@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-WhatsApp 订单自动化处理系统：通过 WhatsApp 收集用户注册信息和消费收据，OCR 识别收据后验证资格，写入 Excel。
+WhatsApp 收据 OCR 识别系统：通过 WhatsApp 接收用户发送的消费收据图片，OCR 识别后静默写入 Excel（品牌、金额、是否合格）。Bot 不回复任何消息。
 
 ## 常用命令
 
@@ -84,12 +84,12 @@ docker compose logs -f                                 # 查看全部日志
 
 | 服务 | 技术 | 职责 |
 |------|------|------|
-| `wa-bot/` | Node.js + whatsapp-web.js | 用户对话状态机、IC 验证、图片下载 |
+| `wa-bot/` | Node.js + whatsapp-web.js | 接收图片、调用 OCR（静默，不回复） |
 | `ocr-service/` | Python FastAPI + EasyOCR | 图像识别、字段提取、Excel 写入 |
 
 **通信接口：**
-- `POST /data/register` — 注册用户（检查重复 + 写 Sheet1）
-- `POST /ocr/receipt` — 处理收据图片（OCR + 验证 + 写 Sheet2）
+- `POST /data/register` — 注册用户（保留，暂未使用）
+- `POST /ocr/receipt` — 处理收据图片（OCR + 验证 + 写 Sheet2），`ic_number` 为可选字段，返回值含 `raw_text` 原始 OCR 文本
 - `GET /health` — 健康检查
 
 **数据输出：**
@@ -101,7 +101,8 @@ docker compose logs -f                                 # 查看全部日志
 
 **AWS 部署：** 详见 `deploy/README.md`
 - CloudFormation 一键部署（`deploy/cloudformation.yaml`），EC2 启动时自动拉代码、构建镜像、启动服务
-- **快捷管理脚本**（`deploy/manage.sh`）：`deploy` / `status` / `stop` / `start` / `ssh` / `logs` / `destroy` / `cost`
+- **快捷管理脚本**（`deploy/manage.sh`）：`deploy` / `status` / `stop` / `start` / `ssh` / `logs` / `update` / `destroy` / `cost`
+- **CI/CD**（`.github/workflows/deploy.yml`）：push to main 自动通过 SSM SendCommand 远程部署，也支持 `manage.sh update` 手动触发
 - 最低配置 t3.medium（~$34/月），推荐 t3.large（~$67/月）；停机时仅 EBS 计费（~$4.1/月）
 - SSM Session Manager 管理（无需 SSH key / 22 端口）
 - **数据卷 `DeletionPolicy: Retain`**：Stack 删除后 EBS 仍保留并持续计费，需手动清理
@@ -122,17 +123,13 @@ docker compose logs -f                                 # 查看全部日志
 - `isReconnecting` 标志防止 `disconnected` 事件重复触发导致并发重连
 - 达到重连上限后调用 `process.exit(1)`，由 PM2 重启
 
-### 会话重置关键词（`messageHandler.js`）
+### 消息处理流程（`messageHandler.js`）
 
-- 触发词：`['重新注册', '重新开始', 'restart', 'reset', 'start']`（`includes` 匹配，不区分大小写）
-- **仅在 `WAITING_RECEIPT` 状态有效**；`DONE` 状态未处理重置（见下方已知 bug）
-- 重置效果：`state → WAITING_IC`，`ic → null`，**`receiptCount` 不清空**（今日计数保留）
-
-### 每日收据上限逻辑（`receiptHandler.js`）
-
-- 双重检查：**提交前**检查上限（超限直接拒绝）→ OCR 处理 → **提交后再次检查**（刚好达上限则 `state → DONE`）
-- 上限计数存在 session 的 `receiptCount` 字段，跨天自动重置（不需重启）
-- `DONE` 状态用户当前**无法**通过关键词重新开始（见下方已知 bug）
+- **静默模式**：Bot 不回复任何消息
+- 收到图片消息 → 调用 `handleReceipt` 进行 OCR 处理 → 结果写入 Excel → 不回复
+- 收到其他消息（文本、语音等）→ 静默忽略
+- 异常时只写日志，不回复用户
+- 无状态机，无注册流程，无会话依赖
 
 ### OCR 资格验证流程（`main.py` `_check_eligibility`）
 
@@ -144,19 +141,11 @@ docker compose logs -f                                 # 查看全部日志
 
 验证失败**不抛异常**，返回 `qualified=False` + `disqualify_reason` 字符串，结果仍写入 Excel（Sheet2）供人工复核。
 
-### ⚠ 已知 Bug
-
-- **DONE 状态无法重置**：`messageHandler.js` 的 `DONE` case 回复了提示语，但未执行状态重置逻辑。用户达到每日上限后，当天无法通过重置关键词重新开始。需在 `DONE` case 中添加与 `WAITING_RECEIPT` 相同的重置检测逻辑。
-
 ## 关键模块
 
-- **`wa-bot/src/sessionManager.js`** — 核心状态机，内存 Map 存储用户会话。状态流转：`WAITING_IC → WAITING_RECEIPT → DONE`。
-  - Session 完整结构：`{ phone, ic, state, createdAt, updatedAt, receiptCount, receiptCountDate }`
-  - `receiptCountDate`（格式 `YYYY-MM-DD`）用于跨天自动重置计数，无需重启
-  - 清理任务每 10 分钟运行一次，TTL 读自 `config.bot.session_timeout_minutes`
-  - **重启后所有会话丢失**，如需持久化需改用 Redis/SQLite
+- **`wa-bot/src/sessionManager.js`** — ⚠️ 已弃用，保留文件未删除。当前流程无状态机，不再使用会话管理。
 
-- **`wa-bot/src/ocrClient.js`** — HTTP 客户端，带指数退避重试。
+- **`wa-bot/src/ocrClient.js`** — HTTP 客户端，带指数退避重试。`icNumber` 现为可选参数。
   - 重试次数由 `config.bot.ocr_max_retries` 控制
   - 等待公式：`min(500ms * 2^attempt, 8000ms)`（首次失败等 500ms，上限 8s）
   - HTTP 4xx 错误不重试（`err.response.status < 500` 直接抛出）
@@ -173,7 +162,7 @@ docker compose logs -f                                 # 查看全部日志
 
 - **`config/config.yaml`** — 业务规则：品牌白名单、最低消费金额（默认 RM500）、模糊匹配阈值、会话超时、每日提交上限
   - `ocr.confidence_threshold: 0.5` — 低于此置信度的 OCR 文字块被丢弃，影响识别精度
-- **`config/messages.yaml`** — 所有对用户可见的话术，支持 `{变量}` 占位符，修改后重启生效
+- **`config/messages.yaml`** — 当前未使用（Bot 静默模式不发送消息），保留供后续恢复回复功能
 
 修改品牌白名单示例：
 ```yaml
@@ -182,19 +171,13 @@ eligibility:
   minimum_amount: 500.00
 ```
 
-**⚠ 配置加载耦合警告：** Node.js 侧存在 6 个独立的配置加载函数（各自硬编码路径）：
-- `_getConfig()`：`ocrClient.js`、`receiptHandler.js`、`sessionManager.js`（3 处）
-- `_getMessages()`：`messageHandler.js`、`receiptHandler.js`、`registrationHandler.js`（3 处）
-
-调整目录结构或配置文件名时需逐一修改。后续可考虑抽取为 `wa-bot/src/config.js` 统一加载。
+**⚠ 配置加载耦合警告：** Node.js 侧 `ocrClient.js` 中 `_getConfig()` 硬编码了配置路径，调整目录结构时需同步修改。
 
 ## 扩展指引
 
-**增加新的对话状态：**
-1. `sessionManager.js` 的 `SESSION_STATE` 增加新状态
-2. `messageHandler.js` 的 `switch` 增加新 `case`
-3. 新建 `handlers/xxxHandler.js`
-4. 注意：`WAITING_RECEIPT` 状态在处理图片前优先检测重置关键词，新状态若需类似逻辑需手动在 `case` 内复制该检测逻辑
+**增加新的消息类型处理：**
+1. `messageHandler.js` 中增加新的消息类型判断分支
+2. 新建 `handlers/xxxHandler.js` 实现处理逻辑
 
 **增加 Excel 新列：**
 1. `config/config.yaml` 的 `excel.sheets.receipts.columns` 添加列名

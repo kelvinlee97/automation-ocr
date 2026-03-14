@@ -97,7 +97,7 @@ async def process_receipt(request: ReceiptOCRRequest):
         # 5. 写入 Excel
         await write_receipt(
             phone=request.phone,
-            ic_number=request.ic_number,
+            ic_number=request.ic_number or "",
             receipt_no=extracted.receipt_no,
             raw_brand=extracted.raw_brand,
             matched_brand=extracted.matched_brand,
@@ -117,6 +117,7 @@ async def process_receipt(request: ReceiptOCRRequest):
             confidence=extracted.confidence,
             disqualify_reason=disqualify_reason,
             image_path=image_path,
+            raw_text=extracted.raw_text,
         )
 
     except Exception as e:

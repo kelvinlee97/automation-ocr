@@ -1,105 +1,44 @@
 /**
- * 收据处理器
- * 下载图片 → base64 → OCR → 格式化回复
+ * 收据处理器（静默模式）
+ * 下载图片 → base64 → OCR → 写 Excel，全程不回复用户
  */
 
 const { processReceipt } = require('../ocrClient');
-const { checkReceiptLimit, incrementReceiptCount, updateSession, SESSION_STATE } = require('../sessionManager');
 const logger = require('../utils/logger');
-
-let _messages = null;
-let _config = null;
-
-function _getMessages() {
-	if (!_messages) {
-		const yaml = require('js-yaml');
-		const fs = require('fs');
-		const path = require('path');
-		_messages = yaml.load(fs.readFileSync(
-			path.join(__dirname, '../../../config/messages.yaml'), 'utf8'
-		));
-	}
-	return _messages;
-}
-
-function _getConfig() {
-	if (!_config) {
-		const yaml = require('js-yaml');
-		const fs = require('fs');
-		const path = require('path');
-		_config = yaml.load(fs.readFileSync(
-			path.join(__dirname, '../../../config/config.yaml'), 'utf8'
-		));
-	}
-	return _config;
-}
 
 
 /**
- * 处理用户发送的收据图片
+ * 处理用户发送的收据图片（静默，不回复任何消息）
  * @param {import('whatsapp-web.js').Message} message
- * @param {object} session
+ * @param {string} phone - 用户手机号
  */
-async function handleReceipt(message, session) {
-	const messages = _getMessages();
-	const config = _getConfig();
-
-	// 检查每日提交上限
-	const limitCheck = checkReceiptLimit(session.phone);
-	if (!limitCheck.allowed) {
-		const reply = messages.receipt.daily_limit_exceeded
-			.replace('{max}', config.bot.max_receipts_per_day);
-		await message.reply(reply);
-		return;
-	}
-
-	// 提示用户等待处理
-	await message.reply(messages.receipt.processing);
-
+async function handleReceipt(message, phone) {
 	// 下载图片并转为 base64
 	let imageBase64;
 	try {
 		imageBase64 = await _downloadMessageMedia(message);
 	} catch (err) {
-		logger.error('图片下载失败', { phone: session.phone, error: err.message });
-		await message.reply(messages.receipt.ocr_failed);
+		logger.error('图片下载失败', { phone, error: err.message });
 		return;
 	}
 
 	// 调用 OCR 服务
 	let result;
 	try {
-		result = await processReceipt({
-			imageBase64,
-			phone: session.phone,
-			icNumber: session.ic,
-		});
+		result = await processReceipt({ imageBase64, phone });
 	} catch (err) {
-		logger.error('OCR 服务调用失败', { phone: session.phone, error: err.message });
-		await message.reply(messages.errors.service_unavailable);
+		logger.error('OCR 服务调用失败', { phone, error: err.message });
 		return;
 	}
 
 	// OCR 服务内部失败（非网络错误）
 	if (!result.success) {
-		logger.warn('OCR 处理失败', { phone: session.phone, error: result.error });
-		await message.reply(messages.receipt.ocr_failed);
+		logger.warn('OCR 处理失败', { phone, error: result.error });
 		return;
 	}
 
-	// 更新提交计数，若已达上限则将状态置为终态 DONE
-	incrementReceiptCount(session.phone);
-	const limitAfter = checkReceiptLimit(session.phone);
-	if (!limitAfter.allowed) {
-		updateSession(session.phone, { state: SESSION_STATE.DONE });
-	}
-
-	// 格式化回复
-	const reply = _formatReceiptReply(result, messages);
-	await message.reply(reply);
-
 	logger.info('收据处理完成', {
-		phone: session.phone,
+		phone,
 		qualified: result.qualified,
 		brand: result.brand,
 		amount: result.amount,
@@ -121,22 +60,6 @@ async function _downloadMessageMedia(message) {
 	}
 
 	return media.data; // whatsapp-web.js 返回的 data 已是 base64
-}
-
-
-/**
- * 根据 OCR 结果生成用户回复文本
- */
-function _formatReceiptReply(result, messages) {
-	if (result.qualified) {
-		return messages.receipt.qualified
-			.replace('{receipt_no}', result.receipt_no || '未识别')
-			.replace('{brand}', result.brand || '未识别')
-			.replace('{amount}', result.amount ? result.amount.toFixed(2) : '未识别');
-	}
-
-	return messages.receipt.not_qualified
-		.replace('{reason}', result.disqualify_reason || '未知原因');
 }
 
 

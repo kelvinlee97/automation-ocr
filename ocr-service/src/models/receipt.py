@@ -9,7 +9,7 @@ class ReceiptOCRRequest(BaseModel):
     """OCR 识别请求：base64 编码的图片"""
     image_base64: str = Field(..., description="Base64 编码的收据图片")
     phone: str = Field(..., description="用户手机号")
-    ic_number: str = Field(..., description="用户身份证号")
+    ic_number: Optional[str] = Field(None, description="用户身份证号（可选）")
 
 
 class ExtractedReceiptData(BaseModel):
@@ -32,4 +32,5 @@ class ReceiptProcessResult(BaseModel):
     confidence: float = 0.0
     disqualify_reason: Optional[str] = None
     image_path: Optional[str] = None
+    raw_text: Optional[str] = None           # 完整原始 OCR 文本，供前端展示
     error: Optional[str] = None

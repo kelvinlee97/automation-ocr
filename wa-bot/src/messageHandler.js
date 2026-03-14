@@ -1,26 +1,11 @@
 /**
  * 消息路由分发器
- * 根据消息类型（文本/图片）和会话状态，分发到对应的处理器
+ * 收到图片 → 静默 OCR 处理（不回复）
+ * 收到其他消息 → 忽略
  */
 
-const { SESSION_STATE, getOrCreateSession, updateSession } = require('./sessionManager');
-const { handleRegistration } = require('./handlers/registrationHandler');
 const { handleReceipt } = require('./handlers/receiptHandler');
 const logger = require('./utils/logger');
-
-let _messages = null;
-
-function _getMessages() {
-	if (!_messages) {
-		const yaml = require('js-yaml');
-		const fs = require('fs');
-		const path = require('path');
-		_messages = yaml.load(fs.readFileSync(
-			path.join(__dirname, '../../config/messages.yaml'), 'utf8'
-		));
-	}
-	return _messages;
-}
 
 
 /**
@@ -33,65 +18,22 @@ async function handleMessage(message) {
 	if (chat.isGroup) return;
 
 	const phone = message.from;
-	const messages = _getMessages();
-	const session = getOrCreateSession(phone);
 
 	logger.debug('收到消息', {
 		phone,
 		type: message.type,
-		state: session.state,
 		body: message.body?.slice(0, 50),
 	});
 
 	try {
-		// 根据会话状态路由
-		switch (session.state) {
-			case SESSION_STATE.WAITING_IC:
-				// 等待注册：只接受文本
-				if (message.type === 'chat') {
-					await handleRegistration(message, session);
-				} else {
-					await message.reply(messages.registration.welcome);
-				}
-				break;
-
-			case SESSION_STATE.WAITING_RECEIPT:
-				// 注册完成：接受图片，文本给提示
-				if (message.hasMedia && message.type === 'image') {
-					await handleReceipt(message, session);
-				} else if (message.type === 'chat') {
-					// 用户可能重新输入 IC，检测关键词重置
-					if (_isResetKeyword(message.body)) {
-						// 重置状态机到初始状态，再回复欢迎语
-						updateSession(phone, { state: SESSION_STATE.WAITING_IC, ic: null });
-						await message.reply(messages.registration.welcome);
-					} else {
-						await message.reply(messages.receipt.send_photo_prompt);
-					}
-				}
-				break;
-
-			case SESSION_STATE.DONE:
-				await message.reply(messages.status.done_prompt);
-				break;
-
-			default:
-				await message.reply(messages.registration.welcome);
+		if (message.hasMedia && message.type === 'image') {
+			// 图片消息 → 静默 OCR 处理
+			await handleReceipt(message, phone);
 		}
+		// 非图片消息（文本、语音等）→ 静默忽略
 	} catch (err) {
 		logger.error('消息处理异常', { phone, error: err.message, stack: err.stack });
-		await message.reply(messages.errors.unknown).catch(() => {});
 	}
-}
-
-
-/**
- * 检测是否是重置流程的关键词
- */
-function _isResetKeyword(text) {
-	if (!text) return false;
-	const keywords = ['重新注册', '重新开始', 'restart', 'reset', 'start'];
-	return keywords.some(kw => text.toLowerCase().includes(kw.toLowerCase()));
 }
 
 

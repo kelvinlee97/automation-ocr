@@ -23,20 +23,26 @@ function _getConfig() {
 
 /**
  * 调用 OCR 服务处理收据图片
- * @param {{ imageBase64: string, phone: string, icNumber: string }} params
+ * @param {{ imageBase64: string, phone: string, icNumber?: string }} params
  * @returns {Promise<import('../src/models/receipt').ReceiptProcessResult>}
  */
-async function processReceipt({ imageBase64, phone, icNumber }) {
+async function processReceipt({ imageBase64, phone, icNumber = null }) {
 	const config = _getConfig();
 	// 环境变量优先（Docker 部署时注入），兜底读 config.yaml
 	const baseUrl = process.env.OCR_SERVICE_URL || config.services.ocr_service_url;
 	const timeoutMs = config.bot.ocr_timeout_seconds * 1000;
 	const maxRetries = config.bot.ocr_max_retries;
 
+	// 构建请求体，ic_number 仅在有值时才传
+	const requestBody = { image_base64: imageBase64, phone };
+	if (icNumber) {
+		requestBody.ic_number = icNumber;
+	}
+
 	return _requestWithRetry(
 		() => axios.post(
 			`${baseUrl}/ocr/receipt`,
-			{ image_base64: imageBase64, phone, ic_number: icNumber },
+			requestBody,
 			{ timeout: timeoutMs }
 		),
 		maxRetries,

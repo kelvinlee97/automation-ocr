@@ -2,7 +2,7 @@
 # ================================================================
 # AWS 快捷管理脚本 — automation-ocr
 # 用法: deploy/manage.sh <子命令>
-# 子命令: setup-token | deploy | status | stop | start | ssh | logs | destroy | cost
+# 子命令: setup-token | deploy | status | stop | start | ssh | logs | update | destroy | cost
 # ================================================================
 set -euo pipefail
 export AWS_PAGER=""
@@ -442,6 +442,77 @@ cmd_logs() {
     exit 1
 }
 
+cmd_update() {
+    _log_step "远程更新代码并重启服务"
+
+    local instance_id
+    instance_id="$(_require_instance)"
+
+    local state
+    state="$(_get_instance_state "$instance_id")"
+    if [[ "$state" != "running" ]]; then
+        _log_error "实例未运行（当前状态: $state），请先执行: $0 start"
+        exit 1
+    fi
+
+    _log_info "通过 SSM 执行: git pull + docker compose up -d --build"
+
+    local command_id
+    command_id=$(aws ssm send-command \
+        --instance-ids "$instance_id" \
+        --document-name "AWS-RunShellScript" \
+        --timeout-seconds 300 \
+        --parameters 'commands=["cd /opt/automation-ocr && git pull origin main && docker compose up -d --build 2>&1"]' \
+        --region "$REGION" \
+        --query "Command.CommandId" \
+        --output text)
+
+    _log_info "SSM Command ID: $command_id"
+    _log_info "等待部署完成..."
+
+    # 轮询等待命令完成（最长 5 分钟）
+    local max_wait=300
+    local waited=0
+    while [[ $waited -lt $max_wait ]]; do
+        local cmd_status
+        cmd_status=$(aws ssm get-command-invocation \
+            --command-id "$command_id" \
+            --instance-id "$instance_id" \
+            --region "$REGION" \
+            --query "Status" \
+            --output text 2>/dev/null || echo "Pending")
+
+        if [[ "$cmd_status" == "Success" ]]; then
+            echo ""
+            _log_info "部署成功！输出:"
+            echo "---"
+            aws ssm get-command-invocation \
+                --command-id "$command_id" \
+                --instance-id "$instance_id" \
+                --region "$REGION" \
+                --query "StandardOutputContent" \
+                --output text
+            echo "---"
+            return
+        elif [[ "$cmd_status" == "Failed" || "$cmd_status" == "Cancelled" || "$cmd_status" == "TimedOut" ]]; then
+            _log_error "部署失败（状态: $cmd_status）"
+            aws ssm get-command-invocation \
+                --command-id "$command_id" \
+                --instance-id "$instance_id" \
+                --region "$REGION" \
+                --query "StandardErrorContent" \
+                --output text 2>/dev/null
+            exit 1
+        fi
+
+        sleep 5
+        waited=$((waited + 5))
+    done
+
+    _log_error "等待部署结果超时（${max_wait}s）"
+    exit 1
+}
+
 cmd_destroy() {
     _log_step "删除 Stack: $STACK_NAME"
 
@@ -576,6 +647,7 @@ _usage() {
     echo "  start      启动 EC2 实例（恢复服务）"
     echo "  ssh        通过 SSM Session Manager 连接实例"
     echo "  logs       查看容器日志（默认 wa-bot）"
+    echo "  update     远程更新代码并重启服务（git pull + docker compose rebuild）"
     echo "  destroy    删除 Stack（需二次确认）"
     echo "  cost       显示当前状态预估月费"
     echo ""
@@ -594,6 +666,7 @@ _usage() {
     echo "  $0 stop                            # 暂停服务（节省费用）"
     echo "  $0 start                           # 恢复服务"
     echo "  $0 logs ocr-service 100            # 查看 OCR 服务最近 100 行日志"
+    echo "  $0 update                            # 远程拉取最新代码并重启"
     echo "  INSTANCE_TYPE=t3.medium $0 deploy  # 使用较小实例部署"
     echo ""
 }
@@ -613,6 +686,7 @@ main() {
         start)   cmd_start "$@" ;;
         ssh)     cmd_ssh "$@" ;;
         logs)    cmd_logs "$@" ;;
+        update)  cmd_update "$@" ;;
         destroy) cmd_destroy "$@" ;;
         cost)    cmd_cost "$@" ;;
         -h|--help|help)
