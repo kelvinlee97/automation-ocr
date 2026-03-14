@@ -3,9 +3,8 @@ name: Deploy to EC2
 on:
   push:
     branches: [main]
-  workflow_dispatch: # 支持手动触发
+  workflow_dispatch:
 
-# 同一时间只允许一个部署任务运行，后续触发的会排队等待
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -13,7 +12,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -36,50 +35,14 @@ jobs:
           fi
 
           echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
-          echo "Instance ID: $INSTANCE_ID"
 
-      - name: Deploy via SSM
+      - name: Deploy via SSM (fire-and-forget)
         run: |
-          COMMAND_ID=$(aws ssm send-command \
+          aws ssm send-command \
             --instance-ids "${{ steps.ec2.outputs.instance_id }}" \
             --document-name "AWS-RunShellScript" \
             --timeout-seconds 300 \
             --parameters 'commands=["cd /opt/automation-ocr && git pull origin main && docker compose up -d --build 2>&1"]' \
-            --query "Command.CommandId" \
-            --output text)
-
-          echo "SSM Command ID: $COMMAND_ID"
-
-          # 轮询等待命令完成（最长 5 分钟，每 5 秒检查一次）
-          for i in $(seq 1 60); do
-            STATUS=$(aws ssm get-command-invocation \
-              --command-id "$COMMAND_ID" \
-              --instance-id "${{ steps.ec2.outputs.instance_id }}" \
-              --query "Status" \
-              --output text 2>/dev/null || echo "Pending")
-
-            if [ "$STATUS" = "Success" ]; then
-              echo "=== 部署输出 ==="
-              aws ssm get-command-invocation \
-                --command-id "$COMMAND_ID" \
-                --instance-id "${{ steps.ec2.outputs.instance_id }}" \
-                --query "StandardOutputContent" \
-                --output text
-              echo "=== 部署成功 ==="
-              exit 0
-            elif [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ]; then
-              echo "::error::部署失败（状态: $STATUS）"
-              echo "=== 错误输出 ==="
-              aws ssm get-command-invocation \
-                --command-id "$COMMAND_ID" \
-                --instance-id "${{ steps.ec2.outputs.instance_id }}" \
-                --query "StandardErrorContent" \
-                --output text
-              exit 1
-            fi
-
-            sleep 5
-          done
-
-          echo "::error::等待部署结果超时"
-          exit 1
+            --comment "deploy-$(date +%Y%m%d-%H%M%S)" \
+            --output text \
+            --query "Command.CommandId"

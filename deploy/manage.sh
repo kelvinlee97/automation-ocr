@@ -398,7 +398,7 @@ cmd_logs() {
     command_id=$(aws ssm send-command \
         --instance-ids "$instance_id" \
         --document-name "AWS-RunShellScript" \
-        --parameters "commands=[\"docker logs --tail $tail_lines $container 2>&1\"]" \
+        --parameters "commands=[\"sudo docker logs --tail $tail_lines $container 2>&1\"]" \
         --region "$REGION" \
         --query "Command.CommandId" \
         --output text)
@@ -462,7 +462,7 @@ cmd_update() {
         --instance-ids "$instance_id" \
         --document-name "AWS-RunShellScript" \
         --timeout-seconds 300 \
-        --parameters 'commands=["cd /opt/automation-ocr && git pull origin main && docker compose up -d --build 2>&1"]' \
+        --parameters 'commands=["cd /opt/automation-ocr && sudo git pull origin main && sudo docker compose up -d --build 2>&1"]' \
         --region "$REGION" \
         --query "Command.CommandId" \
         --output text)

@@ -314,7 +314,7 @@ Resources:
             echo "=== 部署完成 ==="
             echo "提示：首次启动需要扫描 WhatsApp QR 码。"
             echo "通过 SSM Session Manager 连接实例后执行："
-            echo "  docker logs -f wa-bot"
+            echo "  sudo docker logs -f wa-bot"
 
   # ── 将数据卷挂载到实例 ─────────────────────────────────────
   DataVolumeAttachment:
