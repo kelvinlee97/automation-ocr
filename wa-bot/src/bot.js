@@ -33,6 +33,7 @@ function createBot() {
 	});
 
 	let reconnectAttempts = 0;
+	let isReconnecting = false;
 
 	// QR 码扫码（首次登录时触发）
 	client.on('qr', (qr) => {
@@ -60,6 +61,12 @@ function createBot() {
 	client.on('disconnected', async (reason) => {
 		logger.warn('WhatsApp 已断线', { reason, reconnectAttempts });
 
+		// 防止 disconnected 事件多次触发导致并发重连
+		if (isReconnecting) {
+			logger.warn('已有重连任务进行中，跳过本次触发');
+			return;
+		}
+
 		if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
 			logger.error('达到最大重连次数，请手动重启服务');
 			process.exit(1);
@@ -67,6 +74,7 @@ function createBot() {
 
 		const delay = RECONNECT_DELAY_MS * Math.pow(2, reconnectAttempts);
 		reconnectAttempts++;
+		isReconnecting = true;
 		logger.info(`${delay / 1000} 秒后尝试第 ${reconnectAttempts} 次重连...`);
 
 		setTimeout(async () => {
@@ -74,6 +82,8 @@ function createBot() {
 				await client.initialize();
 			} catch (err) {
 				logger.error('重连失败', { error: err.message });
+			} finally {
+				isReconnecting = false;
 			}
 		}, delay);
 	});

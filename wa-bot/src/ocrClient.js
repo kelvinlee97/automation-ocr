@@ -28,7 +28,8 @@ function _getConfig() {
  */
 async function processReceipt({ imageBase64, phone, icNumber }) {
 	const config = _getConfig();
-	const baseUrl = config.services.ocr_service_url;
+	// 环境变量优先（Docker 部署时注入），兜底读 config.yaml
+	const baseUrl = process.env.OCR_SERVICE_URL || config.services.ocr_service_url;
 	const timeoutMs = config.bot.ocr_timeout_seconds * 1000;
 	const maxRetries = config.bot.ocr_max_retries;
 
@@ -50,15 +51,20 @@ async function processReceipt({ imageBase64, phone, icNumber }) {
  */
 async function registerUser({ phone, icNumber }) {
 	const config = _getConfig();
-	const baseUrl = config.services.ocr_service_url;
+	// 环境变量优先（Docker 部署时注入），兜底读 config.yaml
+	const baseUrl = process.env.OCR_SERVICE_URL || config.services.ocr_service_url;
 	const timeoutMs = config.bot.ocr_timeout_seconds * 1000;
+	const maxRetries = config.bot.ocr_max_retries;
 
-	const response = await axios.post(
-		`${baseUrl}/data/register`,
-		{ phone, ic_number: icNumber },
-		{ timeout: timeoutMs }
+	return _requestWithRetry(
+		() => axios.post(
+			`${baseUrl}/data/register`,
+			{ phone, ic_number: icNumber },
+			{ timeout: timeoutMs }
+		),
+		maxRetries,
+		'registerUser'
 	);
-	return response.data;
 }
 
 
@@ -67,9 +73,11 @@ async function registerUser({ phone, icNumber }) {
  */
 async function healthCheck() {
 	const config = _getConfig();
+	// 环境变量优先（Docker 部署时注入），兜底读 config.yaml
+	const baseUrl = process.env.OCR_SERVICE_URL || config.services.ocr_service_url;
 	try {
 		const response = await axios.get(
-			`${config.services.ocr_service_url}/health`,
+			`${baseUrl}/health`,
 			{ timeout: 5000 }
 		);
 		return response.status === 200;
