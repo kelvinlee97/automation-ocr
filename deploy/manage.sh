@@ -5,6 +5,7 @@
 # 子命令: setup-token | deploy | status | stop | start | ssh | logs | destroy | cost
 # ================================================================
 set -euo pipefail
+export AWS_PAGER=""
 
 # ── 配置常量（可通过同名环境变量覆盖）──────────────────────────
 STACK_NAME="${STACK_NAME:-automation-ocr}"
@@ -203,9 +204,9 @@ cmd_deploy() {
         --secret-id "$GITHUB_TOKEN_SECRET_NAME" \
         --region "$REGION" &>/dev/null; then
         token_secret_param="$GITHUB_TOKEN_SECRET_NAME"
-        echo -e "  GitHub Token:  ${GREEN}已配置${NC}（Secret: $GITHUB_TOKEN_SECRET_NAME）"
+        echo -e "  GitHub Token:  ${GREEN}已配置${NC}（Secret: ${GITHUB_TOKEN_SECRET_NAME}）"
     else
-        _log_warn "GitHub Token Secret 未找到（$GITHUB_TOKEN_SECRET_NAME）"
+        _log_warn "GitHub Token Secret 未找到（${GITHUB_TOKEN_SECRET_NAME}）"
         _log_warn "如果是私有仓库，请先执行: $0 setup-token <your-github-pat>"
         _log_info "公开仓库可忽略此警告，继续部署..."
     fi
