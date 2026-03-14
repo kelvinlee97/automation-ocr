@@ -28,4 +28,8 @@ RUN npm ci --omit=dev
 # 复制 bot 代码
 COPY . .
 
+# 代码中相对路径会解析到 /config/，但 docker-compose 挂载在 /app/config/
+# 创建符号链接让两条路径都能正确访问配置文件
+RUN ln -s /app/config /config
+
 CMD ["node", "index.js"]

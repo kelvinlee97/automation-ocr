@@ -17,8 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制服务代码
 COPY . .
 
-# 复制业务配置（config 目录在项目根，通过 docker-compose volumes 挂载）
-# 这里不 COPY config，因为运行时从挂载卷读取
+# 代码中相对路径会解析到 /config/，但 docker-compose 挂载在 /app/config/
+# 创建符号链接让两条路径都能正确访问配置文件
+RUN ln -s /app/config /config
 
 EXPOSE 8000
 
