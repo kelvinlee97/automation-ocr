@@ -1,5 +1,3 @@
-version: "3.9"
-
 # 双服务编排：ocr-service 先启动，wa-bot 依赖它健康后再启动
 # 用法：
 #   docker compose up -d            # 后台启动全部
@@ -21,7 +19,7 @@ services:
       # EasyOCR 模型缓存（约 400MB），容器重建后无需重新下载
       - easyocr-models:/root/.EasyOCR
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       # EasyOCR 模型加载约需 15 秒，start_period 给足启动宽限期
       start_period: 60s
       interval: 15s
