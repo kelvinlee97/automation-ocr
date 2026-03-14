@@ -11,6 +11,9 @@ services:
       dockerfile: Dockerfile
     container_name: ocr-service
     restart: unless-stopped
+    ports:
+      # Dashboard 外部访问
+      - "8000:8000"
     volumes:
       # 挂载业务配置（只读，改 config.yaml 后 restart 生效）
       - ./config:/app/config:ro
