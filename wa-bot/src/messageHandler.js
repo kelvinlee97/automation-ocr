@@ -62,15 +62,17 @@ async function handleMessage(message) {
 				} else if (message.type === 'chat') {
 					// 用户可能重新输入 IC，检测关键词重置
 					if (_isResetKeyword(message.body)) {
+						// 重置状态机到初始状态，再回复欢迎语
+						updateSession(phone, { state: SESSION_STATE.WAITING_IC, ic: null });
 						await message.reply(messages.registration.welcome);
 					} else {
-						await message.reply('请发送收据截图。如需重新注册，请回复「重新注册」。');
+						await message.reply(messages.receipt.send_photo_prompt);
 					}
 				}
 				break;
 
 			case SESSION_STATE.DONE:
-				await message.reply('您的提交已完成。如需再次提交，请回复「重新开始」。');
+				await message.reply(messages.status.done_prompt);
 				break;
 
 			default:

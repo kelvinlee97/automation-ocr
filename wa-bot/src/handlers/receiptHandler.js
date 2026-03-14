@@ -4,7 +4,7 @@
  */
 
 const { processReceipt } = require('../ocrClient');
-const { checkReceiptLimit, incrementReceiptCount } = require('../sessionManager');
+const { checkReceiptLimit, incrementReceiptCount, updateSession, SESSION_STATE } = require('../sessionManager');
 const logger = require('../utils/logger');
 
 let _messages = null;
@@ -87,8 +87,12 @@ async function handleReceipt(message, session) {
 		return;
 	}
 
-	// 更新提交计数
+	// 更新提交计数，若已达上限则将状态置为终态 DONE
 	incrementReceiptCount(session.phone);
+	const limitAfter = checkReceiptLimit(session.phone);
+	if (!limitAfter.allowed) {
+		updateSession(session.phone, { state: SESSION_STATE.DONE });
+	}
 
 	// 格式化回复
 	const reply = _formatReceiptReply(result, messages);

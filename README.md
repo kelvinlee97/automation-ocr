@@ -100,6 +100,14 @@
 - Python 3.10+
 - 一个 **专用** WhatsApp 号码（会长期保持登录状态）
 
+> **Ubuntu / Debian 额外依赖**（whatsapp-web.js 内嵌 Chromium 必需，缺少会报错 `error while loading shared libraries`）：
+> ```bash
+> sudo apt-get install -y \
+>   libgbm-dev libasound2 libatk1.0-0 libatk-bridge2.0-0 \
+>   libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
+>   libxfixes3 libxrandr2 libpango-1.0-0 libcairo2 libnss3
+> ```
+
 ### 安装
 
 ```bash
@@ -186,19 +194,45 @@ automation-ocr/
 
 ---
 
-## 生产部署（PM2）
+## 生产部署
+
+### 方案 A：Docker Compose（推荐 AWS EC2）
+
+```bash
+# 构建并后台启动（首次构建约需 10-15 分钟，EasyOCR 镜像较大）
+docker compose up -d --build
+
+# 查看启动状态（ocr-service 健康检查通过后 wa-bot 才会启动）
+docker compose ps
+
+# 首次运行需扫码登录：查看 wa-bot 日志获取二维码
+docker compose logs -f wa-bot
+
+# 查看实时日志
+docker compose logs -f
+
+# 停止服务（不删除数据）
+docker compose down
+```
+
+> **成本参考（AWS ap-southeast-1 新加坡）：**
+> - t3.medium（2 vCPU / 4GB）：约 $0.052/小时 ≈ $38/月
+> - EasyOCR 模型需要至少 2GB 内存，t3.small 可能 OOM
+> - 加上 EBS 30GB gp3 存储：约 $2.4/月
+> - **估算总成本：~$40-45/月**
+
+---
+
+### 方案 B：PM2（不用 Docker 时）
 
 ```bash
 npm install -g pm2
 
-pm2 start "bash -c 'source ocr-service/.venv/bin/activate && uvicorn main:app --port 8000'" \
-  --name ocr-service --cwd ocr-service
-pm2 start wa-bot/index.js --name wa-bot
+# 使用 ecosystem.config.js 一键启动
+pm2 start ecosystem.config.js --env production
 
 pm2 save && pm2 startup
 ```
-
-详细的 AWS EC2 部署步骤见 [CLAUDE.md](./CLAUDE.md)。
 
 ---
 

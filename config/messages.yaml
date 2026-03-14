@@ -12,6 +12,8 @@ registration:
     注册成功！请发送您的消费收据截图。
 
 receipt:
+  send_photo_prompt: |
+    请发送收据截图。如需重新注册，请回复「重新注册」。
   not_registered: |
     请先完成注册，发送您的身份证号码（格式：XXXXXX-XX-XXXX）开始注册。
   processing: |
@@ -36,3 +38,7 @@ errors:
     系统暂时不可用，请稍后再试。
   unknown: |
     处理失败，请重试或联系客服。
+
+status:
+  done_prompt: |
+    您的提交已完成。如需再次提交，请回复「重新开始」。
