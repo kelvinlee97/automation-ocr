@@ -101,7 +101,8 @@ docker compose logs -f                                 # 查看全部日志
 
 **AWS 部署：** 详见 `deploy/README.md`
 - CloudFormation 一键部署（`deploy/cloudformation.yaml`），EC2 启动时自动拉代码、构建镜像、启动服务
-- 最低配置 t3.medium（~$34/月），推荐 t3.large（~$67/月）
+- **快捷管理脚本**（`deploy/manage.sh`）：`deploy` / `status` / `stop` / `start` / `ssh` / `logs` / `destroy` / `cost`
+- 最低配置 t3.medium（~$34/月），推荐 t3.large（~$67/月）；停机时仅 EBS 计费（~$4.1/月）
 - SSM Session Manager 管理（无需 SSH key / 22 端口）
 - **数据卷 `DeletionPolicy: Retain`**：Stack 删除后 EBS 仍保留并持续计费，需手动清理
 

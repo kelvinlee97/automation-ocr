@@ -150,6 +150,56 @@ sudo systemctl restart automation-ocr
 
 ---
 
+## 快捷管理脚本
+
+`deploy/manage.sh` 封装了常用的 AWS 管理操作，避免每次手动拼 CLI 命令：
+
+```bash
+# 首次部署
+deploy/manage.sh deploy
+
+# 查看当前状态
+deploy/manage.sh status
+
+# 暂停服务（停止实例，仅 EBS 计费约 $4.1/月）
+deploy/manage.sh stop
+
+# 恢复服务（约 1 分钟）
+deploy/manage.sh start
+
+# 通过 SSM 连接实例
+deploy/manage.sh ssh
+
+# 查看容器日志（默认 wa-bot，可指定容器和行数）
+deploy/manage.sh logs                  # wa-bot 最近 50 行
+deploy/manage.sh logs ocr-service 100  # ocr-service 最近 100 行
+
+# 查看预估费用
+deploy/manage.sh cost
+
+# 删除 Stack（需输入 Stack 名称二次确认）
+deploy/manage.sh destroy
+```
+
+所有配置可通过环境变量覆盖：
+
+```bash
+# 使用较小实例部署
+INSTANCE_TYPE=t3.medium deploy/manage.sh deploy
+
+# 指定不同的 Stack 名称
+STACK_NAME=ocr-staging deploy/manage.sh deploy
+```
+
+### 成本策略
+
+| 操作 | 停机时月费 | 恢复时间 | 适用场景 |
+|------|-----------|---------|---------|
+| `manage.sh stop` | ~$4.1（EBS 卷） | ~1 分钟 | 短期停用（几天~几周）|
+| `manage.sh destroy` | ~$1.6（仅 Retain 数据卷） | ~8-15 分钟 | 长期停用（数月）|
+
+---
+
 ## 销毁资源
 
 ```bash

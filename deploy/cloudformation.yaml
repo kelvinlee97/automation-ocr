@@ -38,6 +38,17 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
     Description: "Amazon Linux 2023 最新 AMI（自动获取，通常无需修改）"
 
+  GitHubTokenSecretName:
+    Type: String
+    Default: ""
+    Description: "AWS Secrets Manager 中存储 GitHub PAT 的 Secret 名称（私有仓库必填，公开仓库留空）"
+
+# ────────────────────────────────────────────────────────────
+# 条件
+# ────────────────────────────────────────────────────────────
+Conditions:
+  HasGitHubToken: !Not [!Equals [!Ref GitHubTokenSecretName, ""]]
+
 # ────────────────────────────────────────────────────────────
 # 资源定义
 # ────────────────────────────────────────────────────────────
@@ -106,7 +117,7 @@ Resources:
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "WhatsApp OCR Bot — 仅允许必要出站流量，不开放入站 SSH"
+      GroupDescription: "WhatsApp OCR Bot - outbound only, no inbound SSH"
       VpcId: !Ref Vpc
       SecurityGroupIngress: []   # 无入站规则
       SecurityGroupEgress:
@@ -133,6 +144,18 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
         # CloudWatch Agent：将容器日志推送到 CloudWatch（可选但推荐）
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        # 仅当配置了 GitHub Token Secret 时才附加此 policy
+        - !If
+          - HasGitHubToken
+          - PolicyName: SecretsManagerReadGitHubToken
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${GitHubTokenSecretName}*"
+          - !Ref AWS::NoValue
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -228,7 +251,22 @@ Resources:
 
             echo "=== [4/6] 克隆项目代码 ==="
             APP_DIR=/opt/automation-ocr
-            git clone --depth 1 --branch ${GitBranch} ${GitRepoUrl} "$APP_DIR"
+
+            # 私有仓库：从 Secrets Manager 获取 GitHub Token
+            SECRET_NAME="${GitHubTokenSecretName}"
+            if [ -n "$SECRET_NAME" ]; then
+              echo "从 Secrets Manager 获取 GitHub Token..."
+              TOKEN=$(aws secretsmanager get-secret-value \
+                --secret-id "$SECRET_NAME" --region ${AWS::Region} \
+                --query SecretString --output text)
+              REPO_URL=$(echo "${GitRepoUrl}" | sed "s|https://|https://$TOKEN@|")
+            else
+              REPO_URL="${GitRepoUrl}"
+            fi
+
+            git clone --depth 1 --branch ${GitBranch} "$REPO_URL" "$APP_DIR"
+            # 安全清理：立即清除内存中的 token 变量
+            unset TOKEN REPO_URL SECRET_NAME
 
             # 将数据目录软链到项目 data/（docker-compose volume bind mount 路径）
             rm -rf "$APP_DIR/data"
