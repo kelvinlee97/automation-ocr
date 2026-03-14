@@ -41,15 +41,21 @@ function createBot() {
 		qrcode.generate(qr, { small: true });
 	});
 
-	// 登录成功
+	// 登录成功：此时才注册消息监听，避免处理 ready 之前同步的离线积压消息
 	client.on('ready', () => {
 		reconnectAttempts = 0;
 		logger.info('WhatsApp Bot 已就绪');
-	});
 
-	// 收到消息
-	client.on('message', async (message) => {
-		await handleMessage(message);
+		// 记录就绪时间戳，用于过滤 ready 后仍陆续到达的旧消息
+		const readyTimestamp = Date.now() / 1000;
+
+		// 先移除旧的监听器（断线重连时 ready 会再次触发），防止重复注册
+		client.removeAllListeners('message');
+		client.on('message', async (message) => {
+			if (message.fromMe) return;
+			if (!message.timestamp || message.timestamp < readyTimestamp) return;
+			await handleMessage(message);
+		});
 	});
 
 	// 认证失败
