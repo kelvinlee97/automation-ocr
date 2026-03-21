@@ -68,4 +68,6 @@ excel:
         - "不合格原因"
         - "OCR置信度"
         - "图片路径"
-dashboard:\n  admin_username: admin\n  admin_password: password123
+dashboard:
+  admin_username: admin
+  admin_password: password123
