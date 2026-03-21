@@ -7,24 +7,23 @@ import time
 from pathlib import PurePosixPath
 from typing import Optional
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import FileResponse, JSONResponse
 
 from ..config.loader import get_config
 from .models import ProcessRecord
 from .store import processStore
 from .websocket_manager import wsManager
-
-from fastapi import Depends
 from .auth import verify_admin_credentials
+from pydantic import BaseModel
 
-router = APIRouter(dependencies=[Depends(verify_admin_credentials)])
+router = APIRouter()
 
 # 服务启动时间，用于计算 uptime
 _startTime = time.monotonic()
 
 
-@router.get("/api/receipts")
+@router.get("/api/receipts", dependencies=[Depends(verify_admin_credentials)])
 async def list_receipts(
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -40,7 +39,7 @@ async def list_receipts(
     }
 
 
-@router.get("/api/receipts/{recordId}")
+@router.get("/api/receipts/{recordId}", dependencies=[Depends(verify_admin_credentials)])
 async def get_receipt(recordId: str):
     """查询单条记录详情（含处理步骤）"""
     record = processStore.get(recordId)
@@ -49,7 +48,7 @@ async def get_receipt(recordId: str):
     return record.model_dump()
 
 
-@router.get("/api/receipts/{recordId}/image")
+@router.get("/api/receipts/{recordId}/image", dependencies=[Depends(verify_admin_credentials)])
 async def get_receipt_image(recordId: str):
     """获取收据图片，校验路径防止目录穿越"""
     record = processStore.get(recordId)
@@ -71,7 +70,7 @@ async def get_receipt_image(recordId: str):
     return FileResponse(imagePath, media_type="image/jpeg")
 
 
-@router.get("/api/status")
+@router.get("/api/status", dependencies=[Depends(verify_admin_credentials)])
 async def get_status():
     """服务状态概览"""
     config = get_config()
@@ -105,7 +104,6 @@ async def websocket_events(ws: WebSocket):
     except WebSocketDisconnect:
         wsManager.disconnect(ws)
 
-from pydantic import BaseModel
 
 class ReceiptUpdateRequest(BaseModel):
     brand: Optional[str] = None
@@ -114,7 +112,8 @@ class ReceiptUpdateRequest(BaseModel):
     receiptNo: Optional[str] = None
     disqualifyReason: Optional[str] = None
 
-@router.put("/api/receipts/{recordId}")
+
+@router.put("/api/receipts/{recordId}", dependencies=[Depends(verify_admin_credentials)])
 async def update_receipt(recordId: str, req: ReceiptUpdateRequest):
     """人工审核更新结果，并同步修改 Excel"""
     record = processStore.get(recordId)
