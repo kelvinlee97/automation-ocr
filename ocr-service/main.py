@@ -351,7 +351,15 @@ async def _save_image(image_base64: str, phone: str) -> str:
 _staticDir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.isdir(_staticDir):
     from fastapi import Depends
+    from fastapi.responses import FileResponse
     from src.dashboard.auth import verify_admin_credentials
-    dashboard_app = FastAPI(dependencies=[Depends(verify_admin_credentials)])
-    dashboard_app.mount("/", StaticFiles(directory=_staticDir, html=True), name="dashboard_static")
-    app.mount("/dashboard", dashboard_app)
+    
+    # 建立一个专用于返回前端页面的受保护路由
+    @app.get("/dashboard", dependencies=[Depends(verify_admin_credentials)], include_in_schema=False)
+    @app.get("/dashboard/", dependencies=[Depends(verify_admin_credentials)], include_in_schema=False)
+    async def get_dashboard_html():
+        return FileResponse(os.path.join(_staticDir, "index.html"))
+
+    # 把 app.js, style.css 等静态资源直接挂载在 dashboard 的静态路径下
+    # 为避免直接通过资源 URL 访问（如有必要），也可以加上中间件，但通常只保护 HTML 入口即可
+    app.mount("/dashboard/static", StaticFiles(directory=_staticDir), name="dashboard_assets")

@@ -38,14 +38,14 @@ _log_step()  { echo -e "${CYAN}>>>>${NC} $*"; }
 # ── 依赖检查 ─────────────────────────────────────────────────
 _check_deps() {
     local missing=()
-    for cmd in aws jq; do
+    for cmd in aws jq curl; do
         if ! command -v "$cmd" &>/dev/null; then
             missing+=("$cmd")
         fi
     done
     if [[ ${#missing[@]} -gt 0 ]]; then
         _log_error "缺少必要工具: ${missing[*]}"
-        _log_error "请先安装: brew install awscli jq  (macOS)"
+        _log_error "请先安装所需工具。"
         exit 1
     fi
 }
@@ -108,7 +108,7 @@ _require_stack() {
         _log_error "Stack 当前状态: $status（操作进行中，请稍后再试）"
         exit 1
     fi
-    if [[ "$status" != "CREATE_COMPLETE" && "$status" != "UPDATE_COMPLETE" ]]; then
+    if [[ "$status" != "CREATE_COMPLETE" && "$status" != "UPDATE_COMPLETE" && "$status" != "UPDATE_ROLLBACK_COMPLETE" ]]; then
         _log_warn "Stack 状态异常: $status"
     fi
 }
@@ -173,7 +173,7 @@ cmd_deploy() {
     status="$(_get_stack_status)"
     local cf_action="create-stack"
     local wait_action="stack-create-complete"
-    status="$(_get_stack_status)"
+    
     if [[ -n "$status" ]]; then
         if [[ "$status" == "CREATE_COMPLETE" || "$status" == "UPDATE_COMPLETE" || "$status" == "UPDATE_ROLLBACK_COMPLETE" ]]; then
             _log_info "Stack 已存在 (状态: $status)，执行 update-stack..."
@@ -204,7 +204,6 @@ cmd_deploy() {
     echo -e "  Admin IP:      ${BLUE}${ADMIN_IP}${NC}"
     echo -e "  SSH KeyName:   ${BLUE}${KEY_NAME}${NC}"
 
-
     # 检查 GitHub Token Secret 是否存在
     local token_secret_param=""
     if aws secretsmanager describe-secret \
@@ -219,7 +218,7 @@ cmd_deploy() {
     fi
     echo ""
 
-    aws cloudformation "$cf_action" \\
+    if ! aws cloudformation "$cf_action" \
         --stack-name "$STACK_NAME" \
         --template-body "file://${TEMPLATE_FILE}" \
         --capabilities CAPABILITY_NAMED_IAM \
@@ -228,14 +227,25 @@ cmd_deploy() {
             "ParameterKey=GitBranch,ParameterValue=$GIT_BRANCH" \
             "ParameterKey=InstanceType,ParameterValue=$INSTANCE_TYPE" \
             "ParameterKey=DataVolumeSize,ParameterValue=$DATA_VOLUME_SIZE" \
-            "ParameterKey=AdminIp,ParameterValue=$ADMIN_IP" \\
-            "ParameterKey=KeyName,ParameterValue=$KEY_NAME" \\
+            "ParameterKey=AdminIp,ParameterValue=$ADMIN_IP" \
+            "ParameterKey=KeyName,ParameterValue=$KEY_NAME" \
             "ParameterKey=GitHubTokenSecretName,ParameterValue=$token_secret_param" \
         --region "$REGION" \
-        --output text
+        --output text; then
+        # Check if the error is "No updates are to be performed"
+        if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$REGION" &>/dev/null; then
+             _log_info "No updates are to be performed. Stack is already up-to-date."
+             echo ""
+             cmd_status
+             return 0
+        else
+            _log_error "Stack 部署命令执行失败。"
+            exit 1
+        fi
+    fi
 
     _log_info "Stack 部署中，等待完成（约 5-8 分钟）..."
-    if aws cloudformation wait "$wait_action" \\
+    if aws cloudformation wait "$wait_action" \
         --stack-name "$STACK_NAME" \
         --region "$REGION"; then
         _log_info "Stack 部署成功！"
@@ -669,7 +679,6 @@ _usage() {
     echo "  DATA_VOLUME_SIZE 数据卷大小 GB (默认: 20)"
     echo "  ADMIN_IP         允许远程登入的 IP 网段 (默认: 本机 IP)"
     echo "  KEY_NAME         SSH 密钥名称 (可选)"
-
     echo "  GITHUB_TOKEN_SECRET_NAME  Secret 名称 (默认: \$STACK_NAME/github-token)"
     echo ""
     echo "示例:"
