@@ -26,6 +26,17 @@ Parameters:
       - t3.xlarge   # 4 vCPU / 16GB — 高并发场景
     Description: "EC2 实例类型（EasyOCR 对内存要求高，推荐 t3.large）"
 
+  AdminIp:
+    Type: String
+    Default: "0.0.0.0/0"
+    Description: "允许远程登入（SSH/Dashboard）的本机 IP 网段（例如 1.2.3.4/32）"
+
+  KeyName:
+    Type: String
+    Default: ""
+    Description: "EC2 密钥对名称（可选，用于 SSH 登录；为空则仅可通过 SSM 登录）"
+
+
   DataVolumeSize:
     Type: Number
     Default: 20
@@ -47,6 +58,8 @@ Parameters:
 # 条件
 # ────────────────────────────────────────────────────────────
 Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
+
   HasGitHubToken: !Not [!Equals [!Ref GitHubTokenSecretName, ""]]
 
 # ────────────────────────────────────────────────────────────
@@ -117,9 +130,19 @@ Resources:
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "WhatsApp OCR Bot - outbound only, no inbound SSH"
+      GroupDescription: "WhatsApp OCR Bot - outbound only, allow inbound SSH/Dashboard from Admin IP"
       VpcId: !Ref Vpc
-      SecurityGroupIngress: []   # 无入站规则
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AdminIp
+          Description: "Allow SSH from Admin IP"
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: !Ref AdminIp
+          Description: "Allow OCR Dashboard from Admin IP"
       SecurityGroupEgress:
         - IpProtocol: -1         # 允许所有出站（访问 WhatsApp、GitHub、PyPI 等）
           CidrIp: 0.0.0.0/0
@@ -183,6 +206,8 @@ Resources:
     DependsOn: VpcGatewayAttachment
     Properties:
       InstanceType: !Ref InstanceType
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref AWS::NoValue]
+
       ImageId: !Ref AmiId
       IamInstanceProfile: !Ref InstanceProfile
       SubnetId: !Ref PublicSubnet

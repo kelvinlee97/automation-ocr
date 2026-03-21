@@ -15,7 +15,10 @@ from .models import ProcessRecord
 from .store import processStore
 from .websocket_manager import wsManager
 
-router = APIRouter()
+from fastapi import Depends
+from .auth import verify_admin_credentials
+
+router = APIRouter(dependencies=[Depends(verify_admin_credentials)])
 
 # 服务启动时间，用于计算 uptime
 _startTime = time.monotonic()

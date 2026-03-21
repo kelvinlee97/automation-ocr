@@ -14,6 +14,8 @@ GIT_REPO_URL="${GIT_REPO_URL:-https://github.com/kelvinlee97/automation-ocr.git}
 GIT_BRANCH="${GIT_BRANCH:-main}"
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.large}"
 DATA_VOLUME_SIZE="${DATA_VOLUME_SIZE:-20}"
+ADMIN_IP="${ADMIN_IP:-$(curl -s -4 ifconfig.me)/32}"
+KEY_NAME="${KEY_NAME:-}"
 GITHUB_TOKEN_SECRET_NAME="${GITHUB_TOKEN_SECRET_NAME:-${STACK_NAME}/github-token}"
 
 # CloudFormation 模板路径（相对于项目根目录）
@@ -169,18 +171,20 @@ cmd_deploy() {
     # 检查 Stack 是否已存在
     local status
     status="$(_get_stack_status)"
+    local cf_action="create-stack"
+    local wait_action="stack-create-complete"
+    status="$(_get_stack_status)"
     if [[ -n "$status" ]]; then
-        if [[ "$status" == "CREATE_COMPLETE" || "$status" == "UPDATE_COMPLETE" ]]; then
-            _log_warn "Stack '$STACK_NAME' 已存在（状态: $status）"
-            _log_info "如需启动实例，请执行: $0 start"
-            _log_info "如需重新部署，请先执行: $0 destroy"
-            exit 0
+        if [[ "$status" == "CREATE_COMPLETE" || "$status" == "UPDATE_COMPLETE" || "$status" == "UPDATE_ROLLBACK_COMPLETE" ]]; then
+            _log_info "Stack 已存在 (状态: $status)，执行 update-stack..."
+            cf_action="update-stack"
+            wait_action="stack-update-complete"
         elif [[ "$status" == *"ROLLBACK_COMPLETE"* ]]; then
             _log_warn "Stack 处于 $status 状态，需先删除再重建"
             _log_info "请执行: $0 destroy && $0 deploy"
             exit 1
         else
-            _log_error "Stack 当前状态: $status，无法创建"
+            _log_error "Stack 当前状态: $status，无法部署"
             exit 1
         fi
     fi
@@ -197,6 +201,9 @@ cmd_deploy() {
     echo -e "  Git 仓库:      ${BLUE}$GIT_REPO_URL${NC}"
     echo -e "  Git 分支:      ${BLUE}$GIT_BRANCH${NC}"
     echo -e "  数据卷大小:    ${BLUE}${DATA_VOLUME_SIZE}GB${NC}"
+    echo -e "  Admin IP:      ${BLUE}${ADMIN_IP}${NC}"
+    echo -e "  SSH KeyName:   ${BLUE}${KEY_NAME}${NC}"
+
 
     # 检查 GitHub Token Secret 是否存在
     local token_secret_param=""
@@ -212,7 +219,7 @@ cmd_deploy() {
     fi
     echo ""
 
-    aws cloudformation create-stack \
+    aws cloudformation "$cf_action" \\
         --stack-name "$STACK_NAME" \
         --template-body "file://${TEMPLATE_FILE}" \
         --capabilities CAPABILITY_NAMED_IAM \
@@ -221,22 +228,24 @@ cmd_deploy() {
             "ParameterKey=GitBranch,ParameterValue=$GIT_BRANCH" \
             "ParameterKey=InstanceType,ParameterValue=$INSTANCE_TYPE" \
             "ParameterKey=DataVolumeSize,ParameterValue=$DATA_VOLUME_SIZE" \
+            "ParameterKey=AdminIp,ParameterValue=$ADMIN_IP" \\
+            "ParameterKey=KeyName,ParameterValue=$KEY_NAME" \\
             "ParameterKey=GitHubTokenSecretName,ParameterValue=$token_secret_param" \
         --region "$REGION" \
         --output text
 
-    _log_info "Stack 创建中，等待完成（约 5-8 分钟）..."
-    if aws cloudformation wait stack-create-complete \
+    _log_info "Stack 部署中，等待完成（约 5-8 分钟）..."
+    if aws cloudformation wait "$wait_action" \\
         --stack-name "$STACK_NAME" \
         --region "$REGION"; then
-        _log_info "Stack 创建成功！"
+        _log_info "Stack 部署成功！"
         echo ""
         cmd_status
         echo ""
         _log_warn "首次部署需要扫描 WhatsApp QR 码，Docker 镜像构建约需 10-15 分钟"
         _log_info "执行以下命令查看 QR 码: $0 ssh  然后运行  sudo docker logs -f wa-bot"
     else
-        _log_error "Stack 创建失败，请检查 AWS Console 中的事件日志"
+        _log_error "Stack 部署失败，请检查 AWS Console 中的事件日志"
         exit 1
     fi
 }
@@ -658,6 +667,9 @@ _usage() {
     echo "  GIT_BRANCH       Git 分支 (默认: main)"
     echo "  INSTANCE_TYPE    EC2 实例类型 (默认: t3.large)"
     echo "  DATA_VOLUME_SIZE 数据卷大小 GB (默认: 20)"
+    echo "  ADMIN_IP         允许远程登入的 IP 网段 (默认: 本机 IP)"
+    echo "  KEY_NAME         SSH 密钥名称 (可选)"
+
     echo "  GITHUB_TOKEN_SECRET_NAME  Secret 名称 (默认: \$STACK_NAME/github-token)"
     echo ""
     echo "示例:"

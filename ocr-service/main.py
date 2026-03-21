@@ -350,4 +350,8 @@ async def _save_image(image_base64: str, phone: str) -> str:
 
 _staticDir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.isdir(_staticDir):
-    app.mount("/dashboard", StaticFiles(directory=_staticDir, html=True), name="dashboard")
+    from fastapi import Depends
+    from src.dashboard.auth import verify_admin_credentials
+    dashboard_app = FastAPI(dependencies=[Depends(verify_admin_credentials)])
+    dashboard_app.mount("/", StaticFiles(directory=_staticDir, html=True), name="dashboard_static")
+    app.mount("/dashboard", dashboard_app)

@@ -1,12 +1,8 @@
-"""
-Excel 写入模块
-使用 asyncio.Lock 保证并发场景下文件写入的原子性
-openpyxl 不是线程安全的，Lock 确保同一时刻只有一个协程持有文件句柄
-"""
 import asyncio
 import os
 from datetime import datetime
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -21,6 +17,7 @@ from .schema import (
 
 # 全局写入锁，防止并发写入同一 xlsx 文件
 _write_lock = asyncio.Lock()
+_executor = ThreadPoolExecutor(max_workers=1)  # 单线程池确保文件操作排队，且不阻塞主线程
 
 # Excel 表头样式
 _HEADER_FONT = Font(bold=True, color="FFFFFF")
@@ -89,14 +86,18 @@ async def write_registration(phone: str, ic_number: str) -> bool:
     """
     async with _write_lock:
         excel_path = _get_excel_path()
-        wb = _ensure_workbook(excel_path)
-        ws = wb[get_registrations_sheet_name()]
-
-        seq = _next_seq(ws)
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        ws.append([seq, now, phone, ic_number, "已注册"])
-        wb.save(excel_path)
+        
+        def _do_write():
+            wb = _ensure_workbook(excel_path)
+            ws = wb[get_registrations_sheet_name()]
+            seq = _next_seq(ws)
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ws.append([seq, now, phone, ic_number, "已注册"])
+            wb.save(excel_path)
+            return True
+            
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(_executor, _do_write)
 
     return True
 
@@ -119,30 +120,35 @@ async def write_receipt(
     """
     async with _write_lock:
         excel_path = _get_excel_path()
-        wb = _ensure_workbook(excel_path)
-        ws = wb[get_receipts_sheet_name()]
-
-        seq = _next_seq(ws)
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         qualified_str = "YES" if qualified else "NO"
         amount_str = f"{amount:.2f}" if amount is not None else ""
         confidence_str = f"{confidence:.2%}"
 
-        ws.append([
-            seq,
-            now,
-            phone,
-            ic_number,
-            receipt_no or "",
-            raw_brand or "",
-            matched_brand or "",
-            amount_str,
-            qualified_str,
-            disqualify_reason or "",
-            confidence_str,
-            image_path or "",
-        ])
-        wb.save(excel_path)
+        def _do_write():
+            wb = _ensure_workbook(excel_path)
+            ws = wb[get_receipts_sheet_name()]
+            seq = _next_seq(ws)
+            
+            ws.append([
+                seq,
+                now,
+                phone,
+                ic_number,
+                receipt_no or "",
+                raw_brand or "",
+                matched_brand or "",
+                amount_str,
+                qualified_str,
+                disqualify_reason or "",
+                confidence_str,
+                image_path or "",
+            ])
+            wb.save(excel_path)
+            return seq
+            
+        loop = asyncio.get_event_loop()
+        seq = await loop.run_in_executor(_executor, _do_write)
 
     return seq
 
@@ -162,19 +168,24 @@ async def update_receipt_in_excel(
         excel_path = _get_excel_path()
         if not os.path.exists(excel_path):
             return False
-        wb = _ensure_workbook(excel_path)
-        ws = wb[get_receipts_sheet_name()]
+            
+        def _do_write():
+            wb = _ensure_workbook(excel_path)
+            ws = wb[get_receipts_sheet_name()]
 
-        row_index = seq + 1
-        if row_index <= ws.max_row and ws.cell(row=row_index, column=1).value == seq:
-            ws.cell(row=row_index, column=5).value = receipt_no or ""
-            ws.cell(row=row_index, column=7).value = matched_brand or ""
-            ws.cell(row=row_index, column=8).value = f"{amount:.2f}" if amount is not None else ""
-            ws.cell(row=row_index, column=9).value = "YES" if qualified else "NO"
-            ws.cell(row=row_index, column=10).value = disqualify_reason or ""
-            wb.save(excel_path)
-            return True
-        return False
+            row_index = seq + 1
+            if row_index <= ws.max_row and ws.cell(row=row_index, column=1).value == seq:
+                ws.cell(row=row_index, column=5).value = receipt_no or ""
+                ws.cell(row=row_index, column=7).value = matched_brand or ""
+                ws.cell(row=row_index, column=8).value = f"{amount:.2f}" if amount is not None else ""
+                ws.cell(row=row_index, column=9).value = "YES" if qualified else "NO"
+                ws.cell(row=row_index, column=10).value = disqualify_reason or ""
+                wb.save(excel_path)
+                return True
+            return False
+            
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(_executor, _do_write)
 
 
 async def is_ic_registered(ic_number: str) -> bool:
@@ -183,20 +194,24 @@ async def is_ic_registered(ic_number: str) -> bool:
     if not os.path.exists(excel_path):
         return False
 
-    wb = load_workbook(excel_path, read_only=True, data_only=True)
-    try:
-        sheet_name = get_registrations_sheet_name()
+    def _do_read():
+        wb = load_workbook(excel_path, read_only=True, data_only=True)
+        try:
+            sheet_name = get_registrations_sheet_name()
 
-        if sheet_name not in wb.sheetnames:
+            if sheet_name not in wb.sheetnames:
+                return False
+
+            ws = wb[sheet_name]
+            # IC 在第4列（index 3），跳过表头行
+            ic_col_index = 3
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if row[ic_col_index] == ic_number:
+                    return True
+
             return False
-
-        ws = wb[sheet_name]
-        # IC 在第4列（index 3），跳过表头行
-        ic_col_index = 3
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            if row[ic_col_index] == ic_number:
-                return True
-
-        return False
-    finally:
-        wb.close()
+        finally:
+            wb.close()
+            
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(_executor, _do_read)
