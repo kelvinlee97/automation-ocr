@@ -7,6 +7,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { handleMessage } = require('./messageHandler');
 const logger = require('./utils/logger');
+const { syncBotStatus } = require('./ocrClient');
 
 // 断线后最大重连次数
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -39,12 +40,14 @@ function createBot() {
 	client.on('qr', (qr) => {
 		logger.info('请扫描二维码登录 WhatsApp');
 		qrcode.generate(qr, { small: true });
+                syncBotStatus({ status: 'qr', qr: qr, message: '请使用 WhatsApp 扫描二维码登录' });
 	});
 
 	// 登录成功：此时才注册消息监听，避免处理 ready 之前同步的离线积压消息
 	client.on('ready', () => {
 		reconnectAttempts = 0;
 		logger.info('WhatsApp Bot 已就绪');
+                syncBotStatus({ status: 'ready', message: 'WhatsApp Bot 已就绪' });
 
 		// 记录就绪时间戳，用于过滤 ready 后仍陆续到达的旧消息
 		const readyTimestamp = Date.now() / 1000;
@@ -59,13 +62,20 @@ function createBot() {
 	});
 
 	// 认证失败
-	client.on('auth_failure', (msg) => {
+	client.on('authenticated', () => {
+                logger.info('WhatsApp 认证成功');
+                syncBotStatus({ status: 'authenticated', message: '认证成功，正在初始化...' });
+        });
+
+        // 认证失败
+        client.on('auth_failure', (msg) => {
 		logger.error('WhatsApp 认证失败，请删除 .wwebjs_auth 目录后重新扫码', { msg });
 	});
 
 	// 断线处理：指数退避重连
 	client.on('disconnected', async (reason) => {
 		logger.warn('WhatsApp 已断线', { reason, reconnectAttempts });
+                syncBotStatus({ status: 'disconnected', message: 'WhatsApp 已断线: ' + reason });
 
 		// 防止 disconnected 事件多次触发导致并发重连
 		if (isReconnecting) {

@@ -11,6 +11,7 @@
     <header id="statusBar">
         <div class="status-left">
             <h1>OCR Dashboard</h1>
+            <button id="toggleBotPanelBtn" class="btn-small">📱 Bot 状态</button>
         </div>
         <div class="status-right">
             <span class="status-item">
@@ -26,6 +27,16 @@
             </span>
         </div>
     </header>
+
+    
+    <!-- Bot 状态面板 (QR码等) -->
+    <div id="botPanel" class="bot-panel hidden">
+        <h3>WhatsApp Bot 状态</h3>
+        <p id="botMessage">正在连接...</p>
+        <div id="botQrContainer" class="hidden">
+            <img id="botQrImage" alt="扫码登录" />
+        </div>
+    </div>
 
     <!-- 筛选栏 -->
     <div id="toolbar">

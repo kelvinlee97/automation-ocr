@@ -19,6 +19,33 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
+# Bot state global
+bot_state = {
+    "status": "disconnected",
+    "qr": None,
+    "message": "Waiting for bot connection...",
+    "updatedAt": time.monotonic()
+}
+
+class BotStatusRequest(BaseModel):
+    status: str
+    qr: Optional[str] = None
+    message: Optional[str] = None
+
+@router.post("/api/bot/status")
+async def update_bot_status(req: BotStatusRequest):
+    """接收来自 wa-bot 的状态同步（含登录二维码）"""
+    bot_state["status"] = req.status
+    bot_state["qr"] = req.qr
+    bot_state["message"] = req.message
+    bot_state["updatedAt"] = time.monotonic()
+    
+    # 广播给 Dashboard 实时刷新
+    await wsManager.broadcast("bot_status", bot_state)
+    return {"status": "ok"}
+
+
+
 # 服务启动时间，用于计算 uptime
 _startTime = time.monotonic()
 
@@ -86,6 +113,7 @@ async def get_status():
         "websocket": {
             "activeConnections": wsManager.connectionCount,
         },
+        "bot": bot_state,
         "config": {
             "ocrLanguages": config["ocr"]["languages"],
             "confidenceThreshold": config["ocr"]["confidence_threshold"],
@@ -147,3 +175,8 @@ async def update_receipt(recordId: str, req: ReceiptUpdateRequest):
     await wsManager.broadcast("update_receipt", record.model_dump())
 
     return {"status": "ok", "record": record.model_dump()}
+
+@router.get("/api/bot/status", dependencies=[Depends(verify_admin_credentials)])
+async def get_bot_status():
+    return bot_state
+

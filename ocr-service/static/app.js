@@ -339,6 +339,8 @@
                     var event = JSON.parse(e.data);
                     if (event.type === "new_receipt" && currentOffset === 0) {
                         ReceiptTable.prepend(event.data);
+                    } else if (event.type === "bot_status") {
+                        updateBotPanel(event.data);
                     }
                 } catch (err) {
                     // 忽略解析错误
@@ -512,6 +514,36 @@
     });
 
     // ── 初始化 ────────────────────────────────────
+    var $botPanel = document.getElementById("botPanel");
+    var $botMessage = document.getElementById("botMessage");
+    var $botQrContainer = document.getElementById("botQrContainer");
+    var $botQrImage = document.getElementById("botQrImage");
+    var $toggleBotPanelBtn = document.getElementById("toggleBotPanelBtn");
+
+    if ($toggleBotPanelBtn) {
+        $toggleBotPanelBtn.addEventListener("click", function () {
+            if ($botPanel) {
+                $botPanel.classList.toggle("hidden");
+            }
+        });
+    }
+
+    function updateBotPanel(data) {
+        if (!data) return;
+        if ($botMessage) $botMessage.textContent = data.message || data.status;
+        if (data.status === "qr" && data.qr) {
+            if ($botQrImage) $botQrImage.src = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + encodeURIComponent(data.qr);
+            if ($botQrContainer) $botQrContainer.classList.remove("hidden");
+        } else {
+            if ($botQrContainer) $botQrContainer.classList.add("hidden");
+            if ($botQrImage) $botQrImage.src = "";
+        }
+    }
+
+    apiGet("/bot/status")
+        
+        .then(updateBotPanel)
+        .catch(function(err) { console.warn("Failed to fetch bot status", err); });
 
     StatusBar.start();
     ReceiptTable.load();

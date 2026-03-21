@@ -130,19 +130,4 @@ function _sleep(ms) {
 }
 
 
-
-/**
- * 同步 Bot 状态（包括登录 QR 码）到 OCR Dashboard
- * @param {{ status: string, qr?: string, message?: string }} payload
- */
-async function syncBotStatus(payload) {
-    const config = _getConfig();
-    const baseUrl = process.env.OCR_SERVICE_URL || config.services.ocr_service_url;
-    try {
-        await axios.post(baseUrl + '/api/bot/status', payload, { timeout: 3000 });
-    } catch (err) {
-        logger.warn('同步 Bot 状态失败', { error: err.message });
-    }
-}
-
-module.exports = { processReceipt, registerUser, healthCheck, syncBotStatus };
+module.exports = { processReceipt, registerUser, healthCheck };
