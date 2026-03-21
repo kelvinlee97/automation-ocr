@@ -209,7 +209,7 @@ async def process_receipt(request: ReceiptOCRRequest):
 
         # 6. 写入 Excel
         with collector.step("write_excel") as s:
-            await write_receipt(
+            seq = await write_receipt(
                 phone=request.phone,
                 ic_number=request.ic_number or "",
                 receipt_no=extracted.receipt_no,
@@ -253,6 +253,7 @@ async def process_receipt(request: ReceiptOCRRequest):
             rawText=extracted.raw_text,
             error=None,
             steps=collector.steps,
+        excelSeq=seq,
             totalDurationMs=collector.totalDurationMs,
         )
         processStore.add(record)
@@ -270,6 +271,7 @@ async def process_receipt(request: ReceiptOCRRequest):
             success=False,
             error=str(e),
             steps=collector.steps,
+        excelSeq=seq,
             totalDurationMs=collector.totalDurationMs,
         )
         processStore.add(record)

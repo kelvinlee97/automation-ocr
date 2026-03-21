@@ -112,10 +112,10 @@ async def write_receipt(
     disqualify_reason: Optional[str],
     confidence: float,
     image_path: Optional[str],
-) -> bool:
+) -> int:
     """
     追加写入收据记录到 Sheet2
-    返回 True 表示写入成功
+    返回写入的序号 seq
     """
     async with _write_lock:
         excel_path = _get_excel_path()
@@ -144,7 +144,37 @@ async def write_receipt(
         ])
         wb.save(excel_path)
 
-    return True
+    return seq
+
+
+async def update_receipt_in_excel(
+    seq: int,
+    matched_brand: Optional[str],
+    amount: Optional[float],
+    qualified: bool,
+    disqualify_reason: Optional[str],
+    receipt_no: Optional[str]
+) -> bool:
+    """
+    更新 Excel 中指定 seq 的收据记录
+    """
+    async with _write_lock:
+        excel_path = _get_excel_path()
+        if not os.path.exists(excel_path):
+            return False
+        wb = _ensure_workbook(excel_path)
+        ws = wb[get_receipts_sheet_name()]
+
+        row_index = seq + 1
+        if row_index <= ws.max_row and ws.cell(row=row_index, column=1).value == seq:
+            ws.cell(row=row_index, column=5).value = receipt_no or ""
+            ws.cell(row=row_index, column=7).value = matched_brand or ""
+            ws.cell(row=row_index, column=8).value = f"{amount:.2f}" if amount is not None else ""
+            ws.cell(row=row_index, column=9).value = "YES" if qualified else "NO"
+            ws.cell(row=row_index, column=10).value = disqualify_reason or ""
+            wb.save(excel_path)
+            return True
+        return False
 
 
 async def is_ic_registered(ic_number: str) -> bool:

@@ -198,10 +198,21 @@
     };
 
     var DetailPanel = {
+
         show: function (record) {
             $detailPanel.classList.remove("hidden");
 
+            // 填充编辑表单
+            $editRecordId.value = record.id;
+            $editReceiptNo.value = record.receiptNo || "";
+            $editBrand.value = record.brand || "";
+            $editAmount.value = record.amount !== null ? record.amount.toFixed(2) : "";
+            $editQualified.value = record.qualified ? "true" : "false";
+            $editReason.value = record.disqualifyReason || "";
+            $saveStatus.textContent = "";
+
             // 总耗时
+
             $totalDuration.textContent = record.totalDurationMs > 0
                 ? "总耗时 " + record.totalDurationMs.toFixed(0) + "ms"
                 : "无耗时数据";
@@ -442,6 +453,58 @@
     $closeDetail.addEventListener("click", function () {
         DetailPanel.hide();
     });
+
+    $reviewForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var recordId = $editRecordId.value;
+        if (!recordId) return;
+
+        var amountVal = parseFloat($editAmount.value);
+        var payload = {
+            receiptNo: $editReceiptNo.value || null,
+            brand: $editBrand.value || null,
+            amount: isNaN(amountVal) ? null : amountVal,
+            qualified: $editQualified.value === "true",
+            disqualifyReason: $editReason.value || null
+        };
+
+        $saveReviewBtn.disabled = true;
+        $saveReviewBtn.textContent = "保存中...";
+        $saveStatus.textContent = "";
+
+        fetch(API_BASE + "/receipts/" + recordId, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(function(res) {
+            if (!res.ok) throw new Error("网络响应不是 ok");
+            return res.json();
+        })
+        .then(function(data) {
+            if (data.detail) throw new Error(data.detail);
+            $saveStatus.textContent = "✔ 保存成功";
+            $saveStatus.style.color = "#2ea44f";
+            
+            // 更新本地数据并重绘表格
+            var index = allRecords.findIndex(function(r) { return r.id === recordId; });
+            if (index !== -1) {
+                allRecords[index] = data.record;
+                ReceiptTable.render(); var newTr = document.querySelector("tr[data-id=\x27" + recordId + "\x27]"); if (newTr) newTr.classList.add("active");
+            }
+            
+            setTimeout(function() { $saveStatus.textContent = ""; }, 3000);
+        })
+        .catch(function(err) {
+            $saveStatus.textContent = "✘ 失败: " + err.message;
+            $saveStatus.style.color = "#d73a49";
+        })
+        .finally(function() {
+            $saveReviewBtn.disabled = false;
+            $saveReviewBtn.textContent = "保存审核结果";
+        });
+    });
+
 
     // ESC 关闭详情面板
     document.addEventListener("keydown", function (e) {

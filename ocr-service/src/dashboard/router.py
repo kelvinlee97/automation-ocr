@@ -101,3 +101,47 @@ async def websocket_events(ws: WebSocket):
             await ws.receive_text()
     except WebSocketDisconnect:
         wsManager.disconnect(ws)
+
+from pydantic import BaseModel
+
+class ReceiptUpdateRequest(BaseModel):
+    brand: Optional[str] = None
+    amount: Optional[float] = None
+    qualified: bool
+    receiptNo: Optional[str] = None
+    disqualifyReason: Optional[str] = None
+
+@router.put("/api/receipts/{recordId}")
+async def update_receipt(recordId: str, req: ReceiptUpdateRequest):
+    """人工审核更新结果，并同步修改 Excel"""
+    record = processStore.get(recordId)
+    if not record:
+        return JSONResponse(status_code=404, content={"detail": "记录不存在"})
+
+    if record.excelSeq is None:
+        return JSONResponse(status_code=400, content={"detail": "该记录无对应的 Excel 行，无法更新"})
+
+    from ..excel.writer import update_receipt_in_excel
+    success = await update_receipt_in_excel(
+        seq=record.excelSeq,
+        matched_brand=req.brand,
+        amount=req.amount,
+        qualified=req.qualified,
+        disqualify_reason=req.disqualifyReason,
+        receipt_no=req.receiptNo,
+    )
+
+    if not success:
+        return JSONResponse(status_code=500, content={"detail": "写入 Excel 失败，可能是对应行已被删除"})
+
+    # 更新内存记录
+    record.brand = req.brand
+    record.amount = req.amount
+    record.qualified = req.qualified
+    record.receiptNo = req.receiptNo
+    record.disqualifyReason = req.disqualifyReason
+
+    # 广播更新（可选）
+    await wsManager.broadcast("update_receipt", record.model_dump())
+
+    return {"status": "ok", "record": record.model_dump()}

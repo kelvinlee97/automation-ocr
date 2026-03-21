@@ -353,3 +353,74 @@ tbody td {
     #statusBar { flex-direction: column; gap: 8px; }
     .status-right { flex-wrap: wrap; }
 }
+
+
+/* 审核表单样式 */
+#reviewSection {
+    background: #f9f9f9;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    margin-bottom: 20px;
+}
+
+#reviewSection h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 16px;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 8px;
+}
+
+.form-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.form-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    font-size: 13px;
+    color: #555;
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.form-group input, .form-group select {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.form-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+#saveReviewBtn {
+    background: #2ea44f;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+#saveReviewBtn:hover {
+    background: #2c974b;
+}
+
+#saveStatus {
+    font-size: 13px;
+    color: #2ea44f;
+}

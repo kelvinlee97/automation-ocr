@@ -132,6 +132,7 @@ def backfill_from_excel(store: ProcessStore, excel_path: str) -> int:
                 receiptNo=str(row[4]) if row[4] else None,
                 brand=str(row[6]) if len(row) > 6 and row[6] else None,
                 amount=amount,
+                excelSeq=int(row[0]) if row[0] else None,
                 confidence=confidence,
                 disqualifyReason=str(row[9]) if len(row) > 9 and row[9] else None,
                 imagePath=str(row[11]) if len(row) > 11 and row[11] else None,

@@ -35,3 +35,4 @@ class ProcessRecord(BaseModel):
     # 步骤详情（从 Excel 回填的历史记录无此数据）
     steps: list[ProcessStep] = []
     totalDurationMs: float = 0.0
+    excelSeq: Optional[int] = None
