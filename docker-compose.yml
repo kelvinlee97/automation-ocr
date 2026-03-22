@@ -8,6 +8,8 @@ services:
       - NODE_ENV=production
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
+      # 挂载配置文件目录（Dockerfile 中已创建 /config -> /app/config 符号链接）
+      - ./config:/app/config
       - ./data:/opt/automation-ocr/data
       # 持久化 WhatsApp 登录凭据，防止重启后重新扫码
       - ./data/wwebjs_auth:/opt/automation-ocr/wa-bot/.wwebjs_auth

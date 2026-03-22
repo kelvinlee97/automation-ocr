@@ -1,10 +1,11 @@
-name: Deploy to EC2
+name: Deploy to Lightsail
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+# 同一时间只允许一个部署任务运行，避免并发冲突
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -12,37 +13,29 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: SSH 部署到 Lightsail
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'ap-southeast-5' }}
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USER }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          # 超时设置：单条命令最长 8 分钟（docker build 可能较慢）
+          command_timeout: 8m
+          script: |
+            set -e
+            cd /home/ubuntu/automation-ocr
 
-      - name: Get EC2 Instance ID
-        id: ec2
-        run: |
-          INSTANCE_ID=$(aws cloudformation describe-stacks \
-            --stack-name automation-ocr \
-            --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" \
-            --output text)
+            echo ">>> 拉取最新代码..."
+            git pull origin main
 
-          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
-            echo "::error::无法从 CloudFormation Stack 获取实例 ID"
-            exit 1
-          fi
+            echo ">>> 重新构建并启动容器..."
+            docker compose up -d --build
 
-          echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
+            echo ">>> 清理旧镜像，释放磁盘空间..."
+            docker image prune -f
 
-      - name: Deploy via SSM (fire-and-forget)
-        run: |
-          aws ssm send-command \
-            --instance-ids "${{ steps.ec2.outputs.instance_id }}" \
-            --document-name "AWS-RunShellScript" \
-            --timeout-seconds 300 \
-            --parameters 'commands=["cd /opt/automation-ocr && git pull origin main && docker compose up -d --build 2>&1"]' \
-            --comment "deploy-$(date +%Y%m%d-%H%M%S)" \
-            --output text \
-            --query "Command.CommandId"
+            echo ">>> 确认容器运行状态..."
+            docker ps --filter "name=wa-bot" --format "table {{.Names}}\t{{.Status}}"

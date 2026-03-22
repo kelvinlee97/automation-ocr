@@ -4,16 +4,30 @@ const yaml = require("js-yaml");
 const fs = require("fs");
 const path = require("path");
 
-const messages = yaml.load(fs.readFileSync(path.join(__dirname, "../../../config/messages.yaml"), "utf8"));
+// messages.yaml 为空时 yaml.load 返回 null，用 fallback 兜底避免 TypeError
+const messages = yaml.load(fs.readFileSync(path.join(__dirname, "../../../config/messages.yaml"), "utf8")) || {};
+
+// 回复话术 fallback（messages.yaml 为空时使用）
+const DEFAULT_MESSAGES = {
+  receipt: {
+    invalid_type: "❌ 请发送收据图片。",
+    processing: "⏳ 正在识别收据，请稍候...",
+    qualified: "✅ 收据认证成功！\n单据号：{receipt_no}\n品牌：{brand}\n金额：RM {amount}",
+    disqualified: "❌ 收据不符合条件。\n原因：{reason}",
+  },
+};
 
 async function handleReceipt(msg, session) {
+  // 使用 messages.yaml 中的话术，不存在则用默认文本
+  const r = messages?.receipt ?? DEFAULT_MESSAGES.receipt;
+
   if (!msg.hasMedia) {
-    await msg.reply(messages.receipt.invalid_type);
+    await msg.reply(r.invalid_type);
     return;
   }
 
   // 给用户初步反馈
-  await msg.reply(messages.receipt.processing);
+  await msg.reply(r.processing);
 
   try {
     const media = await msg.downloadMedia();
@@ -36,13 +50,13 @@ async function handleReceipt(msg, session) {
 
     // 根据识别结果回复用户
     if (result.qualified) {
-      const responseText = messages.receipt.qualified
+      const responseText = (r.qualified ?? DEFAULT_MESSAGES.receipt.qualified)
         .replace("{receipt_no}", result.receipt_no)
         .replace("{brand}", result.brand)
         .replace("{amount}", result.amount);
       await msg.reply(responseText);
     } else {
-      const responseText = messages.receipt.disqualified
+      const responseText = (r.disqualified ?? DEFAULT_MESSAGES.receipt.disqualified)
         .replace("{reason}", result.disqualify_reason);
       await msg.reply(responseText);
     }

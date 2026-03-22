@@ -17,23 +17,25 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
  */
 async function processReceipt(base64Image) {
   try {
+    // 马来西亚收据可能混用中文、马来文或英文，需明确告知模型
     const prompt = `
-      You are a professional auditor for promotional receipts in Malaysia. 
+      You are a professional auditor for promotional receipts in Malaysia.
+      The receipt may contain text in Chinese (Mandarin), Malay, or English — handle all languages.
       Analyze the receipt image and extract the following information:
       1. Receipt Number (receipt_no)
-      2. Brand Name (brand)
+      2. Brand Name (brand) - return the English brand name if recognizable
       3. Total Amount in RM (amount)
-      
+
       Eligibility Rules:
       - Eligible Brands: ${config.eligibility.eligible_brands.join(", ")}
       - Minimum Amount: RM ${config.eligibility.minimum_amount}
-      
+
       Respond STRICTLY in JSON format with these fields:
       - receipt_no: (string)
       - brand: (string)
       - amount: (number)
       - qualified: (boolean, true if brand is in eligible list AND amount >= minimum)
-      - disqualify_reason: (string, explanation if not qualified, otherwise empty)
+      - disqualify_reason: (string, explanation in English if not qualified, otherwise empty string)
       - confidence: (number, 0.0 to 1.0)
     `;
 
