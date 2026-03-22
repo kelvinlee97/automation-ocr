@@ -195,7 +195,7 @@ Resources:
   # 与 EC2 实例分离，实例终止后数据不丢失
   DataVolume:
     Type: AWS::EC2::Volume
-    DeletionPolicy: Retain   # Stack 删除时保留数据卷，防止数据丢失
+    DeletionPolicy: Delete   # Stack 删除时同步删除数据卷
     Properties:
       AvailabilityZone: !Select [0, !GetAZs ""]
       Size: !Ref DataVolumeSize

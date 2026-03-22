@@ -646,8 +646,8 @@ cmd_destroy() {
     echo -e "  即将删除 Stack: ${RED}$STACK_NAME${NC}"
     echo -e "  当前状态: ${BLUE}$status${NC}"
     echo ""
-    echo -e "  ${YELLOW}将被删除的资源:${NC} EC2 实例、VPC、Security Group、IAM Role"
-    echo -e "  ${GREEN}将被保留的资源:${NC} 数据 EBS 卷（DeletionPolicy: Retain）"
+    echo -e "  ${RED}将被删除的资源:${NC} EC2 实例、VPC、Security Group、IAM Role、数据 EBS 卷"
+    echo -e "  ${GREEN}温馨提示:${NC} 执行此操作后，存储在 /data 下的所有 Excel 和图片都将丢失"
     echo -e "${RED}=============================================================${NC}"
     echo ""
 
@@ -674,16 +674,8 @@ cmd_destroy() {
         exit 1
     fi
 
-    # 提醒数据卷
-    if [[ -n "$data_volume_id" && "$data_volume_id" != "None" ]]; then
-        echo ""
-        _log_warn "数据 EBS 卷已保留（DeletionPolicy: Retain），仍在计费"
-        echo -e "  卷 ID: ${BLUE}$data_volume_id${NC}"
-        echo -e "  费用:  约 \$1.6/月 (20GB gp3)"
-        echo ""
-        echo "  如确认数据不再需要，手动删除:"
-        echo -e "  ${CYAN}aws ec2 delete-volume --volume-id $data_volume_id --region $REGION${NC}"
-    fi
+    # Stack 已删除
+    _log_info "Stack 及其关联的所有资源（包括数据卷）已成功删除。"
 }
 
 cmd_cost() {
@@ -697,11 +689,6 @@ cmd_cost() {
 
     if [[ -z "$status" ]]; then
         echo "  Stack 不存在 — 无费用"
-        echo ""
-        echo "  ┌─────────────────────────────────────────────────┐"
-        echo "  │  如有保留的数据 EBS 卷，仍会产生约 \$1.6/月 费用  │"
-        echo "  │  使用 aws ec2 describe-volumes 检查              │"
-        echo "  └─────────────────────────────────────────────────┘"
         return
     fi
 
