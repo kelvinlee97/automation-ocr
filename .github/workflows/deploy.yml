@@ -43,8 +43,8 @@ jobs:
 
             echo ">>> 重新构建并启动容器..."
             # 先 down 清除旧容器（含 v1 遗留的 hash 前缀命名容器），再 up 避免命名冲突
-            sudo docker-compose down
-            sudo docker-compose up -d --build --remove-orphans
+            sudo -E docker-compose down
+            sudo -E docker-compose up -d --build --remove-orphans
 
             echo ">>> 清理旧镜像，释放磁盘空间..."
             sudo docker image prune -f
