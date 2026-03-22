@@ -27,6 +27,9 @@ jobs:
           script: |
             set -e
 
+            # 仓库由 root 初始化，修正 owner 确保 ubuntu 用户有读写权限
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/automation-ocr
+
             # 修复 Git 安全目录检查（目录 owner 与 SSH 用户不一致时会报 dubious ownership）
             git config --global --add safe.directory /home/ubuntu/automation-ocr
 
