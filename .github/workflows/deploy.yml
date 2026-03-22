@@ -34,8 +34,8 @@ jobs:
 
             cd /home/ubuntu/automation-ocr
 
-            # 强制使用 HTTPS remote，避免 SSH host key 验证失败
-            git remote set-url origin https://github.com/kelvinlee97/automation-ocr.git
+            # 将 token 嵌入 HTTPS remote URL，非交互式环境下免登录
+            git remote set-url origin https://${{ secrets.GH_TOKEN }}@github.com/kelvinlee97/automation-ocr.git
 
             echo ">>> 拉取最新代码..."
             git pull origin main
