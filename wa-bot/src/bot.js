@@ -99,6 +99,9 @@ function createBot() {
 		}, delay);
 	});
 
+	// 启动 WhatsApp 连接，触发 QR 码生成
+	await client.initialize();
+
 	return client;
 }
 
