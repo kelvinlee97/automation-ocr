@@ -41,7 +41,7 @@ jobs:
             git pull origin main
 
             echo ">>> 重新构建并启动容器..."
-            docker compose up -d --build
+            docker-compose up -d --build
 
             echo ">>> 清理旧镜像，释放磁盘空间..."
             docker image prune -f
