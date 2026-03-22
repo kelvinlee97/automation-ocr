@@ -17,7 +17,7 @@ const RECONNECT_DELAY_MS = 5000;
  * 创建并启动 WhatsApp Bot
  * 使用 LocalAuth 持久化 session，重启后无需重新扫码
  */
-function createBot() {
+async function createBot() {
 	const client = new Client({
 		authStrategy: new LocalAuth({
 			dataPath: '.wwebjs_auth',
