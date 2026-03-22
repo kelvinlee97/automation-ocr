@@ -9,7 +9,7 @@ export AWS_PAGER=""
 
 # ── 配置常量（可通过同名环境变量覆盖）──────────────────────────
 STACK_NAME="${STACK_NAME:-automation-ocr}"
-REGION="${REGION:-ap-southeast-1}"
+REGION="${REGION:-ap-southeast-5}"
 GIT_REPO_URL="${GIT_REPO_URL:-https://github.com/kelvinlee97/automation-ocr.git}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.large}"
@@ -769,7 +769,7 @@ _usage() {
     echo ""
     echo "环境变量（可选覆盖）:"
     echo "  STACK_NAME       Stack 名称 (默认: automation-ocr)"
-    echo "  REGION           AWS 区域 (默认: ap-southeast-1)"
+    echo "  REGION           AWS 区域 (默认: ap-southeast-5)"
     echo "  GIT_REPO_URL     Git 仓库 URL"
     echo "  GIT_BRANCH       Git 分支 (默认: main)"
     echo "  INSTANCE_TYPE    EC2 实例类型 (默认: t3.large)"

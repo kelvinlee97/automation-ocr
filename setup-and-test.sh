@@ -39,8 +39,8 @@ if [[ -z "$INPUT_SECRET_KEY" ]]; then
     exit 1
 fi
 
-read -p "AWS Region [默认 ap-southeast-1]: " INPUT_REGION
-INPUT_REGION=${INPUT_REGION:-ap-southeast-1}
+read -p "AWS Region [默认 ap-southeast-5]: " INPUT_REGION
+INPUT_REGION=${INPUT_REGION:-ap-southeast-5}
 
 # 2. 上传到 GitHub Secrets
 echo ""
