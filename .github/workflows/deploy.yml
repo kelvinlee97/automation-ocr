@@ -41,11 +41,6 @@ jobs:
             echo ">>> 拉取最新代码..."
             git pull origin main
 
-            echo ">>> 写入环境变量..."
-            # 每次部署覆盖写入，确保 Secrets 与服务器同步
-            printf 'GEMINI_API_KEY=%s\nADMIN_USER=%s\nADMIN_PASS=%s\n' \
-              "$GEMINI_API_KEY" "$ADMIN_USER" "$ADMIN_PASS" > .env
-
             echo ">>> 重新构建并启动容器..."
             # 先 down 清除旧容器（含 v1 遗留的 hash 前缀命名容器），再 up 避免命名冲突
             sudo docker-compose down
