@@ -15,7 +15,7 @@ GIT_BRANCH="${GIT_BRANCH:-main}"
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.large}"
 DATA_VOLUME_SIZE="${DATA_VOLUME_SIZE:-20}"
 ADMIN_IP="${ADMIN_IP:-$(curl -s -4 ifconfig.me)/32}"
-KEY_NAME="${KEY_NAME:-}"
+KEY_NAME="${KEY_NAME:-kelvin97}"
 GITHUB_TOKEN_SECRET_NAME="${GITHUB_TOKEN_SECRET_NAME:-${STACK_NAME}/github-token}"
 
 # CloudFormation 模板路径（相对于项目根目录）
