@@ -271,7 +271,7 @@ async def process_receipt(request: ReceiptOCRRequest):
             success=False,
             error=str(e),
             steps=collector.steps,
-        excelSeq=seq,
+            excelSeq=None, # 此处明确为 None，因为报错时尚未获得 seq
             totalDurationMs=collector.totalDurationMs,
         )
         processStore.add(record)
