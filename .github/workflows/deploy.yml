@@ -41,10 +41,10 @@ jobs:
             git pull origin main
 
             echo ">>> 重新构建并启动容器..."
-            docker-compose up -d --build
+            sudo docker-compose up -d --build
 
             echo ">>> 清理旧镜像，释放磁盘空间..."
-            docker image prune -f
+            sudo docker image prune -f
 
             echo ">>> 确认容器运行状态..."
-            docker ps --filter "name=wa-bot" --format "table {{.Names}}\t{{.Status}}"
+            sudo docker ps --filter "name=wa-bot" --format "table {{.Names}}\t{{.Status}}"
