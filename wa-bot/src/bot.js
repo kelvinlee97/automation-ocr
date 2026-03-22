@@ -16,8 +16,11 @@ const RECONNECT_DELAY_MS = 5000;
 /**
  * 创建并启动 WhatsApp Bot
  * 使用 LocalAuth 持久化 session，重启后无需重新扫码
+ * @param {Object} callbacks
+ * @param {Function} [callbacks.onQR]    - QR 码刷新时回调，参数为 base64 data URI
+ * @param {Function} [callbacks.onReady] - Bot 就绪时回调，参数为 client 实例
  */
-async function createBot() {
+async function createBot({ onQR, onReady } = {}) {
 	const client = new Client({
 		authStrategy: new LocalAuth({
 			dataPath: '.wwebjs_auth',
@@ -35,10 +38,21 @@ async function createBot() {
 	let reconnectAttempts = 0;
 	let isReconnecting = false;
 
-	// QR 码扫码（首次登录时触发）
-	client.on('qr', (qr) => {
+	// QR 码扫码（首次登录或 session 失效时触发）
+	client.on('qr', async (qr) => {
 		logger.info('请扫描二维码登录 WhatsApp');
-		qrcode.generate(qr, { small: true });
+		qrcode.generate(qr, { small: true }); // 保留终端显示，方便 SSH 调试
+
+		// 将 QR 转为 base64 data URI 注入管理后台 Web 页面
+		if (onQR) {
+			try {
+				const QRCode = require('qrcode');
+				const dataUri = await QRCode.toDataURL(qr);
+				onQR(dataUri);
+			} catch (err) {
+				logger.error('QR 码转 base64 失败', { error: err.message });
+			}
+		}
 	});
 
 	// 登录成功：此时才注册消息监听，避免处理 ready 之前同步的离线积压消息
@@ -56,6 +70,9 @@ async function createBot() {
 			if (!message.timestamp || message.timestamp < readyTimestamp) return;
 			await handleMessage(message);
 		});
+
+		// 通知外部（adminServer）client 已就绪
+		if (onReady) onReady(client);
 	});
 
 	// 认证失败

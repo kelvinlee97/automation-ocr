@@ -23,7 +23,7 @@ docker compose logs -f wa-bot   # 查看日志 / 首次扫码
 docker compose down
 ```
 
-**首次启动**：终端日志中会显示 QR 码，用专用 WhatsApp 号扫码登录，凭证保存在 `wa-bot/.wwebjs_auth/`（已 gitignore，重启无需重新扫）。
+**首次启动**：访问 `http://<服务器 IP>/admin/qr` 扫码（Web UI），或在终端日志中查看 QR 码，凭证保存在 `wa-bot/.wwebjs_auth/`（已 gitignore，重启无需重新扫）。
 
 ## 代码架构
 
@@ -92,6 +92,7 @@ ADMIN_PASS=your_admin_password
 
 部署后访问 `http://<服务器 IP>/admin`，用 `ADMIN_USER` / `ADMIN_PASS` 登录。
 
+- **WhatsApp 扫码**：访问 `/admin/qr`（无需登录），页面展示 QR 码图像，扫码成功后自动跳转；导航栏显示连接状态（🟢/🔴）
 - **收据审核**：查看所有收据，可手动通过/拒绝，审核后自动发 WhatsApp 通知给用户
 - **注册用户**：查看所有注册用户
 - **下载 Excel**：一键下载完整数据报表
