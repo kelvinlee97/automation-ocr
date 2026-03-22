@@ -26,6 +26,10 @@ jobs:
           command_timeout: 8m
           script: |
             set -e
+
+            # 修复 Git 安全目录检查（目录 owner 与 SSH 用户不一致时会报 dubious ownership）
+            git config --global --add safe.directory /home/ubuntu/automation-ocr
+
             cd /home/ubuntu/automation-ocr
 
             echo ">>> 拉取最新代码..."
