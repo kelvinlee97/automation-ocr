@@ -4,9 +4,13 @@ services:
       context: ./wa-bot
     container_name: wa-bot
     restart: always
+    ports:
+      - "80:3000"
     environment:
       - NODE_ENV=production
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ADMIN_USER=${ADMIN_USER}
+      - ADMIN_PASS=${ADMIN_PASS}
     volumes:
       # 挂载配置文件目录（Dockerfile 中已创建 /config -> /app/config 符号链接）
       - ./config:/app/config

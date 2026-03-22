@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
     "exceljs": "^4.4.0",
     "js-yaml": "^4.1.0",
     "qrcode-terminal": "^0.12.0",

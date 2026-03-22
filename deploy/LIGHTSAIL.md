@@ -33,11 +33,11 @@ cd automation-ocr
 echo "GEMINI_API_KEY=你的_API_KEY" > .env
 
 # 启动服务
-docker-compose up -d --build
+sudo docker-compose up -d --build
 
 # 扫码登录 (重要)
 # 第一次启动后，查看日志获取二维码
-docker logs -f wa-bot
+sudo docker logs -f wa-bot
 ```
 
 ## 4. 常见问题

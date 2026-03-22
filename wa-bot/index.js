@@ -6,6 +6,7 @@
 const { createBot } = require('./src/bot');
 const { startCleanupJob } = require('./src/sessionManager');
 const { initExcel } = require('./src/services/excelService');
+const { startAdminServer } = require('./src/adminServer');
 const logger = require('./src/utils/logger');
 
 async function main() {
@@ -21,8 +22,11 @@ async function main() {
         logger.info('Session 清理定时任务已启动');
 
         // 3. 创建并启动 Bot
-        const bot = await createBot();
+        const client = await createBot();
         logger.info('Bot 已创建，等待连接...');
+
+        // 4. 启动管理后台（共享同一 WhatsApp client 实例）
+        startAdminServer(client);
 
         // 全局错误处理
         process.on('unhandledRejection', (reason, promise) => {

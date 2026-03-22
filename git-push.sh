@@ -25,16 +25,15 @@ REPO_NAME=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 echo "🔍 仓库: $REPO_NAME"
 echo "🌿 分支: $BRANCH"
 
-# 如果没有变更，提示并退出
+# 如果没有变更，提示但不退出，继续尝试推送
 if [ -z "$(git status --porcelain)" ]; then
-    echo "✅ 工作区很干净，无需提交。"
-    exit 0
+    echo "✅ 工作区很干净，无新变更需提交。"
+else
+    # ── 3. 提交与推送 ─────────────────────────────────────────────
+    echo "📦 正在暂存并提交变更..."
+    git add .
+    git commit -m "$MSG"
 fi
-
-# ── 3. 提交与推送 ─────────────────────────────────────────────
-echo "📦 正在暂存并提交变更..."
-git add .
-git commit -m "$MSG"
 
 echo "🚀 正在推送到 GitHub..."
 git push origin "$BRANCH"
