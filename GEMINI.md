@@ -49,6 +49,10 @@ pm2 start ecosystem.config.js --env production
 
 ## 开发约定与指南
 
+- **推荐工作流：本地隔离开发 & 远程自动化部署**: 
+  - **本地零依赖**: 你无需在 Mac 本地安装 Node.js、Python、EasyOCR 或 OpenCV。所有的复杂环境均封装在 Docker 容器中。
+  - **云端构建**: 通过 `git push` 触发 GitHub Actions（见 `.github/workflows/deploy.yml`），在云端自动构建最新的 Docker 镜像并推送到仓库。
+  - **远程同步**: 远程服务器通过 `docker compose pull` 和 `up -d` 自动拉取并运行最新版本。本地仅作为代码编辑器和指令中心，保持环境绝对干净。
 - **配置驱动业务逻辑**: 所有的业务规则（品牌白名单、最低消费门槛、用户每日提交上限、会话超时等）都集中在 `config/config.yaml` 中。所有的回复话术在 `config/messages.yaml` 中。**开发和维护时，优先修改配置文件，无需硬编码在代码中。**
 - **双向独立**: Python 服务和 Node.js 服务相互解耦。修改各自的代码只需重启对应的服务。若修改了 `config` 目录下的配置，需要同时重启两个服务。
 - **并发与持久化**: OCR 写入 Excel 时使用了异步锁（`asyncio.Lock`）来保证并发安全。Bot 的会话状态机当前存储在内存中，重启即丢失（如有持久化需求，需额外实现，如 Redis）。

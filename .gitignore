@@ -20,3 +20,6 @@ logs/*.log
 # 系统文件
 .DS_Store
 *.env
+
+.gemini/
+gha-creds-*.json

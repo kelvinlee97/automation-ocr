@@ -204,6 +204,23 @@ cmd_deploy() {
     echo -e "  Admin IP:      ${BLUE}${ADMIN_IP}${NC}"
     echo -e "  SSH KeyName:   ${BLUE}${KEY_NAME}${NC}"
 
+    # 尝试读取本地公钥注入（用于直接 SSH 登录，解决无 KeyPair 难题）
+    local ssh_pub_key=""
+    local key_path="$HOME/.ssh/kelvin97.pem"
+    local pub_path="$HOME/.ssh/kelvin97.pub"
+
+    if [[ -f "$pub_path" ]]; then
+        ssh_pub_key=$(cat "$pub_path")
+    elif [[ -f "$key_path" ]]; then
+        ssh_pub_key=$(ssh-keygen -y -f "$key_path" 2>/dev/null || true)
+    fi
+
+    if [[ -n "$ssh_pub_key" ]]; then
+        echo -e "  SSH PubKey:    ${GREEN}已检测并自动注入${NC} (from $key_path)"
+    else
+        _log_warn "未发现本地 SSH 公钥 ($key_path)，将无法直接 SSH 登录（仍可通过 SSM 登录）"
+    fi
+
     # 检查 GitHub Token Secret 是否存在
     local token_secret_param=""
     if aws secretsmanager describe-secret \
@@ -229,6 +246,7 @@ cmd_deploy() {
             "ParameterKey=DataVolumeSize,ParameterValue=$DATA_VOLUME_SIZE" \
             "ParameterKey=AdminIp,ParameterValue=$ADMIN_IP" \
             "ParameterKey=KeyName,ParameterValue=$KEY_NAME" \
+            "ParameterKey=SSHPublicKey,ParameterValue=$ssh_pub_key" \
             "ParameterKey=GitHubTokenSecretName,ParameterValue=$token_secret_param" \
         --region "$REGION" \
         --output text; then
@@ -392,6 +410,84 @@ cmd_ssh() {
     aws ssm start-session \
         --target "$instance_id" \
         --region "$REGION"
+}
+
+cmd_setup_ssh() {
+    _log_step "配置 SSH 公钥注入 (以支持直接 SSH 登录)"
+
+    local instance_id
+    instance_id="$(_require_instance)"
+
+    local state
+    state="$(_get_instance_state "$instance_id")"
+    if [[ "$state" != "running" ]]; then
+        _log_error "实例未运行（当前状态: $state），无法注入公钥"
+        exit 1
+    fi
+
+    # 尝试读取本地公钥
+    local ssh_pub_key=""
+    local key_path="$HOME/.ssh/kelvin97.pem"
+    local pub_path="$HOME/.ssh/kelvin97.pub"
+
+    if [[ -f "$pub_path" ]]; then
+        ssh_pub_key=$(cat "$pub_path")
+    elif [[ -f "$key_path" ]]; then
+        ssh_pub_key=$(ssh-keygen -y -f "$key_path" 2>/dev/null || true)
+    fi
+
+    if [[ -z "$ssh_pub_key" ]]; then
+        _log_error "未发现本地公钥，请确保 $key_path 或 $pub_path 存在"
+        exit 1
+    fi
+
+    _log_info "正在通过 SSM 将公钥注入 ec2-user@$instance_id..."
+
+    # 转义公钥中的单引号，防止 shell 注入
+    local escaped_pub_key
+    escaped_pub_key=$(echo "$ssh_pub_key" | sed "s/'/'\\\\''/g")
+
+    local command_id
+    command_id=$(aws ssm send-command \
+        --instance-ids "$instance_id" \
+        --document-name "AWS-RunShellScript" \
+        --parameters "commands=[\"mkdir -p /home/ec2-user/.ssh && echo '$escaped_pub_key' >> /home/ec2-user/.ssh/authorized_keys && sort -u -o /home/ec2-user/.ssh/authorized_keys /home/ec2-user/.ssh/authorized_keys && chmod 700 /home/ec2-user/.ssh && chmod 600 /home/ec2-user/.ssh/authorized_keys && chown -R ec2-user:ec2-user /home/ec2-user/.ssh\"]" \
+        --region "$REGION" \
+        --query "Command.CommandId" \
+        --output text)
+
+    _log_info "SSM Command ID: $command_id"
+    _log_info "等待注入完成..."
+
+    # 等待命令执行完成
+    local max_wait=20
+    local waited=0
+    while [[ $waited -lt $max_wait ]]; do
+        local cmd_status
+        cmd_status=$(aws ssm get-command-invocation \
+            --command-id "$command_id" \
+            --instance-id "$instance_id" \
+            --region "$REGION" \
+            --query "Status" \
+            --output text 2>/dev/null || echo "Pending")
+
+        if [[ "$cmd_status" == "Success" ]]; then
+            echo ""
+            _log_info "注入成功！您现在可以尝试直接 SSH 登录了："
+            local public_ip
+            public_ip="$(_get_public_ip "$instance_id")"
+            echo -e "  ${CYAN}ssh -i $key_path ec2-user@$public_ip${NC}"
+            return
+        elif [[ "$cmd_status" == "Failed" || "$cmd_status" == "Cancelled" || "$cmd_status" == "TimedOut" ]]; then
+            _log_error "注入失败（状态: $cmd_status）"
+            exit 1
+        fi
+
+        sleep 2
+        waited=$((waited + 2))
+    done
+
+    _log_error "注入超时，请手动检查 SSM 状态"
 }
 
 cmd_logs() {
@@ -665,6 +761,7 @@ _usage() {
     echo "  stop       停止 EC2 实例（保留资源，EBS 继续计费）"
     echo "  start      启动 EC2 实例（恢复服务）"
     echo "  ssh        通过 SSM Session Manager 连接实例"
+    echo "  setup-ssh  将本地公钥注入实例（允许直接使用 ssh 命令登录）"
     echo "  logs       查看容器日志（默认 wa-bot）"
     echo "  update     远程更新代码并重启服务（git pull + docker compose rebuild）"
     echo "  destroy    删除 Stack（需二次确认）"
@@ -706,6 +803,7 @@ main() {
         stop)    cmd_stop "$@" ;;
         start)   cmd_start "$@" ;;
         ssh)     cmd_ssh "$@" ;;
+        setup-ssh) cmd_setup_ssh "$@" ;;
         logs)    cmd_logs "$@" ;;
         update)  cmd_update "$@" ;;
         destroy) cmd_destroy "$@" ;;

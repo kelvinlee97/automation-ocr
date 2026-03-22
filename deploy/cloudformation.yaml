@@ -36,6 +36,11 @@ Parameters:
     Default: ""
     Description: "EC2 密钥对名称（可选，用于 SSH 登录；为空则仅可通过 SSM 登录）"
 
+  SSHPublicKey:
+    Type: String
+    Default: ""
+    Description: "SSH 公钥内容（可选，若提供则自动注入 ec2-user，方便直接通过 SSH 登录）"
+
 
   DataVolumeSize:
     Type: Number
@@ -231,6 +236,19 @@ Resources:
             #!/bin/bash
             set -euo pipefail
             exec > >(tee /var/log/user-data.log | logger -t user-data) 2>&1
+
+            echo "=== [0/6] 注入 SSH 公钥 ==="
+            PUB_KEY="${SSHPublicKey}"
+            if [ -n "$PUB_KEY" ]; then
+              echo "检测到公钥参数，注入 ec2-user..."
+              mkdir -p /home/ec2-user/.ssh
+              echo "$PUB_KEY" >> /home/ec2-user/.ssh/authorized_keys
+              chmod 700 /home/ec2-user/.ssh
+              chmod 600 /home/ec2-user/.ssh/authorized_keys
+              chown -R ec2-user:ec2-user /home/ec2-user/.ssh
+            else
+              echo "未提供 SSH 公钥参数，跳过注入。"
+            fi
 
             echo "=== [1/6] 系统更新 ==="
             dnf update -y
