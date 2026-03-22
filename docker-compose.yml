@@ -1,55 +1,18 @@
-# 双服务编排：ocr-service 先启动，wa-bot 依赖它健康后再启动
-# 用法：
-#   docker compose up -d            # 后台启动全部
-#   docker compose logs -f wa-bot   # 实时查看 bot 日志
-#   docker compose down             # 停止并移除容器（不删 volume）
-
 services:
-  ocr-service:
-    build:
-      context: ./ocr-service
-      dockerfile: Dockerfile
-    container_name: ocr-service
-    restart: unless-stopped
-    ports:
-      # Dashboard 外部访问
-      - "8000:8000"
-    volumes:
-      # 挂载业务配置（只读，改 config.yaml 后 restart 生效）
-      - ./config:/app/config:ro
-      # 挂载 Excel 输出目录（持久化到宿主机）
-      - ./data:/app/data
-      # EasyOCR 模型缓存（约 400MB），容器重建后无需重新下载
-      - easyocr-models:/root/.EasyOCR
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      # EasyOCR 模型加载约需 15 秒，start_period 给足启动宽限期
-      start_period: 60s
-      interval: 15s
-      timeout: 5s
-      retries: 3
-
   wa-bot:
     build:
       context: ./wa-bot
-      dockerfile: Dockerfile
     container_name: wa-bot
-    restart: unless-stopped
-    depends_on:
-      ocr-service:
-        condition: service_healthy
+    restart: always
     environment:
-      # 容器网络中用服务名替代 localhost
-      - OCR_SERVICE_URL=http://ocr-service:8000
       - NODE_ENV=production
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
-      # 挂载业务配置
-      - ./config:/app/config:ro
-      # WhatsApp 登录凭证持久化（避免每次重启都要扫码）
-      - ./wa-bot/.wwebjs_auth:/app/.wwebjs_auth
-      # 挂载日志目录
-      - ./logs:/app/logs
-
-volumes:
-  # EasyOCR 模型持久化：容器删除重建后无需重新下载
-  easyocr-models:
+      - ./data:/opt/automation-ocr/data
+      # 持久化 WhatsApp 登录凭据，防止重启后重新扫码
+      - ./data/wwebjs_auth:/opt/automation-ocr/wa-bot/.wwebjs_auth
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

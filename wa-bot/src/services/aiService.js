@@ -1,0 +1,64 @@
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const fs = require("fs");
+const yaml = require("js-yaml");
+const path = require("path");
+
+// 加载业务规则配置
+const config = yaml.load(fs.readFileSync(path.join(__dirname, "../../../config/config.yaml"), "utf8"));
+
+// 初始化 Gemini (通过环境变量获取 API KEY)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+/**
+ * 调用 Gemini 1.5 Flash 识别收据
+ * @param {string} base64Image 图片数据 (Base64)
+ * @returns {Promise<Object>} 识别结果 { success, receipt_no, brand, amount, qualified, disqualify_reason }
+ */
+async function processReceipt(base64Image) {
+  try {
+    const prompt = `
+      You are a professional auditor for promotional receipts in Malaysia. 
+      Analyze the receipt image and extract the following information:
+      1. Receipt Number (receipt_no)
+      2. Brand Name (brand)
+      3. Total Amount in RM (amount)
+      
+      Eligibility Rules:
+      - Eligible Brands: ${config.eligibility.eligible_brands.join(", ")}
+      - Minimum Amount: RM ${config.eligibility.minimum_amount}
+      
+      Respond STRICTLY in JSON format with these fields:
+      - receipt_no: (string)
+      - brand: (string)
+      - amount: (number)
+      - qualified: (boolean, true if brand is in eligible list AND amount >= minimum)
+      - disqualify_reason: (string, explanation if not qualified, otherwise empty)
+      - confidence: (number, 0.0 to 1.0)
+    `;
+
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: base64Image,
+          mimeType: "image/jpeg",
+        },
+      },
+    ]);
+
+    const response = await result.response;
+    const text = response.text().replace(/```json|```/g, "").trim();
+    const data = JSON.parse(text);
+
+    return {
+      success: true,
+      ...data
+    };
+  } catch (error) {
+    console.error("Gemini API Error:", error);
+    return { success: false, message: "AI 识别服务暂时不可用" };
+  }
+}
+
+module.exports = { processReceipt };
