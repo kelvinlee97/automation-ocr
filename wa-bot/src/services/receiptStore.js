@@ -175,6 +175,24 @@ function rejectReceipt(id, note = "") {
 }
 
 /**
+ * 记录人工发送给用户的消息内容，状态流转为 confirmed
+ * 用于「发送给用户」操作后保存已发内容，方便审计
+ *
+ * @param {string} id
+ * @param {string} message  发送的消息文本
+ */
+function saveSentMessage(id, message) {
+  const records = readStore();
+  const idx     = records.findIndex(r => r.id === id);
+  if (idx === -1) throw new Error(`Receipt not found: ${id}`);
+
+  records[idx].status      = "confirmed";
+  records[idx].sentMessage = message;
+  records[idx].sentAt      = new Date().toISOString();
+  writeStore(records);
+}
+
+/**
  * 返回图片的绝对磁盘路径（供 Express res.sendFile 使用）
  * @param {string} filename
  * @returns {string}
@@ -190,5 +208,6 @@ module.exports = {
   saveAiResult,
   confirmReceipt,
   rejectReceipt,
+  saveSentMessage,
   getImagePath,
 };
