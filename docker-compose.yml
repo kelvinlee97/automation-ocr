@@ -14,9 +14,12 @@ services:
     volumes:
       # 挂载配置文件目录（Dockerfile 中已创建 /config -> /app/config 符号链接）
       - ./config:/app/config
+      # 挂载代码目录，更新代码只需 git pull + docker compose restart，无需 --build
+      - ./wa-bot/src:/app/src
       - ./data:/opt/automation-ocr/data
       # 持久化 WhatsApp 登录凭据，防止重启后重新扫码
-      - ./data/wwebjs_auth:/opt/automation-ocr/wa-bot/.wwebjs_auth
+      # LocalAuth dataPath='.wwebjs_auth'，工作目录为 /app，实际写入 /app/.wwebjs_auth
+      - ./data/wwebjs_auth:/app/.wwebjs_auth
     logging:
       driver: "json-file"
       options:
