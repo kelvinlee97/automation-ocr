@@ -8,7 +8,7 @@ const config = yaml.load(fs.readFileSync(path.join(__dirname, "../../../config/c
 
 // 初始化 Gemini (通过环境变量获取 API KEY)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 /**
  * 调用 Gemini 识别收据
