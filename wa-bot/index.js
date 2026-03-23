@@ -35,12 +35,12 @@ async function main() {
         logger.info('Bot 已就绪，系统全面启动');
 
         // 全局错误处理
-        process.on('unhandledRejection', (reason, promise) => {
-            logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+        process.on('unhandledRejection', (reason) => {
+            logger.error('Unhandled Rejection', { reason: reason?.stack || reason });
         });
 
         process.on('uncaughtException', (err) => {
-            logger.error('Uncaught Exception:', err);
+            logger.error('Uncaught Exception', { stack: err.stack });
         });
 
     } catch (error) {
