@@ -16,26 +16,21 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: SSH 部署到 Lightsail
+      - name: SSH 部署到 EC2
         uses: appleboy/ssh-action@v1.0.3
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ADMIN_USER: ${{ secrets.ADMIN_USER }}
           ADMIN_PASS: ${{ secrets.ADMIN_PASS }}
         with:
-          host: ${{ secrets.LIGHTSAIL_HOST }}
-          username: ${{ secrets.LIGHTSAIL_USER }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
           # 超时设置：单条命令最长 8 分钟（docker build 可能较慢）
           command_timeout: 8m
           envs: GEMINI_API_KEY,ADMIN_USER,ADMIN_PASS
           script: |
             set -e
-
-            # 修正仓库目录 owner（manage.sh 用 root 克隆，需改为 ubuntu 可写）
-            sudo chown -R ubuntu:ubuntu /home/ubuntu/automation-ocr
-
-            git config --global --add safe.directory /home/ubuntu/automation-ocr
 
             cd /home/ubuntu/automation-ocr
 
@@ -46,12 +41,12 @@ jobs:
             git pull origin main
 
             echo ">>> 重新构建并启动容器..."
-            # 先 down 清除旧容器（含 v1 遗留的 hash 前缀命名容器），再 up 避免命名冲突
-            sudo -E docker-compose down
-            sudo -E docker-compose up -d --build --remove-orphans
+            # ubuntu 已加入 docker 组，无需 sudo，环境变量直接继承
+            docker compose down
+            docker compose up -d --build --remove-orphans
 
             echo ">>> 清理旧镜像，释放磁盘空间..."
-            sudo docker image prune -f
+            docker image prune -f
 
             echo ">>> 确认容器运行状态..."
-            sudo docker ps --filter "name=wa-bot" --format "table {{.Names}}\t{{.Status}}"
+            docker ps --filter "name=wa-bot" --format "table {{.Names}}\t{{.Status}}"
