@@ -375,7 +375,8 @@ function receiptsPage(receipts) {
       return `<tr id="row-${r.id}">
       <td>${receipts.length - idx}</td>
       <td>${r.submittedAt ? new Date(r.submittedAt).toLocaleString("zh-CN") : "—"}</td>
-      <td style="font-size:12px">${r.phone || "—"}</td>
+      <td style="font-size:12px">${(r.phone || "—").replace(/@c\.us$/, "")}</td>
+      <td style="font-size:12px">${r.ic || "—"}</td>
       <td>${thumb}</td>
       <td>${statusBadge}</td>
       <td>${renderAiResult(r.aiResult)}</td>
@@ -393,7 +394,7 @@ function receiptsPage(receipts) {
     <table>
       <thead>
         <tr>
-          <th>#</th><th>提交时间</th><th>手机号</th><th>收据图片</th>
+          <th>#</th><th>提交时间</th><th>手机号</th><th>身份证号</th><th>收据图片</th>
           <th>状态</th><th>AI 提取结果</th><th>审核备注</th><th>操作</th>
         </tr>
       </thead>
@@ -449,7 +450,7 @@ function usersPage(registrations) {
       (r) => `<tr>
       <td>${r.rowNo - 1}</td>
       <td>${r["Time"] || ""}</td>
-      <td>${r["Phone"] || ""}</td>
+      <td>${(r["Phone"] || "").replace(/@c\.us$/, "")}</td>
       <td>${r["IC Number"] || ""}</td>
       <td><span class="badge badge-yes">${r["Status"] || ""}</span></td>
     </tr>`

@@ -28,7 +28,7 @@ async function handleReceipt(msg, session) {
 
     // 将图片持久化到 data/images/，记录 pending_review 状态
     // AI 识别延后到管理后台由人工触发，避免 WhatsApp 超时
-    addPendingReceipt(msg.from, media.data, media.mimetype);
+    addPendingReceipt(msg.from, media.data, media.mimetype, session.ic ?? null);
 
     await msg.reply(r.received ?? DEFAULT_MESSAGES.receipt.received);
 

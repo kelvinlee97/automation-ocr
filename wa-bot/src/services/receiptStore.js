@@ -79,9 +79,10 @@ function extFromMime(mimeType) {
  * @param {string} phone       - 发送方 WhatsApp 号码（e.g. "60123456789@c.us"）
  * @param {string} base64Data  - 图片 Base64 数据（不含 data:image/... 前缀）
  * @param {string} mimeType    - 图片 MIME 类型
+ * @param {string} [ic]        - 用户身份证号（来自 session.ic）
  * @returns {{ id: string, imageFilename: string }}
  */
-function addPendingReceipt(phone, base64Data, mimeType) {
+function addPendingReceipt(phone, base64Data, mimeType, ic = null) {
   const id            = generateId();
   const ext           = extFromMime(mimeType);
   const imageFilename = `${id}.${ext}`;
@@ -93,6 +94,7 @@ function addPendingReceipt(phone, base64Data, mimeType) {
   const record = {
     id,
     phone,
+    ic,
     imageFilename,
     status:      "pending_review",
     submittedAt: new Date().toISOString(),
