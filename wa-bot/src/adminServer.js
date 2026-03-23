@@ -138,9 +138,6 @@ function htmlLayout(title, content) {
     <span class="brand">⚙ 管理后台</span>
     <div class="nav-right">
       ${statusBadge}
-      <a href="/admin/receipts">收据审核</a>
-      <a href="/admin/users">注册用户</a>
-      <a href="/admin/export">下载 Excel</a>
       <form class="inline" method="POST" action="/admin/logout">
         <button class="btn btn-logout" style="margin-left:12px">退出</button>
       </form>
