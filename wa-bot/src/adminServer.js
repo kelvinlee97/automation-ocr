@@ -2,6 +2,8 @@
  * 管理后台 Express 服务器
  * 与 Bot 同进程运行，通过 setClient()/setQR() 注入 WhatsApp 状态
  * 端口：3000（docker-compose 映射到宿主机 80）
+ *
+ * 单一界面设计：只保留收据审核页，人工主动发消息给用户
  */
 
 const express = require("express");
@@ -9,10 +11,9 @@ const session = require("express-session");
 const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
-const { getRegistrations, getExcelPath } = require("./services/excelService");
+const { getExcelPath } = require("./services/excelService");
 const receiptStore = require("./services/receiptStore");
 const { processReceipt } = require("./services/aiService");
-const settingsStore = require("./services/settingsStore");
 const logger = require("./utils/logger");
 
 const ADMIN_PORT = 3000;
@@ -99,8 +100,6 @@ function htmlLayout(title, content) {
     tr:hover td { background: #fafbff; }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 12px;
              font-size: 11px; font-weight: 600; letter-spacing: .3px; }
-    .badge-yes           { background: #e6f9f0; color: #1a7f4e; }
-    .badge-no            { background: #fff0f0; color: #c0392b; }
     .badge-pending_review { background: #fff8e1; color: #b45309; }
     .badge-ai_extracted  { background: #eff6ff; color: #1d4ed8; }
     .badge-confirmed     { background: #e6f9f0; color: #1a7f4e; }
@@ -109,10 +108,9 @@ function htmlLayout(title, content) {
            font-weight: 600; cursor: pointer; border: none; text-decoration: none;
            transition: opacity .15s; }
     .btn:hover { opacity: .82; }
-    .btn-approve { background: #22c55e; color: #fff; }
-    .btn-reject  { background: #ef4444; color: #fff; margin-left: 6px; }
     .btn-primary { background: #3b82f6; color: #fff; }
     .btn-ai      { background: #6366f1; color: #fff; }
+    .btn-send    { background: #10b981; color: #fff; }
     .btn-logout  { background: transparent; color: #a8b8d8; border: 1px solid #3a4a6b; }
     .btn:disabled { opacity: .5; cursor: not-allowed; }
     form.inline { display: inline; }
@@ -132,6 +130,20 @@ function htmlLayout(title, content) {
     /* AI 结果展示 */
     .ai-result { font-size: 12px; color: #374151; line-height: 1.6; }
     .ai-result strong { color: #1a1a2e; }
+    /* 发送消息表单 */
+    .send-form { display: flex; gap: 6px; align-items: flex-start; flex-direction: column; }
+    .send-form textarea {
+      width: 200px; font-size: 12px; padding: 6px 8px;
+      border: 1px solid #ddd; border-radius: 4px; resize: vertical;
+      min-height: 52px; font-family: inherit;
+    }
+    .send-form textarea:focus { outline: none; border-color: #10b981; }
+    /* 已发送记录 */
+    .sent-record { font-size: 11px; color: #555; line-height: 1.5; }
+    .sent-record .sent-msg { background: #f0fdf4; border-left: 3px solid #10b981;
+                              padding: 4px 8px; border-radius: 0 4px 4px 0; margin-bottom: 4px;
+                              white-space: pre-wrap; word-break: break-word; }
+    .sent-record .sent-time { color: #aaa; font-size: 10px; }
   </style>
 </head>
 <body>
@@ -139,10 +151,7 @@ function htmlLayout(title, content) {
     <span class="brand">⚙ 管理后台</span>
     <div class="nav-right">
       ${statusBadge}
-      <a href="/admin/receipts">收据审核</a>
-      <a href="/admin/users">注册用户</a>
-      <a href="/admin/settings">系统设置</a>
-      <a href="/admin/export">下载 Excel</a>
+      <a href="/admin/export">⬇ 下载 Excel</a>
       <form class="inline" method="POST" action="/admin/logout">
         <button class="btn btn-logout" style="margin-left:12px">退出</button>
       </form>
@@ -286,8 +295,8 @@ function qrPage() {
         const { connected, hasQR } = await res.json();
 
         if (connected) {
-          // 扫码成功，跳转到收据页
-          window.location.href = '/admin/receipts';
+          // 扫码成功，跳转到审核页
+          window.location.href = '/admin';
           return;
         }
 
@@ -313,54 +322,69 @@ function qrPage() {
 
 const STATUS_LABEL = {
   pending_review: "待 AI 提取",
-  ai_extracted:   "待人工审核",
-  confirmed:      "已确认",
+  ai_extracted:   "待发消息",
+  confirmed:      "已发送",
   rejected:       "已拒绝",
 };
 
 /**
- * 渲染单条收据的 AI 结果摘要（ai_extracted / confirmed / rejected 时显示）
+ * 渲染单条收据的 AI 结果摘要（ai_extracted / confirmed 时显示）
+ * 只显示金额和图片摘要，不显示合格/不合格判定（由人工决定）
  */
 function renderAiResult(aiResult) {
   if (!aiResult) return '<span style="color:#aaa;font-size:12px">—</span>';
-  const qualified = aiResult.qualified
-    ? '<span class="badge badge-yes">合格</span>'
-    : '<span class="badge badge-no">不合格</span>';
   return `<div class="ai-result">
-    <strong>单据号：</strong>${aiResult.receipt_no || "—"}<br>
     <strong>金额：</strong>RM ${aiResult.amount ?? "—"}<br>
-    ${qualified}
-    ${aiResult.disqualify_reason ? `<br><span style="color:#c0392b;font-size:11px">${aiResult.disqualify_reason}</span>` : ""}
+    <strong>摘要：</strong>${aiResult.summary || "—"}
   </div>`;
 }
 
 /**
- * 渲染单行操作按钮
+ * 渲染单行操作区
  * - pending_review  → [AI 提取] 按钮（AJAX）
- * - ai_extracted    → [确认] [拒绝] 按钮
- * - confirmed/rejected → 仅显示审核时间
+ * - ai_extracted    → 自由文本输入框 + [发送给用户] 按钮
+ * - confirmed       → 显示已发送的消息内容和时间（只读）
+ * - rejected        → 仅显示时间（历史状态，保持兼容）
  */
 function renderActions(r) {
   if (r.status === "pending_review") {
     return `<button class="btn btn-ai" onclick="aiExtract('${r.id}', this)">🤖 AI 提取</button>`;
   }
+
   if (r.status === "ai_extracted") {
-    return `<form class="inline" method="POST" action="/admin/receipts/${r.id}/confirm"
-               onsubmit="return confirm('确认通过此收据？')">
-             <button class="btn btn-approve">✅ 确认</button>
-           </form>
-           <form class="inline" method="POST" action="/admin/receipts/${r.id}/reject"
-               onsubmit="return confirmReject(this)">
-             <input type="text" name="note" placeholder="拒绝原因（可选）"
-                    style="font-size:12px;padding:4px 8px;border:1px solid #ddd;border-radius:4px;width:130px" />
-             <button class="btn btn-reject">❌ 拒绝</button>
-           </form>`;
+    // 转义 HTML 特殊字符，防止 XSS
+    return `<form class="send-form" method="POST" action="/admin/receipts/${r.id}/send-message">
+      <textarea name="message" placeholder="输入要发给用户的消息…" required></textarea>
+      <button type="submit" class="btn btn-send">📤 发送给用户</button>
+    </form>`;
   }
-  // confirmed / rejected
+
+  if (r.status === "confirmed") {
+    // 已发送：展示消息内容和时间（只读审计）
+    const sentTime = r.sentAt ? new Date(r.sentAt).toLocaleString("zh-CN") : "—";
+    const sentMsg  = r.sentMessage
+      ? `<div class="sent-msg">${escapeHtml(r.sentMessage)}</div>`
+      : "";
+    return `<div class="sent-record">
+      ${sentMsg}
+      <span class="sent-time">发送于 ${sentTime}</span>
+    </div>`;
+  }
+
+  // rejected 或其他历史状态
   return `<span style="color:#aaa;font-size:12px">${r.reviewedAt ? new Date(r.reviewedAt).toLocaleString("zh-CN") : "—"}</span>`;
 }
 
-// ─── 收据列表页（新版，数据源：receiptStore） ─────────────────────────────────
+/** 转义 HTML 特殊字符，防止消息内容中含有尖括号等引发 XSS */
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// ─── 收据列表页 ────────────────────────────────────────────────────────────────
 
 function receiptsPage(receipts) {
   if (receipts.length === 0) {
@@ -381,8 +405,7 @@ function receiptsPage(receipts) {
       <td>${thumb}</td>
       <td>${statusBadge}</td>
       <td>${renderAiResult(r.aiResult)}</td>
-      <td style="max-width:140px;word-break:break-word;font-size:12px">${r.reviewNote || "—"}</td>
-      <td>${renderActions(r)}</td>
+      <td style="max-width:220px">${renderActions(r)}</td>
     </tr>`;
     })
     .join("");
@@ -390,13 +413,12 @@ function receiptsPage(receipts) {
   const content = `
     <div class="toolbar">
       <span style="color:#666;font-size:13px">共 ${receipts.length} 条记录</span>
-      <a href="/admin/export" class="btn btn-primary" style="margin-left:auto">⬇ 下载 Excel</a>
     </div>
     <table>
       <thead>
         <tr>
           <th>#</th><th>提交时间</th><th>手机号</th><th>身份证号</th><th>收据图片</th>
-          <th>状态</th><th>AI 提取结果</th><th>审核备注</th><th>操作</th>
+          <th>状态</th><th>AI 提取结果</th><th>操作 / 记录</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -404,7 +426,7 @@ function receiptsPage(receipts) {
     <script>
       /**
        * AJAX 触发 AI 提取，不刷整页
-       * 提取成功后局部更新该行的状态列和操作列
+       * 提取成功后重载页面以显示最新状态和发送表单
        */
       async function aiExtract(id, btn) {
         btn.disabled = true;
@@ -421,7 +443,7 @@ function receiptsPage(receipts) {
             return;
           }
 
-          // 提取成功，重载整页以显示最新状态
+          // 提取成功，重载整页以显示发送表单
           window.location.reload();
         } catch (e) {
           alert('网络错误，请重试');
@@ -429,47 +451,9 @@ function receiptsPage(receipts) {
           btn.textContent = '🤖 AI 提取';
         }
       }
-
-      function confirmReject(form) {
-        const note = form.querySelector('input[name="note"]').value;
-        return confirm('确认拒绝此收据？' + (note ? '\\n原因：' + note : ''));
-      }
     </script>`;
 
   return htmlLayout("收据审核", content);
-}
-
-// ─── 注册用户列表页 ────────────────────────────────────────────────────────────
-
-function usersPage(registrations) {
-  if (registrations.length === 0) {
-    return htmlLayout("注册用户", '<div class="empty">暂无注册记录</div>');
-  }
-
-  const rows = registrations
-    .map(
-      (r) => `<tr>
-      <td>${r.rowNo - 1}</td>
-      <td>${r["Time"] || ""}</td>
-      <td>${(r["Phone"] || "").replace(/@c\.us$/, "")}</td>
-      <td>${r["IC Number"] || ""}</td>
-      <td><span class="badge badge-yes">${r["Status"] || ""}</span></td>
-    </tr>`
-    )
-    .join("");
-
-  const content = `
-    <div class="toolbar">
-      <span style="color:#666;font-size:13px">共 ${registrations.length} 名用户</span>
-    </div>
-    <table>
-      <thead>
-        <tr><th>#</th><th>注册时间</th><th>手机号</th><th>IC 号</th><th>状态</th></tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-
-  return htmlLayout("注册用户", content);
 }
 
 // ─── 主函数：启动 Express 服务器 ───────────────────────────────────────────────
@@ -498,18 +482,29 @@ function startAdminServer() {
 
   // ── 路由 ──────────────────────────────────────────────────────────────────
 
-  // 根路径跳转
+  // 根路径：已登录直接渲染收据审核页，未登录跳登录
   app.get("/admin", (req, res) => {
-    if (req.session.authenticated) {
-      return res.redirect("/admin/receipts");
+    if (!req.session.authenticated) {
+      return res.redirect("/admin/login");
     }
-    res.redirect("/admin/login");
+    try {
+      const receipts = receiptStore.getAll();
+      res.send(receiptsPage(receipts));
+    } catch (err) {
+      logger.error("加载收据列表失败", { error: err.message });
+      res.status(500).send("加载失败：" + err.message);
+    }
+  });
+
+  // /admin/receipts 重定向到 /admin（向后兼容旧书签）
+  app.get("/admin/receipts", (req, res) => {
+    res.redirect("/admin");
   });
 
   // QR 码扫码页（无需登录，Bot 未就绪时供非技术用户扫码）
   app.get("/admin/qr", (req, res) => {
     if (_waConnected) {
-      return res.redirect("/admin/receipts");
+      return res.redirect("/admin");
     }
     res.send(qrPage());
   });
@@ -521,7 +516,7 @@ function startAdminServer() {
 
   // 登录页
   app.get("/admin/login", (req, res) => {
-    if (req.session.authenticated) return res.redirect("/admin/receipts");
+    if (req.session.authenticated) return res.redirect("/admin");
     res.send(loginPage());
   });
 
@@ -530,7 +525,7 @@ function startAdminServer() {
     if (username === credentials.user && password === credentials.pass) {
       req.session.authenticated = true;
       req.session.username = username;
-      return res.redirect("/admin/receipts");
+      return res.redirect("/admin");
     }
     res.send(loginPage("用户名或密码错误，请重试"));
   });
@@ -544,20 +539,8 @@ function startAdminServer() {
 
   // ── 收据相关路由 ──────────────────────────────────────────────────────────
 
-  // 收据列表（数据源改为 receiptStore JSON）
-  app.get("/admin/receipts", requireAuth, (req, res) => {
-    try {
-      const receipts = receiptStore.getAll();
-      res.send(receiptsPage(receipts));
-    } catch (err) {
-      logger.error("加载收据列表失败", { error: err.message });
-      res.status(500).send("加载失败：" + err.message);
-    }
-  });
-
   // 静态图片服务：将 data/images/ 中的图片暴露给前端缩略图和灯箱
   app.get("/admin/images/:filename", requireAuth, (req, res) => {
-    // 防止路径穿越攻击：只取 basename，不允许 ../ 等
     // 防止路径穿越攻击：只取 basename，不允许 ../ 等
     const filename = path.basename(req.params.filename);
     const imagePath = receiptStore.getImagePath(filename);
@@ -585,19 +568,18 @@ function startAdminServer() {
       const imageBuffer = fs.readFileSync(imagePath);
       const base64Image = imageBuffer.toString("base64");
 
-      // 调用 Gemini，传入图片 base64 及实际 MIME 类型
-      const imageMime = record.imageFilename.endsWith(".png") ? "image/png"
+      // 根据文件名后缀推断实际 MIME 类型
+      const imageMime = record.imageFilename.endsWith(".png")  ? "image/png"
                       : record.imageFilename.endsWith(".webp") ? "image/webp"
                       : "image/jpeg";
       const aiResult = await processReceipt(base64Image, imageMime);
 
       if (!aiResult.success) {
-        // 把真实错误消息透传给前端，方便诊断
         return res.status(502).json({ error: `AI 识别失败：${aiResult.message}` });
       }
 
       receiptStore.saveAiResult(id, aiResult);
-      logger.info("AI 提取完成", { id, brand: aiResult.brand, amount: aiResult.amount });
+      logger.info("AI 提取完成", { id, amount: aiResult.amount });
 
       res.json({ ok: true, aiResult });
     } catch (err) {
@@ -606,100 +588,45 @@ function startAdminServer() {
     }
   });
 
-  // 人工确认收据
-  app.post("/admin/receipts/:id/confirm", requireAuth, async (req, res) => {
+  /**
+   * 人工发送消息给用户
+   * 输入任意文本 → 调用 WhatsApp 发送 → 保存记录 → 状态改为 confirmed
+   */
+  app.post("/admin/receipts/:id/send-message", requireAuth, async (req, res) => {
     const { id } = req.params;
-    const { note = "" } = req.body;
+    const message = (req.body.message || "").trim();
+
+    if (!message) {
+      return res.status(400).send("消息内容不能为空");
+    }
 
     try {
       const record = receiptStore.getById(id);
       if (!record) return res.status(404).send("收据不存在");
 
-      receiptStore.confirmReceipt(id, note);
-      logger.info("收据已确认", { id, phone: record.phone });
+      // 补全 chatId 格式
+      const chatId = record.phone.includes("@") ? record.phone : `${record.phone}@c.us`;
 
-      // 发送 WhatsApp 通知（client 未就绪时自动跳过）
-      const aiResult = record.aiResult || {};
-      await sendReviewNotification("approved", note, {
-        phone:      record.phone,
-        receipt_no: aiResult.receipt_no,
-        brand:      aiResult.brand,
-        amount:     aiResult.amount,
-      });
+      // 发送 WhatsApp 消息（client 未就绪时报错，让用户知道）
+      if (!_client || typeof _client.sendMessage !== "function") {
+        return res.status(503).send("WhatsApp 尚未连接，请先扫码");
+      }
 
-      res.redirect("/admin/receipts");
+      await _client.sendMessage(chatId, message);
+      logger.info("WhatsApp 消息已发送", { id, chatId, messageLength: message.length });
+
+      // 保存发送记录，状态改为 confirmed
+      receiptStore.saveSentMessage(id, message);
+
+      res.redirect("/admin");
     } catch (err) {
-      logger.error("确认操作失败", { id, error: err.message });
-      res.status(500).send("操作失败：" + err.message);
+      logger.error("发送消息失败", { id, error: err.message });
+      res.status(500).send("发送失败：" + err.message);
     }
   });
 
-  // 人工拒绝收据
-  app.post("/admin/receipts/:id/reject", requireAuth, async (req, res) => {
-    const { id } = req.params;
-    const { note = "" } = req.body;
+  // ── 下载 Excel ────────────────────────────────────────────────────────────
 
-    try {
-      const record = receiptStore.getById(id);
-      if (!record) return res.status(404).send("收据不存在");
-
-      receiptStore.rejectReceipt(id, note);
-      logger.info("收据已拒绝", { id, phone: record.phone, note });
-
-      // 发送 WhatsApp 通知
-      await sendReviewNotification("rejected", note, { phone: record.phone });
-
-      res.redirect("/admin/receipts");
-    } catch (err) {
-      logger.error("拒绝操作失败", { id, error: err.message });
-      res.status(500).send("操作失败：" + err.message);
-    }
-  });
-
-  // ── 其他路由 ──────────────────────────────────────────────────────────────
-
-  // 系统设置页
-  app.get("/admin/settings", requireAuth, (req, res) => {
-    const settings = settingsStore.getAll();
-    const saved = req.query.saved === "1";
-    const content = `
-      <form method="POST" action="/admin/settings" style="max-width:480px">
-        <div style="background:#fff;border-radius:8px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
-          ${saved ? '<div style="background:#e6f9f0;color:#1a7f4e;padding:10px 14px;border-radius:6px;margin-bottom:20px;font-size:13px">✅ 设置已保存</div>' : ""}
-          <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">
-            最低消费门槛（RM）
-          </label>
-          <input type="number" name="minimum_amount" min="0" step="0.01"
-                 value="${settings.minimum_amount}"
-                 style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:20px" />
-          <button type="submit" class="btn btn-primary" style="padding:9px 24px">保存</button>
-        </div>
-      </form>`;
-    res.send(htmlLayout("系统设置", content));
-  });
-
-  app.post("/admin/settings", requireAuth, (req, res) => {
-    const minimum_amount = parseFloat(req.body.minimum_amount);
-    if (isNaN(minimum_amount) || minimum_amount < 0) {
-      return res.status(400).send("金额无效");
-    }
-    settingsStore.set("minimum_amount", minimum_amount);
-    logger.info("系统设置已更新", { minimum_amount });
-    res.redirect("/admin/settings?saved=1");
-  });
-
-  // 注册用户列表
-  app.get("/admin/users", requireAuth, async (req, res) => {
-    try {
-      const registrations = await getRegistrations();
-      res.send(usersPage(registrations));
-    } catch (err) {
-      logger.error("加载用户列表失败", { error: err.message });
-      res.status(500).send("加载失败：" + err.message);
-    }
-  });
-
-  // 下载 Excel
   app.get("/admin/export", requireAuth, (req, res) => {
     const excelPath = getExcelPath();
     res.download(excelPath, "records.xlsx", (err) => {
@@ -714,49 +641,6 @@ function startAdminServer() {
   app.listen(ADMIN_PORT, () => {
     logger.info(`管理后台已启动，监听端口 ${ADMIN_PORT}`);
   });
-}
-
-/**
- * 向用户发送审核结果 WhatsApp 通知
- * _client 未就绪时自动跳过（不阻断审核流程）
- */
-async function sendReviewNotification(action, note, rowData) {
-  // null-safe：client 未就绪时跳过，不影响审核写 JSON
-  if (!_client || typeof _client.sendMessage !== "function") {
-    logger.warn("WhatsApp client 未就绪，跳过通知");
-    return;
-  }
-
-  const { phone, receipt_no, brand, amount } = rowData;
-
-  if (!phone) {
-    logger.warn("收据记录缺少手机号，跳过 WhatsApp 通知");
-    return;
-  }
-
-  // 补全 chatId 格式，phone 存储格式可能是 "60123456789" 或 "60123456789@c.us"
-  const chatId = phone.includes("@") ? phone : `${phone}@c.us`;
-
-  let message;
-  if (action === "approved") {
-    message =
-      `✅ 您的收据已审核通过！\n` +
-      `单据号：${receipt_no || "—"} | 品牌：${brand || "—"} | 金额：RM ${amount || "—"}\n` +
-      `感谢您的参与！`;
-  } else {
-    message =
-      `❌ 您的收据审核未通过。\n` +
-      `原因：${note || "不符合条件"}\n` +
-      `如有疑问请重新提交。`;
-  }
-
-  try {
-    await _client.sendMessage(chatId, message);
-    logger.info("WhatsApp 通知已发送", { chatId, action });
-  } catch (err) {
-    // 发送失败不阻断审核流程，记录日志即可
-    logger.error("WhatsApp 通知发送失败", { chatId, error: err.message });
-  }
 }
 
 module.exports = { startAdminServer, setClient, setQR };
