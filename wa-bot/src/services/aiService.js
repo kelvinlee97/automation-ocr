@@ -8,14 +8,15 @@ const config = yaml.load(fs.readFileSync(path.join(__dirname, "../../../config/c
 
 // 初始化 Gemini (通过环境变量获取 API KEY)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 /**
- * 调用 Gemini 1.5 Flash 识别收据
+ * 调用 Gemini 识别收据
  * @param {string} base64Image 图片数据 (Base64)
+ * @param {string} [mimeType]  图片 MIME 类型，默认 image/jpeg
  * @returns {Promise<Object>} 识别结果 { success, receipt_no, brand, amount, qualified, disqualify_reason }
  */
-async function processReceipt(base64Image) {
+async function processReceipt(base64Image, mimeType = "image/jpeg") {
   try {
     // 马来西亚收据可能混用中文、马来文或英文，需明确告知模型
     const prompt = `
@@ -44,7 +45,7 @@ async function processReceipt(base64Image) {
       {
         inlineData: {
           data: base64Image,
-          mimeType: "image/jpeg",
+          mimeType,           // 使用传入的实际 MIME 类型，不硬编码
         },
       },
     ]);
@@ -58,8 +59,9 @@ async function processReceipt(base64Image) {
       ...data
     };
   } catch (error) {
+    // 透传真实错误信息，方便上层记录和诊断
     console.error("Gemini API Error:", error);
-    return { success: false, message: "AI 识别服务暂时不可用" };
+    return { success: false, message: error.message || "AI 识别服务暂时不可用" };
   }
 }
 

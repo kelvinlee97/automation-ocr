@@ -584,11 +584,15 @@ function startAdminServer() {
       const imageBuffer = fs.readFileSync(imagePath);
       const base64Image = imageBuffer.toString("base64");
 
-      // 调用 Gemini，传入图片 base64
-      const aiResult = await processReceipt(base64Image);
+      // 调用 Gemini，传入图片 base64 及实际 MIME 类型
+      const imageMime = record.imageFilename.endsWith(".png") ? "image/png"
+                      : record.imageFilename.endsWith(".webp") ? "image/webp"
+                      : "image/jpeg";
+      const aiResult = await processReceipt(base64Image, imageMime);
 
       if (!aiResult.success) {
-        return res.status(502).json({ error: "AI 识别服务暂时不可用，请稍后重试" });
+        // 把真实错误消息透传给前端，方便诊断
+        return res.status(502).json({ error: `AI 识别失败：${aiResult.message}` });
       }
 
       receiptStore.saveAiResult(id, aiResult);
