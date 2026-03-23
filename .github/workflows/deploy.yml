@@ -12,85 +12,33 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # 直接在 EC2 服务器上运行，无需 SSM 中间层
+    runs-on: self-hosted
     timeout-minutes: 15
 
     steps:
-      - name: 配置 AWS 凭据
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-southeast-5
+      - name: 拉取最新代码
+        run: |
+          cd /home/ubuntu/automation-ocr
+          git pull origin main
 
-      - name: 通过 SSM 部署到 EC2
+      - name: 写入环境变量
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ADMIN_USER: ${{ secrets.ADMIN_USER }}
           ADMIN_PASS: ${{ secrets.ADMIN_PASS }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          INSTANCE_ID: i-01e04810ff1f9f5d1
         run: |
-          # 通过 SSM 下发部署脚本（不需要开放 SSH 端口）
-          # 注意：git 命令加 sudo -u ubuntu，避免 root 操作 ubuntu 目录触发 git 安全策略
-          COMMAND_ID=$(aws ssm send-command \
-            --region ap-southeast-5 \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --parameters commands="[
-              \"set -e\",
-              \"cd /home/ubuntu/automation-ocr\",
-              \"sudo -u ubuntu git remote set-url origin https://${GH_TOKEN}@github.com/kelvinlee97/automation-ocr.git\",
-              \"echo '>>> 拉取最新代码...'\",
-              \"sudo -u ubuntu git pull origin main\",
-              \"echo '>>> 写入环境变量...'\",
-              \"printf 'GEMINI_API_KEY=%s\\\\nADMIN_USER=%s\\\\nADMIN_PASS=%s\\\\n' '${GEMINI_API_KEY}' '${ADMIN_USER}' '${ADMIN_PASS}' > .env\",
-              \"echo '>>> 重新构建并启动容器...'\",
-              \"docker compose down\",
-              \"docker compose up -d --build --remove-orphans\",
-              \"echo '>>> 清理旧镜像...'\",
-              \"docker image prune -f\",
-              \"echo '>>> 容器状态:'\",
-              \"docker ps --filter 'name=wa-bot' --format 'table {{.Names}}\\\\t{{.Status}}'\"
-            ]" \
-            --timeout-seconds 600 \
-            --query "Command.CommandId" \
-            --output text)
+          printf 'GEMINI_API_KEY=%s\nADMIN_USER=%s\nADMIN_PASS=%s\n' \
+            "$GEMINI_API_KEY" "$ADMIN_USER" "$ADMIN_PASS" \
+            > /home/ubuntu/automation-ocr/.env
 
-          echo "SSM Command ID: $COMMAND_ID"
+      - name: 重新构建并启动容器
+        run: |
+          cd /home/ubuntu/automation-ocr
+          docker compose down
+          docker compose up -d --build --remove-orphans
+          docker image prune -f
 
-          # 等待 SSM invocation 记录生成，避免立即查询报 InvalidPluginName
-          sleep 5
-
-          # 轮询等待命令完成（40 次 × 15s = 600s，与 SSM timeout 对齐）
-          for i in $(seq 1 40); do
-            STATUS=$(aws ssm get-command-invocation \
-              --region ap-southeast-5 \
-              --command-id "$COMMAND_ID" \
-              --instance-id "$INSTANCE_ID" \
-              --query "Status" --output text 2>/dev/null || echo "Pending")
-
-            echo "[$i/40] 状态: $STATUS"
-
-            if [ "$STATUS" = "Success" ]; then
-              aws ssm get-command-invocation \
-                --region ap-southeast-5 \
-                --command-id "$COMMAND_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --query "StandardOutputContent" --output text
-              exit 0
-            elif [ "$STATUS" = "Failed" ] || [ "$STATUS" = "TimedOut" ] || [ "$STATUS" = "Cancelled" ]; then
-              echo ">>> 部署失败，错误日志："
-              aws ssm get-command-invocation \
-                --region ap-southeast-5 \
-                --command-id "$COMMAND_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --query "StandardErrorContent" --output text
-              exit 1
-            fi
-
-            sleep 15
-          done
-
-          echo ">>> 等待超时"
-          exit 1
+      - name: 确认容器状态
+        run: |
+          docker ps --filter 'name=wa-bot' --format 'table {{.Names}}\t{{.Status}}'
