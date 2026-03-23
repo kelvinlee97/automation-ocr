@@ -24,9 +24,9 @@ const IMAGES_DIR = path.join(DATA_DIR, "images");
  * 初始化必要目录和 JSON 文件（幂等，可重复调用）
  */
 function ensureInit() {
-  if (\!fs.existsSync(DATA_DIR))   fs.mkdirSync(DATA_DIR,   { recursive: true });
-  if (\!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });
-  if (\!fs.existsSync(STORE_PATH)) {
+  if (!fs.existsSync(DATA_DIR))   fs.mkdirSync(DATA_DIR,   { recursive: true });
+  if (!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });
+  if (!fs.existsSync(STORE_PATH)) {
     fs.writeFileSync(STORE_PATH, JSON.stringify([], null, 2), "utf-8");
   }
 }
@@ -63,7 +63,7 @@ function generateId() {
  * WhatsApp 图片通常为 image/jpeg 或 image/png
  */
 function extFromMime(mimeType) {
-  if (\!mimeType) return "jpg";
+  if (!mimeType) return "jpg";
   if (mimeType.includes("png"))  return "png";
   if (mimeType.includes("webp")) return "webp";
   return "jpg";
