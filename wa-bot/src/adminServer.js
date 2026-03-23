@@ -7,12 +7,11 @@
 const express = require("express");
 const session = require("express-session");
 const crypto = require("crypto");
-const {
-  getReceipts,
-  getRegistrations,
-  updateReviewStatus,
-  getExcelPath,
-} = require("./services/excelService");
+const path = require("path");
+const fs = require("fs");
+const { getRegistrations, getExcelPath } = require("./services/excelService");
+const receiptStore = require("./services/receiptStore");
+const { processReceipt } = require("./services/aiService");
 const logger = require("./utils/logger");
 
 const ADMIN_PORT = 3000;
@@ -88,7 +87,7 @@ function htmlLayout(title, content) {
     nav a:hover { color: #fff; }
     nav .brand { font-weight: 700; font-size: 16px; color: #fff; letter-spacing: .5px; }
     nav .nav-right { display: flex; align-items: center; gap: 8px; }
-    main { max-width: 1200px; margin: 32px auto; padding: 0 24px; }
+    main { max-width: 1400px; margin: 32px auto; padding: 0 24px; }
     h1 { font-size: 22px; font-weight: 700; margin-bottom: 20px; }
     table { width: 100%; border-collapse: collapse; background: #fff;
             border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
@@ -99,11 +98,12 @@ function htmlLayout(title, content) {
     tr:hover td { background: #fafbff; }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 12px;
              font-size: 11px; font-weight: 600; letter-spacing: .3px; }
-    .badge-yes    { background: #e6f9f0; color: #1a7f4e; }
-    .badge-no     { background: #fff0f0; color: #c0392b; }
-    .badge-pending  { background: #fff8e1; color: #b45309; }
-    .badge-approved { background: #e6f9f0; color: #1a7f4e; }
-    .badge-rejected { background: #fff0f0; color: #c0392b; }
+    .badge-yes           { background: #e6f9f0; color: #1a7f4e; }
+    .badge-no            { background: #fff0f0; color: #c0392b; }
+    .badge-pending_review { background: #fff8e1; color: #b45309; }
+    .badge-ai_extracted  { background: #eff6ff; color: #1d4ed8; }
+    .badge-confirmed     { background: #e6f9f0; color: #1a7f4e; }
+    .badge-rejected      { background: #fff0f0; color: #c0392b; }
     .btn { display: inline-block; padding: 5px 12px; border-radius: 6px; font-size: 12px;
            font-weight: 600; cursor: pointer; border: none; text-decoration: none;
            transition: opacity .15s; }
@@ -111,10 +111,26 @@ function htmlLayout(title, content) {
     .btn-approve { background: #22c55e; color: #fff; }
     .btn-reject  { background: #ef4444; color: #fff; margin-left: 6px; }
     .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-ai      { background: #6366f1; color: #fff; }
     .btn-logout  { background: transparent; color: #a8b8d8; border: 1px solid #3a4a6b; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
     form.inline { display: inline; }
     .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
     .empty { text-align: center; padding: 40px; color: #888; font-size: 14px; }
+    .thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 6px;
+             cursor: pointer; border: 1px solid #e0e0e0; transition: transform .15s; }
+    .thumb:hover { transform: scale(1.08); }
+    /* 图片灯箱 */
+    #lightbox { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75);
+                z-index:999; align-items:center; justify-content:center; }
+    #lightbox.active { display:flex; }
+    #lightbox img { max-width:90vw; max-height:90vh; border-radius:8px;
+                    box-shadow:0 8px 40px rgba(0,0,0,.5); }
+    #lightbox-close { position:absolute; top:20px; right:28px; font-size:32px;
+                      color:#fff; cursor:pointer; line-height:1; }
+    /* AI 结果展示 */
+    .ai-result { font-size: 12px; color: #374151; line-height: 1.6; }
+    .ai-result strong { color: #1a1a2e; }
   </style>
 </head>
 <body>
@@ -134,6 +150,24 @@ function htmlLayout(title, content) {
     <h1>${title}</h1>
     ${content}
   </main>
+  <!-- 图片灯箱 -->
+  <div id="lightbox">
+    <span id="lightbox-close" onclick="closeLightbox()">✕</span>
+    <img id="lightbox-img" src="" alt="收据大图" />
+  </div>
+  <script>
+    function openLightbox(src) {
+      document.getElementById('lightbox-img').src = src;
+      document.getElementById('lightbox').classList.add('active');
+    }
+    function closeLightbox() {
+      document.getElementById('lightbox').classList.remove('active');
+    }
+    // 点击背景关闭灯箱
+    document.getElementById('lightbox').addEventListener('click', function(e) {
+      if (e.target === this) closeLightbox();
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -273,7 +307,59 @@ function qrPage() {
 </html>`;
 }
 
-// ─── 收据列表页 ────────────────────────────────────────────────────────────────
+// ─── 收据状态标签映射 ──────────────────────────────────────────────────────────
+
+const STATUS_LABEL = {
+  pending_review: "待 AI 提取",
+  ai_extracted:   "待人工审核",
+  confirmed:      "已确认",
+  rejected:       "已拒绝",
+};
+
+/**
+ * 渲染单条收据的 AI 结果摘要（ai_extracted / confirmed / rejected 时显示）
+ */
+function renderAiResult(aiResult) {
+  if (!aiResult) return '<span style="color:#aaa;font-size:12px">—</span>';
+  const qualified = aiResult.qualified
+    ? '<span class="badge badge-yes">合格</span>'
+    : '<span class="badge badge-no">不合格</span>';
+  return `<div class="ai-result">
+    <strong>单据号：</strong>${aiResult.receipt_no || "—"}<br>
+    <strong>品牌：</strong>${aiResult.brand || "—"}<br>
+    <strong>金额：</strong>RM ${aiResult.amount ?? "—"}<br>
+    ${qualified}
+    ${aiResult.disqualify_reason ? `<br><span style="color:#c0392b;font-size:11px">${aiResult.disqualify_reason}</span>` : ""}
+  </div>`;
+}
+
+/**
+ * 渲染单行操作按钮
+ * - pending_review  → [AI 提取] 按钮（AJAX）
+ * - ai_extracted    → [确认] [拒绝] 按钮
+ * - confirmed/rejected → 仅显示审核时间
+ */
+function renderActions(r) {
+  if (r.status === "pending_review") {
+    return `<button class="btn btn-ai" onclick="aiExtract('${r.id}', this)">🤖 AI 提取</button>`;
+  }
+  if (r.status === "ai_extracted") {
+    return `<form class="inline" method="POST" action="/admin/receipts/${r.id}/confirm"
+               onsubmit="return confirm('确认通过此收据？')">
+             <button class="btn btn-approve">✅ 确认</button>
+           </form>
+           <form class="inline" method="POST" action="/admin/receipts/${r.id}/reject"
+               onsubmit="return confirmReject(this)">
+             <input type="text" name="note" placeholder="拒绝原因（可选）"
+                    style="font-size:12px;padding:4px 8px;border:1px solid #ddd;border-radius:4px;width:130px" />
+             <button class="btn btn-reject">❌ 拒绝</button>
+           </form>`;
+  }
+  // confirmed / rejected
+  return `<span style="color:#aaa;font-size:12px">${r.reviewedAt ? new Date(r.reviewedAt).toLocaleString("zh-CN") : "—"}</span>`;
+}
+
+// ─── 收据列表页（新版，数据源：receiptStore） ─────────────────────────────────
 
 function receiptsPage(receipts) {
   if (receipts.length === 0) {
@@ -281,50 +367,20 @@ function receiptsPage(receipts) {
   }
 
   const rows = receipts
-    .map((r) => {
-      const qualifiedBadge =
-        r["Qualified"] === "YES"
-          ? '<span class="badge badge-yes">合格</span>'
-          : '<span class="badge badge-no">不合格</span>';
+    .map((r, idx) => {
+      const statusBadge = `<span class="badge badge-${r.status}">${STATUS_LABEL[r.status] || r.status}</span>`;
+      const thumbSrc = `/admin/images/${r.imageFilename}`;
+      const thumb = `<img class="thumb" src="${thumbSrc}" alt="收据" onclick="openLightbox('${thumbSrc}')" />`;
 
-      const reviewStatus = r["Review Status"] || "pending";
-      const statusBadge = `<span class="badge badge-${reviewStatus}">${
-        { pending: "待审核", approved: "已通过", rejected: "已拒绝" }[
-          reviewStatus
-        ] || reviewStatus
-      }</span>`;
-
-      // 已审核的行不再显示操作按钮
-      const actions =
-        reviewStatus === "pending"
-          ? `<form class="inline" method="POST" action="/admin/receipts/${r.rowNo}/review"
-                onsubmit="return confirmReview(this, 'approve')">
-               <input type="hidden" name="action" value="approved" />
-               <input type="hidden" name="note" value="" />
-               <button class="btn btn-approve">通过</button>
-             </form>
-             <form class="inline" method="POST" action="/admin/receipts/${r.rowNo}/review"
-                onsubmit="return confirmReview(this, 'reject')">
-               <input type="hidden" name="action" value="rejected" />
-               <input type="text" name="note" placeholder="拒绝原因（可选）"
-                      style="font-size:12px;padding:4px 8px;border:1px solid #ddd;border-radius:4px;width:140px" />
-               <button class="btn btn-reject">拒绝</button>
-             </form>`
-          : `<span style="color:#aaa;font-size:12px">${r["Reviewed At"] || ""}</span>`;
-
-      return `<tr>
-      <td>${r.rowNo - 1}</td>
-      <td>${r["Time"] || ""}</td>
-      <td>${r["Phone"] || ""}</td>
-      <td>${r["IC Number"] || ""}</td>
-      <td>${r["Receipt No"] || ""}</td>
-      <td>${r["Brand"] || ""}</td>
-      <td>RM ${r["Amount (RM)"] || ""}</td>
-      <td>${qualifiedBadge}</td>
-      <td style="max-width:160px;word-break:break-word">${r["Reason"] || ""}</td>
+      return `<tr id="row-${r.id}">
+      <td>${receipts.length - idx}</td>
+      <td>${r.submittedAt ? new Date(r.submittedAt).toLocaleString("zh-CN") : "—"}</td>
+      <td style="font-size:12px">${r.phone || "—"}</td>
+      <td>${thumb}</td>
       <td>${statusBadge}</td>
-      <td style="max-width:160px;word-break:break-word">${r["Reviewer Note"] || ""}</td>
-      <td>${actions}</td>
+      <td>${renderAiResult(r.aiResult)}</td>
+      <td style="max-width:140px;word-break:break-word;font-size:12px">${r.reviewNote || "—"}</td>
+      <td>${renderActions(r)}</td>
     </tr>`;
     })
     .join("");
@@ -337,20 +393,44 @@ function receiptsPage(receipts) {
     <table>
       <thead>
         <tr>
-          <th>#</th><th>时间</th><th>手机号</th><th>IC 号</th><th>单据号</th>
-          <th>品牌</th><th>金额</th><th>AI 判定</th><th>AI 原因</th>
-          <th>审核状态</th><th>审核备注</th><th>操作</th>
+          <th>#</th><th>提交时间</th><th>手机号</th><th>收据图片</th>
+          <th>状态</th><th>AI 提取结果</th><th>审核备注</th><th>操作</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
     <script>
-      function confirmReview(form, type) {
-        if (type === 'reject') {
-          const note = form.querySelector('input[name="note"]').value;
-          return confirm('确认拒绝此收据？' + (note ? '\\n原因：' + note : ''));
+      /**
+       * AJAX 触发 AI 提取，不刷整页
+       * 提取成功后局部更新该行的状态列和操作列
+       */
+      async function aiExtract(id, btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ 识别中…';
+
+        try {
+          const res = await fetch('/admin/receipts/' + id + '/ai-extract', { method: 'POST' });
+          const data = await res.json();
+
+          if (!res.ok) {
+            alert('AI 提取失败：' + (data.error || res.statusText));
+            btn.disabled = false;
+            btn.textContent = '🤖 AI 提取';
+            return;
+          }
+
+          // 提取成功，重载整页以显示最新状态
+          window.location.reload();
+        } catch (e) {
+          alert('网络错误，请重试');
+          btn.disabled = false;
+          btn.textContent = '🤖 AI 提取';
         }
-        return confirm('确认通过此收据？');
+      }
+
+      function confirmReject(form) {
+        const note = form.querySelector('input[name="note"]').value;
+        return confirm('确认拒绝此收据？' + (note ? '\\n原因：' + note : ''));
       }
     </script>`;
 
@@ -460,10 +540,12 @@ function startAdminServer() {
     });
   });
 
-  // 收据列表
-  app.get("/admin/receipts", requireAuth, async (req, res) => {
+  // ── 收据相关路由 ──────────────────────────────────────────────────────────
+
+  // 收据列表（数据源改为 receiptStore JSON）
+  app.get("/admin/receipts", requireAuth, (req, res) => {
     try {
-      const receipts = await getReceipts();
+      const receipts = receiptStore.getAll();
       res.send(receiptsPage(receipts));
     } catch (err) {
       logger.error("加载收据列表失败", { error: err.message });
@@ -471,31 +553,104 @@ function startAdminServer() {
     }
   });
 
-  // 审核操作：更新 Excel + 发 WhatsApp 通知
-  app.post("/admin/receipts/:rowNo/review", requireAuth, async (req, res) => {
-    const rowNo = parseInt(req.params.rowNo, 10);
-    const { action, note } = req.body;
+  // 静态图片服务：将 data/images/ 中的图片暴露给前端缩略图和灯箱
+  app.get("/admin/images/:filename", requireAuth, (req, res) => {
+    // 防止路径穿越攻击：只取 basename，不允许 ../ 等
+    // 防止路径穿越攻击：只取 basename，不允许 ../ 等
+    const filename = path.basename(req.params.filename);
+    const imagePath = receiptStore.getImagePath(filename);
 
-    if (!["approved", "rejected"].includes(action)) {
-      return res.status(400).send("无效的审核操作");
+    if (!fs.existsSync(imagePath)) {
+      return res.status(404).send("图片不存在");
     }
-    if (isNaN(rowNo) || rowNo < 2) {
-      return res.status(400).send("无效的行号");
+    res.sendFile(imagePath);
+  });
+
+  // AI 提取：读取图片 → 调用 Gemini → 保存结果（JSON API，前端 AJAX 调用）
+  app.post("/admin/receipts/:id/ai-extract", requireAuth, async (req, res) => {
+    const { id } = req.params;
+
+    const record = receiptStore.getById(id);
+    if (!record) {
+      return res.status(404).json({ error: "收据记录不存在" });
+    }
+    if (record.status !== "pending_review") {
+      return res.status(400).json({ error: `当前状态 ${record.status} 不可触发 AI 提取` });
     }
 
     try {
-      const rowData = await updateReviewStatus(rowNo, action, note);
-      logger.info("审核操作完成", { rowNo, action, note, phone: rowData.phone });
+      const imagePath = receiptStore.getImagePath(record.imageFilename);
+      const imageBuffer = fs.readFileSync(imagePath);
+      const base64Image = imageBuffer.toString("base64");
+
+      // 调用 Gemini，传入图片 base64
+      const aiResult = await processReceipt(base64Image);
+
+      if (!aiResult.success) {
+        return res.status(502).json({ error: "AI 识别服务暂时不可用，请稍后重试" });
+      }
+
+      receiptStore.saveAiResult(id, aiResult);
+      logger.info("AI 提取完成", { id, brand: aiResult.brand, amount: aiResult.amount });
+
+      res.json({ ok: true, aiResult });
+    } catch (err) {
+      logger.error("AI 提取失败", { id, error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 人工确认收据
+  app.post("/admin/receipts/:id/confirm", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const { note = "" } = req.body;
+
+    try {
+      const record = receiptStore.getById(id);
+      if (!record) return res.status(404).send("收据不存在");
+
+      receiptStore.confirmReceipt(id, note);
+      logger.info("收据已确认", { id, phone: record.phone });
 
       // 发送 WhatsApp 通知（client 未就绪时自动跳过）
-      await sendReviewNotification(action, note, rowData);
+      const aiResult = record.aiResult || {};
+      await sendReviewNotification("approved", note, {
+        phone:      record.phone,
+        receipt_no: aiResult.receipt_no,
+        brand:      aiResult.brand,
+        amount:     aiResult.amount,
+      });
 
       res.redirect("/admin/receipts");
     } catch (err) {
-      logger.error("审核操作失败", { error: err.message, rowNo, action });
-      res.status(500).send("审核失败：" + err.message);
+      logger.error("确认操作失败", { id, error: err.message });
+      res.status(500).send("操作失败：" + err.message);
     }
   });
+
+  // 人工拒绝收据
+  app.post("/admin/receipts/:id/reject", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const { note = "" } = req.body;
+
+    try {
+      const record = receiptStore.getById(id);
+      if (!record) return res.status(404).send("收据不存在");
+
+      receiptStore.rejectReceipt(id, note);
+      logger.info("收据已拒绝", { id, phone: record.phone, note });
+
+      // 发送 WhatsApp 通知
+      await sendReviewNotification("rejected", note, { phone: record.phone });
+
+      res.redirect("/admin/receipts");
+    } catch (err) {
+      logger.error("拒绝操作失败", { id, error: err.message });
+      res.status(500).send("操作失败：" + err.message);
+    }
+  });
+
+  // ── 其他路由 ──────────────────────────────────────────────────────────────
 
   // 注册用户列表
   app.get("/admin/users", requireAuth, async (req, res) => {
@@ -530,7 +685,7 @@ function startAdminServer() {
  * _client 未就绪时自动跳过（不阻断审核流程）
  */
 async function sendReviewNotification(action, note, rowData) {
-  // null-safe：client 未就绪时跳过，不影响审核写 Excel
+  // null-safe：client 未就绪时跳过，不影响审核写 JSON
   if (!_client || typeof _client.sendMessage !== "function") {
     logger.warn("WhatsApp client 未就绪，跳过通知");
     return;
@@ -539,7 +694,7 @@ async function sendReviewNotification(action, note, rowData) {
   const { phone, receipt_no, brand, amount } = rowData;
 
   if (!phone) {
-    logger.warn("收据行缺少手机号，跳过 WhatsApp 通知");
+    logger.warn("收据记录缺少手机号，跳过 WhatsApp 通知");
     return;
   }
 

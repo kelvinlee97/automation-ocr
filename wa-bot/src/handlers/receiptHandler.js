@@ -1,5 +1,4 @@
-const { processReceipt } = require("../services/aiService");
-const { addReceipt } = require("../services/excelService");
+const { addPendingReceipt } = require("../services/receiptStore");
 const yaml = require("js-yaml");
 const fs = require("fs");
 const path = require("path");
@@ -11,58 +10,30 @@ const messages = yaml.load(fs.readFileSync(path.join(__dirname, "../../../config
 const DEFAULT_MESSAGES = {
   receipt: {
     invalid_type: "❌ 请发送收据图片。",
-    processing: "⏳ 正在识别收据，请稍候...",
-    qualified: "✅ 收据认证成功！\n单据号：{receipt_no}\n品牌：{brand}\n金额：RM {amount}",
-    disqualified: "❌ 收据不符合条件。\n原因：{reason}",
+    // 新流程：不再即时 AI 识别，改为等待人工审核
+    received: "✅ 收据已收到，正在等待人工审核，请耐心等待。",
   },
 };
 
 async function handleReceipt(msg, session) {
-  // 使用 messages.yaml 中的话术，不存在则用默认文本
   const r = messages?.receipt ?? DEFAULT_MESSAGES.receipt;
 
   if (!msg.hasMedia) {
-    await msg.reply(r.invalid_type);
+    await msg.reply(r.invalid_type ?? DEFAULT_MESSAGES.receipt.invalid_type);
     return;
   }
 
-  // 给用户初步反馈
-  await msg.reply(r.processing);
-
   try {
     const media = await msg.downloadMedia();
-    const base64Image = media.data;
 
-    // 调用 Gemini AI 进行识别
-    const result = await processReceipt(base64Image);
+    // 将图片持久化到 data/images/，记录 pending_review 状态
+    // AI 识别延后到管理后台由人工触发，避免 WhatsApp 超时
+    addPendingReceipt(msg.from, media.data, media.mimetype);
 
-    if (!result.success) {
-      await msg.reply("❌ 识别服务暂时不可用，请稍后再试。");
-      return;
-    }
-
-    // 记录到 Excel
-    await addReceipt({
-      phone: msg.from,
-      ic: session.ic,
-      ...result
-    });
-
-    // 根据识别结果回复用户
-    if (result.qualified) {
-      const responseText = (r.qualified ?? DEFAULT_MESSAGES.receipt.qualified)
-        .replace("{receipt_no}", result.receipt_no)
-        .replace("{brand}", result.brand)
-        .replace("{amount}", result.amount);
-      await msg.reply(responseText);
-    } else {
-      const responseText = (r.disqualified ?? DEFAULT_MESSAGES.receipt.disqualified)
-        .replace("{reason}", result.disqualify_reason);
-      await msg.reply(responseText);
-    }
+    await msg.reply(r.received ?? DEFAULT_MESSAGES.receipt.received);
 
   } catch (error) {
-    console.error("Receipt Processing Error:", error);
+    console.error("Receipt Save Error:", error);
     await msg.reply("❌ 处理收据时发生错误，请重新提交。");
   }
 }
