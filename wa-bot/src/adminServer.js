@@ -12,6 +12,7 @@ const fs = require("fs");
 const { getRegistrations, getExcelPath } = require("./services/excelService");
 const receiptStore = require("./services/receiptStore");
 const { processReceipt } = require("./services/aiService");
+const settingsStore = require("./services/settingsStore");
 const logger = require("./utils/logger");
 
 const ADMIN_PORT = 3000;
@@ -138,6 +139,10 @@ function htmlLayout(title, content) {
     <span class="brand">⚙ 管理后台</span>
     <div class="nav-right">
       ${statusBadge}
+      <a href="/admin/receipts">收据审核</a>
+      <a href="/admin/users">注册用户</a>
+      <a href="/admin/settings">系统设置</a>
+      <a href="/admin/export">下载 Excel</a>
       <form class="inline" method="POST" action="/admin/logout">
         <button class="btn btn-logout" style="margin-left:12px">退出</button>
       </form>
@@ -323,7 +328,6 @@ function renderAiResult(aiResult) {
     : '<span class="badge badge-no">不合格</span>';
   return `<div class="ai-result">
     <strong>单据号：</strong>${aiResult.receipt_no || "—"}<br>
-    <strong>品牌：</strong>${aiResult.brand || "—"}<br>
     <strong>金额：</strong>RM ${aiResult.amount ?? "—"}<br>
     ${qualified}
     ${aiResult.disqualify_reason ? `<br><span style="color:#c0392b;font-size:11px">${aiResult.disqualify_reason}</span>` : ""}
@@ -653,6 +657,36 @@ function startAdminServer() {
   });
 
   // ── 其他路由 ──────────────────────────────────────────────────────────────
+
+  // 系统设置页
+  app.get("/admin/settings", requireAuth, (req, res) => {
+    const settings = settingsStore.getAll();
+    const saved = req.query.saved === "1";
+    const content = `
+      <form method="POST" action="/admin/settings" style="max-width:480px">
+        <div style="background:#fff;border-radius:8px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+          ${saved ? '<div style="background:#e6f9f0;color:#1a7f4e;padding:10px 14px;border-radius:6px;margin-bottom:20px;font-size:13px">✅ 设置已保存</div>' : ""}
+          <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">
+            最低消费门槛（RM）
+          </label>
+          <input type="number" name="minimum_amount" min="0" step="0.01"
+                 value="${settings.minimum_amount}"
+                 style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:20px" />
+          <button type="submit" class="btn btn-primary" style="padding:9px 24px">保存</button>
+        </div>
+      </form>`;
+    res.send(htmlLayout("系统设置", content));
+  });
+
+  app.post("/admin/settings", requireAuth, (req, res) => {
+    const minimum_amount = parseFloat(req.body.minimum_amount);
+    if (isNaN(minimum_amount) || minimum_amount < 0) {
+      return res.status(400).send("金额无效");
+    }
+    settingsStore.set("minimum_amount", minimum_amount);
+    logger.info("系统设置已更新", { minimum_amount });
+    res.redirect("/admin/settings?saved=1");
+  });
 
   // 注册用户列表
   app.get("/admin/users", requireAuth, async (req, res) => {
