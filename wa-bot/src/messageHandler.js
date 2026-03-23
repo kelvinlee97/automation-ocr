@@ -8,7 +8,7 @@
  *   图片消息 → receiptHandler（保存图片，带上 session.ic）
  *   其他类型 → 静默忽略
  *
- * session 在路由入口统一获取，确保 receiptHandler 能拿到含 ic 的完整上下文
+ * session 在路由入口统一获取，确保两个 handler 拿到同一个上下文对象
  */
 
 const { handleReceipt } = require("./handlers/receiptHandler");
@@ -33,15 +33,15 @@ async function handleMessage(message) {
     body: message.body?.slice(0, 50),
   });
 
-  // 路由入口统一获取 session，receiptHandler 从这里取 session.ic
+  // 在路由入口统一获取/创建 session，确保 ic 等字段能正确传给各 handler
   const session = sessionManager.getOrCreateSession(phone);
 
   try {
     if (message.type === "chat") {
-      // 文字消息 → 尝试解析为 IC 号码，更新 session.ic
+      // 文字消息 → 尝试解析为 IC 号码
       await handleRegistration(message, session, sessionManager);
     } else if (message.hasMedia && message.type === "image") {
-      // 图片消息 → 保存收据（session.ic 已在上一步文字消息中写入）
+      // 图片消息 → 保存收据（携带 session.ic）
       await handleReceipt(message, session);
     }
     // 其他类型（语音、贴纸、文件等）→ 静默忽略
