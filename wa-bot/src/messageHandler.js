@@ -21,9 +21,13 @@ const logger = require("./utils/logger");
  * @param {import('whatsapp-web.js').Message} message
  */
 async function handleMessage(message) {
-  // 忽略群组消息，只处理私聊
+  // 忽略群组消息和 WhatsApp Status（status@broadcast），只处理私聊
+  if (message.from === 'status@broadcast') return;
   const chat = await message.getChat();
   if (chat.isGroup) return;
+  // 防止联系人发布 WhatsApp Status 动态时漏网：
+  // 此类消息 message.from 是联系人真实号码，但 chat ID 为 status@broadcast
+  if (chat.id._serialized === 'status@broadcast') return;
 
   const phone = message.from;
 
