@@ -111,7 +111,12 @@ function htmlLayout(title, content) {
     .btn-primary { background: #3b82f6; color: #fff; }
     .btn-ai      { background: #6366f1; color: #fff; }
     .btn-send    { background: #10b981; color: #fff; }
+    .btn-reject  { background: #dc3545; color: #fff; }
+    .btn-reject:hover { background: #c82333; }
     .btn-logout  { background: transparent; color: #a8b8d8; border: 1px solid #3a4a6b; }
+    .reject-form { margin-top: 6px; display: flex; gap: 6px; align-items: center; }
+    .reject-form input { flex: 1; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+    .reject-note { color: #dc3545; font-size: 12px; margin-bottom: 2px; }
     .btn:disabled { opacity: .5; cursor: not-allowed; }
     form.inline { display: inline; }
     .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
@@ -352,10 +357,15 @@ function renderActions(r) {
   }
 
   if (r.status === "ai_extracted") {
-    // 转义 HTML 特殊字符，防止 XSS
+    // 发送给用户 + 拒绝 两个操作并列，拒绝不发 WhatsApp，仅更新状态
     return `<form class="send-form" method="POST" action="/admin/receipts/${r.id}/send-message">
       <textarea name="message" placeholder="输入要发给用户的消息…" required></textarea>
       <button type="submit" class="btn btn-send">📤 发送给用户</button>
+    </form>
+    <form class="reject-form" method="POST" action="/admin/receipts/${r.id}/reject"
+          onsubmit="return confirm('确认拒绝此收据？')">
+      <input name="note" placeholder="拒绝原因（可选）" />
+      <button type="submit" class="btn btn-reject">❌ 拒绝</button>
     </form>`;
   }
 
@@ -371,8 +381,12 @@ function renderActions(r) {
     </div>`;
   }
 
-  // rejected 或其他历史状态
-  return `<span style="color:#aaa;font-size:12px">${r.reviewedAt ? new Date(r.reviewedAt).toLocaleString("zh-CN") : "—"}</span>`;
+  // rejected：显示拒绝原因（若有）和拒绝时间
+  const rejectTime = r.reviewedAt ? new Date(r.reviewedAt).toLocaleString("zh-CN") : "—";
+  const rejectNote = r.reviewNote
+    ? `<div class="reject-note">${escapeHtml(r.reviewNote)}</div>`
+    : "";
+  return `<div>${rejectNote}<span style="color:#aaa;font-size:12px">拒绝于 ${rejectTime}</span></div>`;
 }
 
 /** 转义 HTML 特殊字符，防止消息内容中含有尖括号等引发 XSS */
@@ -622,6 +636,21 @@ function startAdminServer() {
     } catch (err) {
       logger.error("发送消息失败", { id, error: err.message });
       res.status(500).send("发送失败：" + err.message);
+    }
+  });
+
+  // ── 拒绝收据（不发 WhatsApp，仅更新内部状态）────────────────────────────────
+
+  app.post("/admin/receipts/:id/reject", requireAuth, (req, res) => {
+    const { id } = req.params;
+    const note = (req.body.note || "").trim();
+    try {
+      receiptStore.rejectReceipt(id, note);
+      logger.info("收据已拒绝", { id, note });
+      res.redirect("/admin");
+    } catch (err) {
+      logger.error("拒绝收据失败", { id, error: err.message });
+      res.status(500).send("操作失败：" + err.message);
     }
   });
 
