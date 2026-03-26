@@ -6,6 +6,7 @@
 const icParser = require("../utils/icParser");
 const { addRegistration } = require("../services/excelService");
 const logger = require("../utils/logger");
+const { maskPhone } = require("../utils/maskPhone");
 
 /**
  * 处理用户提交的 IC 号码
@@ -22,7 +23,7 @@ async function handleRegistration(msg, session, sessionManager) {
 
   if (!ic) {
     // IC 格式不对，静默忽略（用户可能只是发了普通文字）
-    logger.debug("IC 格式无效，忽略", { phone: msg.from, text: text.slice(0, 20) });
+    logger.debug("IC 格式无效，忽略", { phone: maskPhone(msg.from), text: text.slice(0, 20) });
     return;
   }
 
@@ -31,17 +32,17 @@ async function handleRegistration(msg, session, sessionManager) {
 
     if (result.duplicate) {
       // 重复注册，记录日志，session 仍更新以允许继续提交收据
-      logger.info("重复注册，已允许继续提交收据", { phone: msg.from, ic });
+      logger.info("重复注册，已允许继续提交收据", { phone: maskPhone(msg.from) });
     }
 
     // 无论首次还是重复注册，都将 IC 写入 session，允许后续提交收据
     session.ic = ic;
     session.state = "WAITING_RECEIPT";
     sessionManager.updateSession(msg.from, session);
-    logger.info("IC 注册完成，等待收据", { phone: msg.from, ic });
+    logger.info("IC 注册完成，等待收据", { phone: maskPhone(msg.from) });
 
   } catch (err) {
-    logger.error("IC 注册失败", { phone: msg.from, error: err.message });
+    logger.error("IC 注册失败", { phone: maskPhone(msg.from), error: err.message });
   }
 }
 

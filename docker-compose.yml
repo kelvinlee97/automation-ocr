@@ -1,7 +1,8 @@
 services:
   wa-bot:
-    build:
-      context: ./wa-bot
+    # 从 GHCR 拉取预构建镜像，不在服务器本地执行 docker build
+    # 服务器只做 pull + up，节省 1GB 内存机器的构建资源
+    image: ghcr.io/kelvinlee97/automation-ocr:latest
     container_name: wa-bot
     restart: always
     ports:
@@ -14,8 +15,8 @@ services:
     volumes:
       # 挂载配置文件目录（Dockerfile 中已创建 /config -> /app/config 符号链接）
       - ./config:/app/config
-      # 挂载代码目录，更新代码只需 git pull + docker compose restart，无需 --build
-      - ./wa-bot/src:/app/src
+      # 注意：移除了 ./wa-bot/src:/app/src 挂载
+      # 使用预构建镜像后，src 挂载会用服务器旧代码覆盖镜像中的新代码，导致代码不更新
       - ./data:/opt/automation-ocr/data
       # 持久化 WhatsApp 登录凭据，防止重启后重新扫码
       # LocalAuth dataPath='.wwebjs_auth'，工作目录为 /app，实际写入 /app/.wwebjs_auth
