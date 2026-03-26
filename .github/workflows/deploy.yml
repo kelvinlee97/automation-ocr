@@ -56,83 +56,74 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Job 2：SSH 到 EC2，拉取新镜像并重启服务
-  # 需要等 Job 1 完成，确保镜像已推送到 GHCR
+  # Job 2：通过 SSM SendCommand 在 EC2 上执行部署
+  # 走 AWS API（HTTPS 443），无需开放 22 端口，无需 SSH Key
   deploy:
     runs-on: ubuntu-latest
     needs: build-and-push
     timeout-minutes: 10
 
     steps:
-      - name: 获取 runner 出口 IP
-        id: get_ip
-        run: |
-          RUNNER_IP=$(curl -sf https://checkip.amazonaws.com)
-          echo "runner_ip=${RUNNER_IP}" >> "$GITHUB_OUTPUT"
-          echo "Runner IP: ${RUNNER_IP}"
-
-      - name: 临时开放安全组 22 端口（仅 runner IP /32）
-        id: open_sg
+      - name: SSM 部署
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
         run: |
-          # 通过实例公网 IP 反查安全组 ID，无需单独维护 Secret
-          SG_ID=$(aws ec2 describe-instances \
-            --filters "Name=ip-address,Values=${{ secrets.EC2_HOST }}" \
-            --query "Reservations[0].Instances[0].SecurityGroups[0].GroupId" \
+          INSTANCE_ID="i-01e04810ff1f9f5d1"
+
+          # 通过 SSM 在实例上执行部署脚本
+          # secret 通过 runner 环境变量传入，再经由 SSM parameters 注入远端 shell
+          # 避免将敏感值直接拼接进命令字符串
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${INSTANCE_ID}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "$(jq -n \
+              --arg gemini_key "${GEMINI_API_KEY}" \
+              --arg ghcr_token "${GHCR_TOKEN}" \
+              --arg ghcr_actor "${GHCR_ACTOR}" \
+              '{commands: [
+                "set -e",
+                "cd /home/ubuntu/automation-ocr",
+                "git pull origin main",
+                ("printf \"GEMINI_API_KEY=%s\\n\" \"" + $gemini_key + "\" > .env"),
+                ("echo \"" + $ghcr_token + "\" | docker login ghcr.io -u \"" + $ghcr_actor + "\" --password-stdin"),
+                "docker compose pull",
+                "docker compose up -d --remove-orphans",
+                "docker image prune -f",
+                "docker ps --filter name=wa-bot --format \"table {{.Names}}\\t{{.Status}}\\t{{.Ports}}\""
+              ]}')" \
+            --query "Command.CommandId" \
             --output text)
-          echo "sg_id=${SG_ID}" >> "$GITHUB_OUTPUT"
-          aws ec2 authorize-security-group-ingress \
-            --group-id "${SG_ID}" \
-            --protocol tcp --port 22 \
-            --cidr "${{ steps.get_ip.outputs.runner_ip }}/32"
 
-      - name: SSH 部署
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          timeout: 30s
-          script: |
-            cd /home/ubuntu/automation-ocr
-            git pull origin main
+          echo "SSM Command ID: ${COMMAND_ID}"
 
-            # 写入环境变量文件（覆盖旧文件，确保 secrets 最新）
-            # ADMIN_USER/ADMIN_PASS 已迁移到管理后台内置用户管理，不再通过环境变量注入
-            printf 'GEMINI_API_KEY=%s\n' \
-              '${{ secrets.GEMINI_API_KEY }}' \
-              > .env
+          # 轮询等待执行完成（每 10 秒一次，最多 8 分钟）
+          for i in $(seq 1 48); do
+            sleep 10
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "${COMMAND_ID}" \
+              --instance-id "${INSTANCE_ID}" \
+              --query "Status" --output text 2>/dev/null || echo "Pending")
+            echo "[$((i * 10))s] 状态: ${STATUS}"
 
-            # 登录 GHCR 以拉取镜像（公开仓库的包也需要登录才能拉取）
-            echo '${{ secrets.GITHUB_TOKEN }}' | \
-              docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+            if [ "${STATUS}" = "Success" ]; then
+              aws ssm get-command-invocation \
+                --command-id "${COMMAND_ID}" \
+                --instance-id "${INSTANCE_ID}" \
+                --query "StandardOutputContent" --output text
+              exit 0
+            elif [ "${STATUS}" = "Failed" ] || [ "${STATUS}" = "Cancelled" ] || [ "${STATUS}" = "TimedOut" ]; then
+              aws ssm get-command-invocation \
+                --command-id "${COMMAND_ID}" \
+                --instance-id "${INSTANCE_ID}" \
+                --query "StandardErrorContent" --output text
+              exit 1
+            fi
+          done
 
-            docker compose pull
-            docker compose up -d --remove-orphans
-            # 清理旧镜像，防止磁盘空间被历史层占满
-            docker image prune -f
-
-      - name: 确认容器状态
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            docker ps --filter 'name=wa-bot' \
-              --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
-
-      - name: 撤销安全组临时规则（无论部署成功或失败都执行）
-        if: always()
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
-        run: |
-          aws ec2 revoke-security-group-ingress \
-            --group-id "${{ steps.open_sg.outputs.sg_id }}" \
-            --protocol tcp --port 22 \
-            --cidr "${{ steps.get_ip.outputs.runner_ip }}/32"
+          echo "超时：命令未在 8 分钟内完成"
+          exit 1
