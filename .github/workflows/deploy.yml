@@ -64,6 +64,31 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - name: 获取 runner 出口 IP
+        id: get_ip
+        run: |
+          RUNNER_IP=$(curl -sf https://checkip.amazonaws.com)
+          echo "runner_ip=${RUNNER_IP}" >> "$GITHUB_OUTPUT"
+          echo "Runner IP: ${RUNNER_IP}"
+
+      - name: 临时开放安全组 22 端口（仅 runner IP /32）
+        id: open_sg
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          # 通过实例公网 IP 反查安全组 ID，无需单独维护 Secret
+          SG_ID=$(aws ec2 describe-instances \
+            --filters "Name=ip-address,Values=${{ secrets.EC2_HOST }}" \
+            --query "Reservations[0].Instances[0].SecurityGroups[0].GroupId" \
+            --output text)
+          echo "sg_id=${SG_ID}" >> "$GITHUB_OUTPUT"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "${SG_ID}" \
+            --protocol tcp --port 22 \
+            --cidr "${{ steps.get_ip.outputs.runner_ip }}/32"
+
       - name: SSH 部署
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -99,3 +124,15 @@ jobs:
           script: |
             docker ps --filter 'name=wa-bot' \
               --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+
+      - name: 撤销安全组临时规则（无论部署成功或失败都执行）
+        if: always()
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id "${{ steps.open_sg.outputs.sg_id }}" \
+            --protocol tcp --port 22 \
+            --cidr "${{ steps.get_ip.outputs.runner_ip }}/32"
