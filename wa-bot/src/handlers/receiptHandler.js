@@ -5,6 +5,7 @@
 
 const { addPendingReceipt } = require("../services/receiptStore");
 const logger = require("../utils/logger");
+const { maskPhone } = require("../utils/maskPhone");
 
 /**
  * 处理用户发送的收据图片
@@ -16,7 +17,7 @@ const logger = require("../utils/logger");
  */
 async function handleReceipt(msg, session) {
   if (!msg.hasMedia) {
-    logger.debug("消息无附件，忽略", { phone: msg.from });
+    logger.debug("消息无附件，忽略", { phone: maskPhone(msg.from) });
     return;
   }
 
@@ -26,9 +27,9 @@ async function handleReceipt(msg, session) {
     // ic 来自 session，若用户跳过 IC 注册直接发图也能保存，ic 为 null
     addPendingReceipt(msg.from, media.data, media.mimetype, session.ic ?? null);
 
-    logger.info("收据已保存，等待人工审核", { phone: msg.from, ic: session.ic });
+    logger.info("收据已保存，等待人工审核", { phone: maskPhone(msg.from) });
   } catch (err) {
-    logger.error("收据保存失败", { phone: msg.from, error: err.message });
+    logger.error("收据保存失败", { phone: maskPhone(msg.from), error: err.message });
   }
 }
 

@@ -1,4 +1,4 @@
-name: Deploy to EC2
+name: Deploy
 
 on:
   push:
@@ -6,39 +6,94 @@ on:
   workflow_dispatch:
 
 # 同一时间只允许一个部署任务运行，避免并发冲突
+# cancel-in-progress: false 确保正在进行的部署不会被新的 push 中断
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    # 直接在 EC2 服务器上运行，无需 SSM 中间层
-    runs-on: self-hosted
-    timeout-minutes: 15
+  # Job 1：在 GitHub 托管 runner 上构建镜像并推送至 GHCR
+  # 构建与服务器完全隔离，不占用 EC2 内存
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write    # 写入 GitHub Packages (GHCR) 需要此权限
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
 
     steps:
-      - name: 拉取最新代码
-        run: |
-          cd /home/ubuntu/automation-ocr
-          git pull origin main
+      - uses: actions/checkout@v4
 
-      - name: 写入环境变量
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          ADMIN_USER: ${{ secrets.ADMIN_USER }}
-          ADMIN_PASS: ${{ secrets.ADMIN_PASS }}
-        run: |
-          printf 'GEMINI_API_KEY=%s\nADMIN_USER=%s\nADMIN_PASS=%s\n' \
-            "$GEMINI_API_KEY" "$ADMIN_USER" "$ADMIN_PASS" \
-            > /home/ubuntu/automation-ocr/.env
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # GITHUB_TOKEN 是内置 token，无需在 Secrets 中手动配置
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 重新构建并启动容器
-        run: |
-          cd /home/ubuntu/automation-ocr
-          docker compose down
-          docker compose up -d --build --remove-orphans
-          docker image prune -f
+      - name: 生成镜像标签
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-
+
+      - name: 构建并推送镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: ./wa-bot
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          # 利用 GitHub Actions 缓存加速重复构建
+          # 依赖层（npm install）未变时直接复用，构建时间从分钟级降到秒级
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Job 2：SSH 到 EC2，拉取新镜像并重启服务
+  # 需要等 Job 1 完成，确保镜像已推送到 GHCR
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    timeout-minutes: 10
+
+    steps:
+      - name: SSH 部署
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 30s
+          script: |
+            cd /home/ubuntu/automation-ocr
+            git pull origin main
+
+            # 写入环境变量文件（覆盖旧文件，确保 secrets 最新）
+            printf 'GEMINI_API_KEY=%s\nADMIN_USER=%s\nADMIN_PASS=%s\n' \
+              '${{ secrets.GEMINI_API_KEY }}' \
+              '${{ secrets.ADMIN_USER }}'    \
+              '${{ secrets.ADMIN_PASS }}'    \
+              > .env
+
+            # 登录 GHCR 以拉取镜像（公开仓库的包也需要登录才能拉取）
+            echo '${{ secrets.GITHUB_TOKEN }}' | \
+              docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
+            docker compose pull
+            docker compose up -d --remove-orphans
+            # 清理旧镜像，防止磁盘空间被历史层占满
+            docker image prune -f
 
       - name: 确认容器状态
-        run: |
-          docker ps --filter 'name=wa-bot' --format 'table {{.Names}}\t{{.Status}}'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker ps --filter 'name=wa-bot' \
+              --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'

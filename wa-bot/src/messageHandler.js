@@ -15,6 +15,7 @@ const { handleReceipt } = require("./handlers/receiptHandler");
 const { handleRegistration } = require("./handlers/registrationHandler");
 const sessionManager = require("./sessionManager");
 const logger = require("./utils/logger");
+const { maskPhone } = require("./utils/maskPhone");
 
 /**
  * 主消息处理入口
@@ -32,9 +33,8 @@ async function handleMessage(message) {
   const phone = message.from;
 
   logger.debug("收到消息", {
-    phone,
+    phone: maskPhone(phone),
     type: message.type,
-    body: message.body?.slice(0, 50),
   });
 
   // 在路由入口统一获取/创建 session，确保 ic 等字段能正确传给各 handler
@@ -50,7 +50,7 @@ async function handleMessage(message) {
     }
     // 其他类型（语音、贴纸、文件等）→ 静默忽略
   } catch (err) {
-    logger.error("消息处理异常", { phone, error: err.message, stack: err.stack });
+    logger.error("消息处理异常", { phone: maskPhone(phone), error: err.message, stack: err.stack });
   }
 }
 
