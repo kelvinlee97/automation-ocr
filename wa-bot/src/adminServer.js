@@ -14,6 +14,7 @@ const fs = require("fs");
 const { getExcelPath } = require("./services/excelService");
 const receiptStore = require("./services/receiptStore");
 const { processReceipt } = require("./services/aiService");
+const adminUserService = require("./services/adminUserService");
 const logger = require("./utils/logger");
 
 const ADMIN_PORT = 3000;
@@ -43,19 +44,6 @@ function setQR(base64DataUri) {
   _waConnected = false;
 }
 
-// ─── 认证凭据 ──────────────────────────────────────────────────────────────────
-
-function getAdminCredentials() {
-  const user = process.env.ADMIN_USER;
-  const pass = process.env.ADMIN_PASS;
-  if (!user || !pass) {
-    throw new Error(
-      "缺少必要环境变量 ADMIN_USER / ADMIN_PASS，请在 .env 或 docker-compose.yml 中配置"
-    );
-  }
-  return { user, pass };
-}
-
 // ─── 认证中间件 ────────────────────────────────────────────────────────────────
 
 function requireAuth(req, res, next) {
@@ -63,6 +51,17 @@ function requireAuth(req, res, next) {
     return next();
   }
   res.redirect("/admin/login");
+}
+
+/**
+ * 首次设置守卫：尚未创建任何账户时，强制所有 /admin/* 请求跳转到设置页
+ * 放在 requireAuth 之前，确保安装引导优先执行
+ */
+function requireSetup(req, res, next) {
+  // 放行设置页本身，防止无限重定向
+  if (req.path === "/admin/setup") return next();
+  if (adminUserService.isEmpty()) return res.redirect("/admin/setup");
+  next();
 }
 
 // ─── HTML 骨架 ─────────────────────────────────────────────────────────────────
@@ -157,6 +156,8 @@ function htmlLayout(title, content) {
     <div class="nav-right">
       ${statusBadge}
       <a href="/admin/export">⬇ 下载 Excel</a>
+      <a href="/admin/users">👥 用户管理</a>
+      <a href="/admin/change-password">🔑 修改密码</a>
       <form class="inline" method="POST" action="/admin/logout">
         <button class="btn btn-logout" style="margin-left:12px">退出</button>
       </form>
@@ -228,6 +229,158 @@ function loginPage(errorMsg = "") {
   </div>
 </body>
 </html>`;
+}
+
+// ─── 首次设置页（无任何账户时展示） ────────────────────────────────────────────
+
+function setupPage(errorMsg = "") {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>初始化设置 — 管理后台</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, sans-serif; background: #f5f7fa;
+           display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .card { background: #fff; border-radius: 12px; padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,.10); width: 400px; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 8px; text-align: center; color: #1a1a2e; }
+    .sub { font-size: 13px; color: #888; text-align: center; margin-bottom: 28px; }
+    label { display: block; font-size: 13px; color: #555; margin-bottom: 6px; }
+    input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;
+            font-size: 14px; margin-bottom: 16px; outline: none; }
+    input:focus { border-color: #3b82f6; }
+    button { width: 100%; padding: 11px; background: #1a1a2e; color: #fff;
+             border: none; border-radius: 6px; font-size: 15px; font-weight: 600; cursor: pointer; }
+    button:hover { opacity: .88; }
+    .error { color: #c0392b; font-size: 13px; margin-bottom: 14px; text-align: center; }
+    .hint { font-size: 11px; color: #aaa; margin-top: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🚀 初始化管理后台</h1>
+    <div class="sub">首次使用，请创建管理员账号</div>
+    ${errorMsg ? `<div class="error">${errorMsg}</div>` : ""}
+    <form method="POST" action="/admin/setup">
+      <label>用户名（至少 3 位，字母/数字/下划线）</label>
+      <input type="text" name="username" required autofocus minlength="3" pattern="[\\w-]+" />
+      <label>密码（至少 8 位）</label>
+      <input type="password" name="password" required minlength="8" />
+      <label>确认密码</label>
+      <input type="password" name="confirm" required minlength="8" />
+      <button type="submit">创建管理员账号</button>
+    </form>
+    <div class="hint">此页面只在尚无账户时出现，创建后自动消失</div>
+  </div>
+</body>
+</html>`;
+}
+
+// ─── 用户管理页 ────────────────────────────────────────────────────────────────
+
+function usersPage(users, currentUser, flash = "") {
+  const rows = users.map(u => {
+    // 禁止删除当前登录账户（防止自锁），按钮置灰
+    const isSelf = u.username === currentUser;
+    const deleteBtn = isSelf
+      ? `<button class="btn" disabled title="不能删除当前登录账户">🚫 删除</button>`
+      : `<form class="inline" method="POST" action="/admin/users/${encodeURIComponent(u.username)}/delete"
+              onsubmit="return confirm('确认删除用户 ${u.username}？')">
+           <button class="btn btn-reject">删除</button>
+         </form>`;
+
+    return `<tr>
+      <td>${u.username}${isSelf ? ' <span style="color:#888;font-size:11px">(当前)</span>' : ""}</td>
+      <td>${u.createdAt ? new Date(u.createdAt).toLocaleString("zh-CN") : "—"}</td>
+      <td>
+        <form class="inline" method="POST" action="/admin/users/${encodeURIComponent(u.username)}/reset-password"
+              onsubmit="return promptReset(this, '${u.username}')">
+          <input type="hidden" name="newPassword" id="rp-${u.username}" />
+          <button type="submit" class="btn btn-primary">重置密码</button>
+        </form>
+        ${deleteBtn}
+      </td>
+    </tr>`;
+  }).join("");
+
+  const content = `
+    ${flash ? `<div style="background:#e6f9f0;border-left:4px solid #10b981;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">${flash}</div>` : ""}
+    <div class="toolbar">
+      <a href="/admin/users/new" class="btn btn-primary">＋ 新建用户</a>
+    </div>
+    <table>
+      <thead><tr><th>用户名</th><th>创建时间</th><th>操作</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="3" style="text-align:center;color:#aaa">暂无用户</td></tr>'}</tbody>
+    </table>
+    <script>
+      function promptReset(form, username) {
+        const pwd = prompt('请输入 ' + username + ' 的新密码（至少 8 位）：');
+        if (!pwd || pwd.length < 8) { alert('密码至少 8 位'); return false; }
+        form.querySelector('#rp-' + username).value = pwd;
+        return true;
+      }
+    </script>`;
+
+  return htmlLayout("用户管理", content);
+}
+
+// ─── 新建用户页 ────────────────────────────────────────────────────────────────
+
+function newUserPage(errorMsg = "") {
+  const content = `
+    ${errorMsg ? `<div style="background:#fff0f0;border-left:4px solid #c0392b;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">${errorMsg}</div>` : ""}
+    <form method="POST" action="/admin/users/new" style="max-width:400px;background:#fff;padding:32px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">用户名（至少 3 位）</label>
+        <input type="text" name="username" required minlength="3" pattern="[\\w-]+"
+               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" />
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">密码（至少 8 位）</label>
+        <input type="password" name="password" required minlength="8"
+               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" />
+      </div>
+      <div style="margin-bottom:24px">
+        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">确认密码</label>
+        <input type="password" name="confirm" required minlength="8"
+               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" />
+      </div>
+      <div style="display:flex;gap:12px">
+        <button type="submit" class="btn btn-primary" style="padding:10px 24px">创建用户</button>
+        <a href="/admin/users" class="btn btn-logout" style="padding:10px 24px">取消</a>
+      </div>
+    </form>`;
+  return htmlLayout("新建用户", content);
+}
+
+// ─── 修改密码页 ────────────────────────────────────────────────────────────────
+
+function changePasswordPage(errorMsg = "", successMsg = "") {
+  const content = `
+    ${errorMsg   ? `<div style="background:#fff0f0;border-left:4px solid #c0392b;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">${errorMsg}</div>` : ""}
+    ${successMsg ? `<div style="background:#e6f9f0;border-left:4px solid #10b981;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">${successMsg}</div>` : ""}
+    <form method="POST" action="/admin/change-password" style="max-width:400px;background:#fff;padding:32px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">当前密码</label>
+        <input type="password" name="oldPassword" required
+               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" />
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">新密码（至少 8 位）</label>
+        <input type="password" name="newPassword" required minlength="8"
+               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" />
+      </div>
+      <div style="margin-bottom:24px">
+        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">确认新密码</label>
+        <input type="password" name="confirm" required minlength="8"
+               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" />
+      </div>
+      <button type="submit" class="btn btn-primary" style="padding:10px 24px">更新密码</button>
+    </form>`;
+  return htmlLayout("修改密码", content);
 }
 
 // ─── QR 码页（无需登录，供初始化时扫码用） ────────────────────────────────────
@@ -473,9 +626,6 @@ function receiptsPage(receipts) {
 // ─── 主函数：启动 Express 服务器 ───────────────────────────────────────────────
 
 function startAdminServer() {
-  // 启动时检查凭据是否已配置
-  const credentials = getAdminCredentials();
-
   const app = express();
 
   app.use(express.urlencoded({ extended: false }));
@@ -497,7 +647,7 @@ function startAdminServer() {
   // ── 路由 ──────────────────────────────────────────────────────────────────
 
   // 根路径：已登录直接渲染收据审核页，未登录跳登录
-  app.get("/admin", (req, res) => {
+  app.get("/admin", requireSetup, (req, res) => {
     if (!req.session.authenticated) {
       return res.redirect("/admin/login");
     }
@@ -515,6 +665,26 @@ function startAdminServer() {
     res.redirect("/admin");
   });
 
+  // ── 首次设置（无账户时的引导页）────────────────────────────────────────────
+
+  app.get("/admin/setup", (req, res) => {
+    // 已有账户，直接跳登录（防止已初始化后重访）
+    if (!adminUserService.isEmpty()) return res.redirect("/admin/login");
+    res.send(setupPage());
+  });
+
+  app.post("/admin/setup", (req, res) => {
+    if (!adminUserService.isEmpty()) return res.redirect("/admin/login");
+    const { username, password, confirm } = req.body;
+
+    if (password !== confirm) return res.send(setupPage("两次密码输入不一致"));
+    const result = adminUserService.createUser(username, password);
+    if (!result.ok) return res.send(setupPage(result.error));
+
+    logger.info("首次设置完成，管理员账号已创建", { username });
+    res.redirect("/admin/login");
+  });
+
   // QR 码扫码页（无需登录，Bot 未就绪时供非技术用户扫码）
   app.get("/admin/qr", (req, res) => {
     if (_waConnected) {
@@ -528,15 +698,16 @@ function startAdminServer() {
     res.json({ connected: _waConnected, hasQR: !!_qrBase64 });
   });
 
-  // 登录页
-  app.get("/admin/login", (req, res) => {
+  // ── 登录/登出 ──────────────────────────────────────────────────────────────
+
+  app.get("/admin/login", requireSetup, (req, res) => {
     if (req.session.authenticated) return res.redirect("/admin");
     res.send(loginPage());
   });
 
-  app.post("/admin/login", (req, res) => {
+  app.post("/admin/login", requireSetup, (req, res) => {
     const { username, password } = req.body;
-    if (username === credentials.user && password === credentials.pass) {
+    if (adminUserService.authenticate(username, password)) {
       req.session.authenticated = true;
       req.session.username = username;
       return res.redirect("/admin");
@@ -546,6 +717,64 @@ function startAdminServer() {
 
   // 登出
   app.post("/admin/logout", (req, res) => {
+    req.session.destroy(() => {
+      res.redirect("/admin/login");
+    });
+  });
+
+  // ── 用户管理 ───────────────────────────────────────────────────────────────
+
+  app.get("/admin/users", requireAuth, (req, res) => {
+    const users = adminUserService.listUsers();
+    const flash = req.query.flash || "";
+    res.send(usersPage(users, req.session.username, flash));
+  });
+
+  app.get("/admin/users/new", requireAuth, (req, res) => {
+    res.send(newUserPage());
+  });
+
+  app.post("/admin/users/new", requireAuth, (req, res) => {
+    const { username, password, confirm } = req.body;
+    if (password !== confirm) return res.send(newUserPage("两次密码输入不一致"));
+    const result = adminUserService.createUser(username, password);
+    if (!result.ok) return res.send(newUserPage(result.error));
+    logger.info("新管理员账号已创建", { by: req.session.username, newUser: username });
+    res.redirect("/admin/users?flash=用户创建成功");
+  });
+
+  // 重置指定用户密码（管理员操作，无需旧密码）
+  app.post("/admin/users/:username/reset-password", requireAuth, (req, res) => {
+    const { username } = req.params;
+    const { newPassword } = req.body;
+    const result = adminUserService.resetPassword(username, newPassword);
+    if (!result.ok) return res.redirect(`/admin/users?flash=错误：${result.error}`);
+    logger.info("密码已重置", { by: req.session.username, target: username });
+    res.redirect("/admin/users?flash=密码重置成功");
+  });
+
+  // 删除用户
+  app.post("/admin/users/:username/delete", requireAuth, (req, res) => {
+    const { username } = req.params;
+    const result = adminUserService.deleteUser(username, req.session.username);
+    if (!result.ok) return res.redirect(`/admin/users?flash=错误：${result.error}`);
+    logger.info("管理员账号已删除", { by: req.session.username, deleted: username });
+    res.redirect("/admin/users?flash=用户已删除");
+  });
+
+  // ── 修改当前用户密码 ────────────────────────────────────────────────────────
+
+  app.get("/admin/change-password", requireAuth, (req, res) => {
+    res.send(changePasswordPage());
+  });
+
+  app.post("/admin/change-password", requireAuth, (req, res) => {
+    const { oldPassword, newPassword, confirm } = req.body;
+    if (newPassword !== confirm) return res.send(changePasswordPage("两次密码输入不一致"));
+    const result = adminUserService.changePassword(req.session.username, oldPassword, newPassword);
+    if (!result.ok) return res.send(changePasswordPage(result.error));
+    logger.info("密码已更新", { username: req.session.username });
+    // 改密后销毁 session，要求重新登录
     req.session.destroy(() => {
       res.redirect("/admin/login");
     });

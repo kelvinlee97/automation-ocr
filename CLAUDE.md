@@ -84,18 +84,20 @@ bot:
 
 ```bash
 GEMINI_API_KEY=your_key_here
-ADMIN_USER=your_admin_username
-ADMIN_PASS=your_admin_password
 ```
+
+> `ADMIN_USER` / `ADMIN_PASS` 已从环境变量迁移到管理后台内置用户系统。首次访问 `/admin` 会自动引导创建管理员账号，凭据加密存储在 `data/admin_users.json`（scrypt 哈希，Docker volume 持久化）。
 
 ### 管理后台
 
-部署后访问 `http://<服务器 IP>/admin`，用 `ADMIN_USER` / `ADMIN_PASS` 登录。
+部署后访问 `http://<服务器 IP>/admin`，首次访问自动进入初始化引导页创建管理员账号。
 
 - **WhatsApp 扫码**：访问 `/admin/qr`（无需登录），页面展示 QR 码图像，扫码成功后自动跳转；导航栏显示连接状态（🟢/🔴）
 - **收据审核**：查看所有收据，可手动通过/拒绝，审核后自动发 WhatsApp 通知给用户
 - **注册用户**：查看所有注册用户
 - **下载 Excel**：一键下载完整数据报表
+- **用户管理**：`/admin/users` — 新建/删除管理员账号、重置任意用户密码
+- **修改密码**：`/admin/change-password` — 修改当前登录账号密码
 
 Receipts 表新增 3 列：`Review Status`（pending/approved/rejected）、`Reviewer Note`、`Reviewed At`。
 旧 Excel 文件在下次启动时会自动追加这 3 列（无损迁移）。
@@ -107,12 +109,11 @@ Receipts 表新增 3 列：`Review Status`（pending/approved/rejected）、`Rev
 ```bash
 # 服务器上
 git clone https://github.com/kelvinlee97/automation-ocr.git
-# .env 需包含 GEMINI_API_KEY、ADMIN_USER、ADMIN_PASS
+# .env 只需包含 GEMINI_API_KEY
 echo "GEMINI_API_KEY=xxx" > .env
-echo "ADMIN_USER=admin" >> .env
-echo "ADMIN_PASS=your_password" >> .env
 docker compose up -d --build
 docker compose logs -f wa-bot  # 等待 QR 码，手机扫码
+# 首次访问 http://<IP>/admin 引导创建管理员账号
 ```
 
 `wa-bot/.wwebjs_auth/` 通过 Docker volume 挂载持久化，重启不丢登录状态。
@@ -122,5 +123,4 @@ docker compose logs -f wa-bot  # 等待 QR 码，手机扫码
 - **会话不持久**：重启丢失所有活跃会话
 - **无测试框架**：无单元测试 / 集成测试
 - **无 ESLint**：无代码风格检查
-- **config.yaml 明文密码**：`dashboard.admin_password: password123` 需迁移到 .env
 - **重试未实现**：config 配置了 `ocr_max_retries: 3`，但 aiService.js 未实现重试逻辑

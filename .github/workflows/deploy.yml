@@ -73,10 +73,9 @@ jobs:
             git pull origin main
 
             # 写入环境变量文件（覆盖旧文件，确保 secrets 最新）
-            printf 'GEMINI_API_KEY=%s\nADMIN_USER=%s\nADMIN_PASS=%s\n' \
+            # ADMIN_USER/ADMIN_PASS 已迁移到管理后台内置用户管理，不再通过环境变量注入
+            printf 'GEMINI_API_KEY=%s\n' \
               '${{ secrets.GEMINI_API_KEY }}' \
-              '${{ secrets.ADMIN_USER }}'    \
-              '${{ secrets.ADMIN_PASS }}'    \
               > .env
 
             # 登录 GHCR 以拉取镜像（公开仓库的包也需要登录才能拉取）
