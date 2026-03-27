@@ -833,7 +833,10 @@ function startAdminServer() {
 
   /**
    * 人工发送消息给用户
-   * 输入任意文本 → 调用 WhatsApp 发送 → 保存记录 → 状态改为 confirmed
+   * 严格约束：只有 ai_extracted 状态才允许发送，防止重复发送或跳过 AI 提取直接发
+   * 操作顺序：先落状态 confirmed，再发 WhatsApp
+   *   - 若发 WhatsApp 失败，状态已 confirmed 不会重复发送，管理员可在日志中追查
+   *   - 若先发消息再落状态，发送成功但写盘失败会导致状态停在 ai_extracted，出现重复发送风险
    */
   app.post("/admin/receipts/:id/send-message", requireAuth, async (req, res) => {
     const { id } = req.params;
@@ -843,23 +846,32 @@ function startAdminServer() {
       return res.status(400).send("消息内容不能为空");
     }
 
+    // WhatsApp client 未就绪时提前退出，不浪费后续状态变更
+    if (!_client || typeof _client.sendMessage !== "function") {
+      return res.status(503).send("WhatsApp 尚未连接，请先扫码");
+    }
+
     try {
       const record = receiptStore.getById(id);
       if (!record) return res.status(404).send("收据不存在");
 
-      // 补全 chatId 格式
-      const chatId = record.phone.includes("@") ? record.phone : `${record.phone}@c.us`;
-
-      // 发送 WhatsApp 消息（client 未就绪时报错，让用户知道）
-      if (!_client || typeof _client.sendMessage !== "function") {
-        return res.status(503).send("WhatsApp 尚未连接，请先扫码");
+      // 服务端状态守卫：只有 ai_extracted 允许发送
+      // 防止 UI 绕过（双击、直接 POST）导致对 confirmed / pending_review / rejected 记录重复发送
+      if (record.status !== "ai_extracted") {
+        logger.warn("拒绝发送：状态不符", { id, status: record.status });
+        return res.status(409).send(`操作不允许：当前状态为 ${record.status}，只有 ai_extracted 状态可发送`);
       }
 
+      // 补全 chatId 格式（whatsapp-web.js 存储时已含 @c.us，此处兼容万一缺失的情况）
+      const chatId = record.phone.includes("@") ? record.phone : `${record.phone}@c.us`;
+
+      // 先落状态为 confirmed，避免 sendMessage 成功但状态未更新时被重复发送
+      receiptStore.saveSentMessage(id, message);
+      logger.info("收据状态已更新为 confirmed，准备发送 WhatsApp", { id, chatId });
+
+      // 状态已持久化后再发消息：即使此处失败，状态也不会回滚到 ai_extracted
       await _client.sendMessage(chatId, message);
       logger.info("WhatsApp 消息已发送", { id, chatId, messageLength: message.length });
-
-      // 保存发送记录，状态改为 confirmed
-      receiptStore.saveSentMessage(id, message);
 
       res.redirect("/admin");
     } catch (err) {
