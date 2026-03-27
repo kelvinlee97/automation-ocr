@@ -1,0 +1,167 @@
+Name: Deploy
+SchemaVersion: "1.0"
+
+# 触发条件：推送到 main 分支时自动触发
+# 与原 GitHub Actions deploy.yml 行为一致
+Triggers:
+  - Type: Push
+    Branches:
+      - main
+
+# 同一时间只允许一个部署流水线运行
+# 防止并发推送导致部署状态混乱
+RunMode: QUEUED
+
+Actions:
+  # ── Stage 1：构建镜像并推送到 ECR ─────────────────────────────────────────
+  # 对应原 GitHub Actions 的 build-and-push job
+  # 关键差异：不需要 AWS_ACCESS_KEY_ID/SECRET，通过 IAM Role 直接获得权限
+  BuildAndPush:
+    Identifier: aws/build@v1
+    Inputs:
+      Sources:
+        - WorkflowSource
+    Environment:
+      # production 环境需在 CodeCatalyst 控制台预先创建，并绑定 AWS 账号连接
+      Name: production
+      Connections:
+        - Role: automation-ocr-codecatalyst-deploy   # CloudFormation 创建的 IAM Role
+          Name: default
+    Configuration:
+      Steps:
+        # Step 1：登录 ECR（Instance Role 等效，这里是 CodeCatalyst Role 临时凭证）
+        # ECR 登录 token 有效期 12 小时，单次构建完全足够
+        - Run: |
+            AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+            echo "ECR_URI=${ECR_URI}" >> $CATALYST_ENV_FILE
+            aws ecr get-login-password --region "${AWS_DEFAULT_REGION}" \
+              | docker login --username AWS --password-stdin "${ECR_URI}"
+
+        # Step 2：构建镜像（构建上下文与原 Dockerfile 一致）
+        - Run: |
+            docker build \
+              --tag "${ECR_URI}/automation-ocr:latest" \
+              --tag "${ECR_URI}/automation-ocr:sha-${CATALYST_SOURCE_REPO_BRANCH_NAME}-${CATALYST_PIPELINERUN_ID:0:8}" \
+              ./wa-bot
+
+        # Step 3：推送两个 tag 到 ECR
+        # latest 用于部署，sha tag 用于回滚追溯
+        - Run: |
+            docker push "${ECR_URI}/automation-ocr:latest"
+            docker push "${ECR_URI}/automation-ocr:sha-${CATALYST_SOURCE_REPO_BRANCH_NAME}-${CATALYST_PIPELINERUN_ID:0:8}"
+            echo "✅ 镜像推送完成：${ECR_URI}/automation-ocr:latest"
+
+  # ── Stage 2：通过 SSM 部署到 EC2 ──────────────────────────────────────────
+  # 对应原 GitHub Actions 的 deploy job
+  # 核心逻辑完全相同：SSM SendCommand + 轮询等待
+  # 关键差异：EC2 有 Instance Profile，直接 aws ecr get-login-password 无需任何密钥
+  Deploy:
+    Identifier: aws/build@v1
+    DependsOn:
+      - BuildAndPush
+    Inputs:
+      Sources:
+        - WorkflowSource
+    Environment:
+      Name: production
+      Connections:
+        - Role: automation-ocr-codecatalyst-deploy
+          Name: default
+    Configuration:
+      Steps:
+        # 从 CloudFormation Stack Outputs 动态获取 EC2 Instance ID
+        # 避免硬编码实例 ID（每次重建 Stack 后 ID 会变）
+        - Run: |
+            INSTANCE_ID=$(aws cloudformation describe-stacks \
+              --stack-name automation-ocr \
+              --query "Stacks[0].Outputs[?OutputKey=='Ec2InstanceId'].OutputValue" \
+              --output text \
+              --region "${AWS_DEFAULT_REGION}")
+
+            if [ -z "${INSTANCE_ID}" ]; then
+              echo "❌ 无法获取 EC2 Instance ID，请确认 CloudFormation Stack 已部署"
+              exit 1
+            fi
+
+            echo "目标实例：${INSTANCE_ID}"
+
+            # 发送部署命令到 EC2
+            # EC2 有 Instance Profile（automation-ocr-ec2-role），无需传入任何凭证
+            # ECR 登录、Parameter Store 读取均通过 Instance Role 自动完成
+            COMMAND_ID=$(aws ssm send-command \
+              --instance-ids "${INSTANCE_ID}" \
+              --document-name "AWS-RunShellScript" \
+              --parameters "$(cat <<'SHELL_EOF'
+            {
+              "commands": [
+                "set -euo pipefail",
+                "cd /home/ubuntu/automation-ocr",
+                "",
+                "# 拉取最新代码",
+                "git pull origin main",
+                "",
+                "# 从 Parameter Store 读取 Gemini API Key（Instance Role 自动认证）",
+                "GEMINI_KEY=$(aws ssm get-parameter --name /automation-ocr/gemini-api-key --with-decryption --query Parameter.Value --output text)",
+                "printf 'GEMINI_API_KEY=%s\\n' \"${GEMINI_KEY}\" > .env",
+                "",
+                "# ECR 登录（Instance Role 提供凭证，12h 有效，无需任何密钥）",
+                "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)",
+                "REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)",
+                "aws ecr get-login-password --region \"${REGION}\" | docker login --username AWS --password-stdin \"${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com\"",
+                "",
+                "# 设置 IMAGE_URI 让 docker-compose.yml 中的 ${IMAGE_URI} 解析到正确 ECR 地址",
+                "# docker compose 会自动读取当前 shell 的环境变量，无需写入 .env",
+                "export IMAGE_URI=\"${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/automation-ocr:latest\"",
+                "",
+                "# 拉取新镜像并重启容器",
+                "docker compose pull",
+                "docker compose up -d --remove-orphans",
+                "",
+                "# 清理悬挂镜像（<none> tag 的旧层），释放磁盘空间",
+                "docker image prune -f",
+                "",
+                "# 输出容器状态确认部署成功",
+                "docker ps --filter name=wa-bot --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'"
+              ]
+            }
+            SHELL_EOF
+            )" \
+              --region "${AWS_DEFAULT_REGION}" \
+              --query "Command.CommandId" \
+              --output text)
+
+            echo "SSM Command ID：${COMMAND_ID}"
+
+            # 轮询等待命令执行完成（每 10 秒查询一次，最多等 8 分钟）
+            # 与原 GitHub Actions 逻辑完全一致
+            for i in $(seq 1 48); do
+              sleep 10
+              STATUS=$(aws ssm get-command-invocation \
+                --command-id "${COMMAND_ID}" \
+                --instance-id "${INSTANCE_ID}" \
+                --region "${AWS_DEFAULT_REGION}" \
+                --query "Status" --output text 2>/dev/null || echo "Pending")
+              echo "[$((i * 10))s] 状态：${STATUS}"
+
+              if [ "${STATUS}" = "Success" ]; then
+                echo "✅ 部署成功"
+                aws ssm get-command-invocation \
+                  --command-id "${COMMAND_ID}" \
+                  --instance-id "${INSTANCE_ID}" \
+                  --region "${AWS_DEFAULT_REGION}" \
+                  --query "StandardOutputContent" --output text
+                exit 0
+              elif [ "${STATUS}" = "Failed" ] || [ "${STATUS}" = "Cancelled" ] || [ "${STATUS}" = "TimedOut" ]; then
+                echo "❌ 部署失败"
+                aws ssm get-command-invocation \
+                  --command-id "${COMMAND_ID}" \
+                  --instance-id "${INSTANCE_ID}" \
+                  --region "${AWS_DEFAULT_REGION}" \
+                  --query "StandardErrorContent" --output text
+                exit 1
+              fi
+            done
+
+            echo "⏰ 超时：命令未在 8 分钟内完成"
+            exit 1
