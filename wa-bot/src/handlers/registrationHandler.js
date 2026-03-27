@@ -38,7 +38,7 @@ async function handleRegistration(msg, session, sessionManager) {
     // 无论首次还是重复注册，都将 IC 写入 session，允许后续提交收据
     session.ic = ic;
     session.state = "WAITING_RECEIPT";
-    sessionManager.updateSession(msg.from, session);
+    await sessionManager.updateSession(msg.from, session);
     logger.info("IC 注册完成，等待收据", { phone: maskPhone(msg.from) });
 
   } catch (err) {

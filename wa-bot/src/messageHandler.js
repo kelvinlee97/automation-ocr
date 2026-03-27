@@ -38,7 +38,7 @@ async function handleMessage(message) {
   });
 
   // 在路由入口统一获取/创建 session，确保 ic 等字段能正确传给各 handler
-  const session = sessionManager.getOrCreateSession(phone);
+  const session = await sessionManager.getOrCreateSession(phone);
 
   try {
     if (message.type === "chat") {

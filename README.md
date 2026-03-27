@@ -50,8 +50,6 @@
 
 ## 技术架构
 
-双进程微服务，各用最适合的语言，通过 HTTP 通信：
-
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                      用户手机                            │
@@ -74,38 +72,33 @@
 │  └─────────┬───────────┘  └────────────┬────────────┘  │
 │            │                           │                │
 │            └──────────┬────────────────┘                │
-│                       │ HTTP 请求                        │
-│                  ocrClient.js                           │
-└──────────────────────┬──────────────────────────────────┘
-                       │ HTTP (localhost:8000)
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│              Python FastAPI OCR 服务                    │
-│  ┌────────────┐  ┌────────────┐  ┌──────────────────┐  │
-│  │ main.py    │  │  OCR 模块  │  │   Excel 模块     │  │
-│  │ (路由入口) │→ │ engine     │→ │  writer.py       │→ records.xlsx
-│  └────────────┘  │ preprocessor  │  schema.py       │  │
-│                  │ extractor  │  └──────────────────┘  │
-│                  └────────────┘                         │
+│                       │                                 │
+│         ┌─────────────┴─────────────┐                  │
+│         ▼                           ▼                  │
+│  ┌───────────────┐         ┌─────────────────┐        │
+│  │  Gemini AI    │         │   Redis         │        │
+│  │  (OCR 识别)   │         │  (会话持久化)   │        │
+│  └───────────────┘         └─────────────────┘        │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### 数据流说明
 
-1. **注册流程**: 用户发送消息 -> Bot 进入 `WAITING_IC` 状态 -> 验证 IC 格式 -> 调用 Python API 写入 Excel -> 状态转为 `WAITING_RECEIPT`。
-2. **收据处理**: 用户发送图片 -> Bot 下载并转发 Base64 到 Python 服务 -> 图像预处理 -> EasyOCR 识别 -> 模糊品牌匹配 (rapidfuzz) -> 金额提取 -> 资格判定 -> 写入 Excel。
+1. **注册流程**: 用户发送 IC -> Bot 进入 `WAITING_IC` 状态 -> 验证 IC 格式 -> 写入 Excel -> 状态转为 `WAITING_RECEIPT`。
+2. **收据处理**: 用户发送图片 -> Bot 下载并转 Base64 -> Gemini AI 识别品牌和金额 -> 资格判定 -> 写入 Excel。
+3. **会话持久化**: Redis Hash 存储会话状态，TTL 自动过期，Bot 重启不会丢失会话。
 
 ---
 
 ## 核心特性
 
-- **模糊品牌匹配**：用 rapidfuzz `partial_ratio` 识别 OCR 的错别字，如 "SAMSNG ELECTRONI" → Samsung（阈值可配置）
-- **智能金额提取**：优先识别 Total/Jumlah 关键词附近的数字，兜底取全单最大 RM 金额
-- **图像预处理**：灰度化 + CLAHE 自适应对比度增强 + 非局部均值去噪，提升模糊收据的识别率
-- **并发安全**：asyncio.Lock 保证多用户同时提交时 Excel 数据不互相覆盖
-- **指数退避重试**：OCR 请求失败时自动重试（500ms / 1s / 2s），4xx 错误不重试
+- **模糊品牌匹配**：用 Gemini AI 识别收据中的品牌名称，支持模糊匹配
+- **智能金额提取**：优先识别 Total/Jumlah 关键词附近的数字
+- **会话持久化**：Redis 存储用户会话状态，Bot 重启不会丢失会话
+- **内存降级**：Redis 不可用时自动降级到内存模式，保持可用性
+- **并发安全**：Redis 原子操作保证多用户同时提交时数据不冲突
 - **防刷限制**：每用户每日最多提交 5 次（可配置）
-- **会话超时**：30 分钟无操作自动清理，防内存泄漏
+- **会话超时**：30 分钟无操作自动过期（Redis TTL）
 
 ---
 
@@ -114,8 +107,9 @@
 ### 环境要求
 
 - Node.js ≥ 18
-- Python 3.10+
+- Redis ≥ 6
 - 一个 **专用** WhatsApp 号码（会长期保持登录状态）
+- Gemini API Key
 
 > **Ubuntu / Debian 额外依赖**（whatsapp-web.js 内嵌 Chromium 必需，缺少会报错 `error while loading shared libraries`）：
 > ```bash
@@ -132,31 +126,25 @@
 git clone https://github.com/kelvinlee97/automation-ocr.git
 cd automation-ocr
 
-# Python 依赖
-cd ocr-service
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+# 安装 Redis
+sudo apt-get install redis-server
 
 # Node.js 依赖
-cd ../wa-bot
+cd wa-bot
 npm install
 ```
 
-### 启动（顺序重要）
+### 启动
 
-**终端 1 — 先启动 OCR 服务：**
+**启动 Redis：**
 ```bash
-cd ocr-service
-source .venv/bin/activate
-uvicorn main:app --host 0.0.0.0 --port 8000
-# 等看到 "EasyOCR 模型加载完成" 再进行下一步
+redis-server
 ```
 
-**终端 2 — 再启动 Bot：**
+**启动 Bot：**
 ```bash
 cd wa-bot
-npm start
+GEMINI_API_KEY=your_key npm start
 # 首次运行会显示二维码，用目标 WhatsApp 号码扫码登录
 ```
 
@@ -182,9 +170,12 @@ eligibility:
 bot:
   session_timeout_minutes: 30
   max_receipts_per_day: 5
-```
 
-所有对用户可见的回复话术在 **`config/messages.yaml`**，支持 `{变量}` 占位符。
+redis:
+  host: "localhost"
+  port: 6379
+  # password: ""  # 有密码时取消注释
+```
 
 ---
 
@@ -193,18 +184,15 @@ bot:
 ```
 automation-ocr/
 ├── config/
-│   ├── config.yaml          ← 业务规则（品牌、金额门槛等）
-│   └── messages.yaml        ← 所有 Bot 回复话术
-├── wa-bot/                  ← Node.js WhatsApp Bot
+│   └── config.yaml          ← 业务规则（品牌、金额门槛、Redis 配置等）
+├── wa-bot/                   ← Node.js WhatsApp Bot
 │   └── src/
-│       ├── sessionManager.js    ← 核心：用户会话状态机
-│       ├── messageHandler.js    ← 消息路由
-│       ├── ocrClient.js         ← HTTP 客户端（含重试）
+│       ├── bot.js                ← WhatsApp 客户端初始化
+│       ├── sessionManager.js    ← 会话状态机（Redis + 内存降级）
+│       ├── redisClient.js       ← Redis 连接管理
+│       ├── messageHandler.js   ← 消息路由
+│       ├── adminServer.js      ← 管理后台 Express 服务器
 │       └── handlers/            ← 注册 / 收据处理逻辑
-├── ocr-service/             ← Python FastAPI OCR 服务
-│   └── src/
-│       ├── ocr/                 ← engine / preprocessor / extractor
-│       └── excel/               ← schema / writer（线程安全）
 └── data/
     └── excel/records.xlsx   ← 最终输出（运行后自动创建）
 ```
@@ -213,13 +201,21 @@ automation-ocr/
 
 ## 生产部署
 
-### 方案 A：Docker Compose（推荐 AWS EC2）
+### Docker Compose（推荐 AWS Lightsail）
 
 ```bash
-# 构建并后台启动（首次构建约需 10-15 分钟，EasyOCR 镜像较大）
+# 克隆项目
+git clone https://github.com/kelvinlee97/automation-ocr.git
+cd automation-ocr
+
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env，填入 GEMINI_API_KEY
+
+# 启动所有服务（Redis + Bot）
 docker compose up -d --build
 
-# 查看启动状态（ocr-service 健康检查通过后 wa-bot 才会启动）
+# 查看启动状态
 docker compose ps
 
 # 首次运行需扫码登录：查看 wa-bot 日志获取二维码
@@ -233,22 +229,18 @@ docker compose down
 ```
 
 > **成本参考（AWS ap-southeast-1 新加坡）：**
-> - t3.medium（2 vCPU / 4GB）：约 $0.052/小时 ≈ $38/月
-> - EasyOCR 模型需要至少 2GB 内存，t3.small 可能 OOM
-> - 加上 EBS 30GB gp3 存储：约 $2.4/月
-> - **估算总成本：~$40-45/月**
+> - Lightsail $5/月套餐（1GB RAM）足够
+> - 加上 EBS 30GB 存储：约 $1.5/月
+> - **估算总成本：~$7/月**
 
 ---
 
-### 方案 B：PM2（不用 Docker 时）
+### 环境变量 (.env)
 
 ```bash
-npm install -g pm2
-
-# 使用 ecosystem.config.js 一键启动
-pm2 start ecosystem.config.js --env production
-
-pm2 save && pm2 startup
+GEMINI_API_KEY=your_key_here
+REDIS_HOST=redis
+REDIS_PORT=6379
 ```
 
 ---
@@ -256,7 +248,7 @@ pm2 save && pm2 startup
 ## 注意事项
 
 - `wa-bot/.wwebjs_auth/` 含 WhatsApp 登录凭证，已加入 `.gitignore`，**切勿提交到版本控制**
-- 用户会话存储在内存中，Bot 重启后所有活跃会话丢失（用户需重新注册）；如需持久化请改用 Redis
+- Redis 数据通过 Docker volume 持久化，重启不丢失
 - 本项目使用 [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) 非官方库，存在被 WhatsApp 封号风险，建议使用专用号码而非个人主号
 
 ---

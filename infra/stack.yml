@@ -26,6 +26,19 @@ Parameters:
     Default: ""
     Description: "EC2 Key Pair 名称（可选；留空则不配置，仅用 SSM Session Manager 访问）"
 
+  # VPC 内的 SecurityGroup 必须关联 VpcId，否则 CFN 报错
+  # 默认使用账号默认 VPC，无需手动创建
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-059be25291667be3d
+    Description: "VPC to deploy into (default VPC)"
+
+  # EC2 必须指定子网；默认 VPC 下取第一个可用子网
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-08512cd2657b07910
+    Description: "Subnet for EC2 instance (must be in the selected VPC)"
+
 # ─── 条件 ────────────────────────────────────────────────────────────────────
 Conditions:
   # KeyPair 可选：有值时才在 EC2 上关联 Key Pair（生产环境推荐不配置，全用 SSM）
@@ -126,7 +139,9 @@ Resources:
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "automation-ocr：仅开 80 入站，SSM 走 HTTPS 出站"
+      GroupDescription: "automation-ocr: HTTP 80 inbound only, HTTPS 443 outbound for SSM/ECR/API"
+      # VpcId 必填：VPC 内的 SG 必须关联 VPC，否则 SecurityGroupEgress 报错
+      VpcId: !Ref VpcId
       # 入站：仅 HTTP 80（WhatsApp bot 管理后台）
       # SSH 22 不开放，通过 SSM Session Manager 访问（零 Attack Surface）
       SecurityGroupIngress:
@@ -134,24 +149,23 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-          Description: "HTTP 管理后台"
+          Description: "HTTP inbound - admin panel"
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIpv6: ::/0
-          Description: "HTTP 管理后台（IPv6）"
-      # 出站：HTTPS 443（SSM Agent + ECR + Gemini API + WhatsApp），无需开 22
+          Description: "HTTP inbound - admin panel IPv6"
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-          Description: "HTTPS 出站（SSM/ECR/API）"
+          Description: "HTTPS outbound - SSM/ECR/API"
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIpv6: ::/0
-          Description: "HTTPS 出站（IPv6）"
+          Description: "HTTPS outbound - SSM/ECR/API IPv6"
       Tags:
         - Key: Name
           Value: automation-ocr-sg
@@ -163,8 +177,11 @@ Resources:
       InstanceType: t3.micro
       ImageId: !Ref Ec2AmiId
       IamInstanceProfile: !Ref Ec2InstanceProfile
-      SecurityGroups:
-        - !Ref AppSecurityGroup
+      # VPC 内的 EC2 必须用 SecurityGroupIds（引用 SG ID），不能用 SecurityGroups（EC2-Classic 语法）
+      SecurityGroupIds:
+        - !GetAtt AppSecurityGroup.GroupId
+      # 必须指定子网，默认 VPC 无 default subnet 时 CFN 无法自动选择
+      SubnetId: !Ref SubnetId
       # Key Pair 可选：生产推荐不配置，全用 SSM Session Manager
       KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref AWS::NoValue]
       # User Data：首次启动自动安装 Docker、Docker Compose、AWS CLI、克隆代码
@@ -322,7 +339,7 @@ Resources:
       # aws ssm put-parameter --name /automation-ocr/gemini-api-key \
       #   --value "$GEMINI_API_KEY" --type SecureString --overwrite
       Value: !Ref GeminiApiKey
-      Description: "Gemini API Key（部署后请用 CLI 升级为 SecureString）"
+      Description: "Gemini API Key - upgrade to SecureString via CLI after deploy"
       Tags:
         Project: automation-ocr
 

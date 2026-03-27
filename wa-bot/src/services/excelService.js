@@ -4,6 +4,16 @@ const path = require("path");
 
 const EXCEL_PATH = path.join(__dirname, "../../../data/excel/records.xlsx");
 
+// 写操作互斥锁：防止并发"读取→修改→写回"导致后写覆盖先写（TOCTOU race condition）
+// 原理：每次写操作都追加到上一次的 Promise 尾部，形成串行执行链
+// catch 吞掉错误是故意的：避免单次失败导致整个队列永久卡死
+let writeQueue = Promise.resolve();
+function withExcelLock(fn) {
+  const result = writeQueue.then(() => fn());
+  writeQueue = result.catch(() => {});
+  return result;
+}
+
 // 确保 Excel 文件存在并初始化表头（含审核列）
 async function initExcel() {
   if (!fs.existsSync(path.dirname(EXCEL_PATH))) {
@@ -74,56 +84,60 @@ async function initExcel() {
  * 记录注册信息
  */
 async function addRegistration(phone, ic) {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(EXCEL_PATH);
-  const sheet = workbook.getWorksheet("Registrations");
+  return withExcelLock(async () => {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(EXCEL_PATH);
+    const sheet = workbook.getWorksheet("Registrations");
 
-  // 检查重复
-  const icColumn = sheet.getColumn("ic");
-  let isDuplicate = false;
-  icColumn.eachCell((cell) => {
-    if (cell.value === ic) isDuplicate = true;
+    // 检查重复（必须在锁内执行，确保读取到最新状态）
+    const icColumn = sheet.getColumn("ic");
+    let isDuplicate = false;
+    icColumn.eachCell((cell) => {
+      if (cell.value === ic) isDuplicate = true;
+    });
+
+    if (isDuplicate) return { success: false, duplicate: true };
+
+    sheet.addRow({
+      no: sheet.rowCount,
+      time: new Date().toISOString(),
+      phone,
+      ic,
+      status: "Registered",
+    });
+
+    await workbook.xlsx.writeFile(EXCEL_PATH);
+    return { success: true };
   });
-
-  if (isDuplicate) return { success: false, duplicate: true };
-
-  sheet.addRow({
-    no: sheet.rowCount,
-    time: new Date().toISOString(),
-    phone,
-    ic,
-    status: "Registered",
-  });
-
-  await workbook.xlsx.writeFile(EXCEL_PATH);
-  return { success: true };
 }
 
 /**
  * 记录收据识别结果，初始审核状态为 pending
  */
 async function addReceipt(data) {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(EXCEL_PATH);
-  const sheet = workbook.getWorksheet("Receipts");
+  return withExcelLock(async () => {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(EXCEL_PATH);
+    const sheet = workbook.getWorksheet("Receipts");
 
-  sheet.addRow({
-    no: sheet.rowCount,
-    time: new Date().toISOString(),
-    phone: data.phone,
-    ic: data.ic,
-    receipt_no: data.receipt_no,
-    brand: data.brand,
-    amount: data.amount,
-    qualified: data.qualified ? "YES" : "NO",
-    reason: data.disqualify_reason || "",
-    confidence: data.confidence,
-    review_status: "pending",
-    reviewer_note: "",
-    reviewed_at: "",
+    sheet.addRow({
+      no: sheet.rowCount,
+      time: new Date().toISOString(),
+      phone: data.phone,
+      ic: data.ic,
+      receipt_no: data.receipt_no,
+      brand: data.brand,
+      amount: data.amount,
+      qualified: data.qualified ? "YES" : "NO",
+      reason: data.disqualify_reason || "",
+      confidence: data.confidence,
+      review_status: "pending",
+      reviewer_note: "",
+      reviewed_at: "",
+    });
+
+    await workbook.xlsx.writeFile(EXCEL_PATH);
   });
-
-  await workbook.xlsx.writeFile(EXCEL_PATH);
 }
 
 /**
@@ -194,39 +208,41 @@ async function getRegistrations() {
  * @param {string} note   - 审核备注
  */
 async function updateReviewStatus(rowNo, status, note) {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(EXCEL_PATH);
-  const sheet = workbook.getWorksheet("Receipts");
+  return withExcelLock(async () => {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(EXCEL_PATH);
+    const sheet = workbook.getWorksheet("Receipts");
 
-  const row = sheet.getRow(rowNo);
+    const row = sheet.getRow(rowNo);
 
-  // 找到各列索引（通过表头动态查找，避免硬编码列号）
-  const headerRow = sheet.getRow(1);
-  const colIndex = {};
-  headerRow.eachCell((cell, colNumber) => {
-    colIndex[cell.value] = colNumber;
+    // 找到各列索引（通过表头动态查找，避免硬编码列号）
+    const headerRow = sheet.getRow(1);
+    const colIndex = {};
+    headerRow.eachCell((cell, colNumber) => {
+      colIndex[cell.value] = colNumber;
+    });
+
+    // 审核列必须存在
+    if (!colIndex["Review Status"]) {
+      throw new Error("Receipts sheet 缺少 Review Status 列，请重新初始化 Excel");
+    }
+
+    row.getCell(colIndex["Review Status"]).value = status;
+    row.getCell(colIndex["Reviewer Note"]).value = note || "";
+    row.getCell(colIndex["Reviewed At"]).value = new Date().toISOString();
+    row.commit();
+
+    await workbook.xlsx.writeFile(EXCEL_PATH);
+
+    // 返回该行关键信息，供发送 WhatsApp 通知使用
+    return {
+      phone: row.getCell(colIndex["Phone"]).value,
+      ic: row.getCell(colIndex["IC Number"]).value,
+      receipt_no: row.getCell(colIndex["Receipt No"]).value,
+      brand: row.getCell(colIndex["Brand"]).value,
+      amount: row.getCell(colIndex["Amount (RM)"]).value,
+    };
   });
-
-  // 审核列必须存在
-  if (!colIndex["Review Status"]) {
-    throw new Error("Receipts sheet 缺少 Review Status 列，请重新初始化 Excel");
-  }
-
-  row.getCell(colIndex["Review Status"]).value = status;
-  row.getCell(colIndex["Reviewer Note"]).value = note || "";
-  row.getCell(colIndex["Reviewed At"]).value = new Date().toISOString();
-  row.commit();
-
-  await workbook.xlsx.writeFile(EXCEL_PATH);
-
-  // 返回该行关键信息，供发送 WhatsApp 通知使用
-  return {
-    phone: row.getCell(colIndex["Phone"]).value,
-    ic: row.getCell(colIndex["IC Number"]).value,
-    receipt_no: row.getCell(colIndex["Receipt No"]).value,
-    brand: row.getCell(colIndex["Brand"]).value,
-    amount: row.getCell(colIndex["Amount (RM)"]).value,
-  };
 }
 
 /**

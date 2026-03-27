@@ -5,28 +5,35 @@
  */
 
 const { createBot } = require('./src/bot');
-const { startCleanupJob } = require('./src/sessionManager');
+const sessionManager = require('./src/sessionManager');
 const { initExcel } = require('./src/services/excelService');
 const { startAdminServer, setClient, setQR } = require('./src/adminServer');
+const { createClient, connect } = require('./src/redisClient');
 const logger = require('./src/utils/logger');
 
 async function main() {
     logger.info('启动 WhatsApp Bot (AI 版)...');
 
     try {
-        // 1. 初始化 Excel 文件（确保 data/ 目录和表头存在）
+        // 1. 加载配置并初始化 Redis
+        const yaml = require('js-yaml');
+        const fs = require('fs');
+        const path = require('path');
+        const config = yaml.load(fs.readFileSync(path.join(__dirname, 'config/config.yaml'), 'utf8'));
+
+        const redis = createClient(config);
+        await connect(redis);
+        sessionManager.init(redis);
+        logger.info('Redis 初始化完成');
+
+        // 2. 初始化 Excel 文件
         await initExcel();
         logger.info('Excel 文件初始化完成');
 
-        // 2. 启动会话清理任务（内存会话过期管理）
-        startCleanupJob();
-        logger.info('Session 清理定时任务已启动');
-
-        // 3. Express 立即启动（此时 _client 为 null，/admin/qr 已可访问）
+        // 3. Express 立即启动
         startAdminServer();
 
-        // 4. Bot 初始化——通过回调注入 QR 和 client，不阻塞 HTTP 服务
-        //    createBot 在 ready 事件触发后 resolve，期间 Express 照常响应请求
+        // 4. Bot 初始化
         await createBot({
             onQR: (dataUri) => setQR(dataUri),
             onReady: (client) => setClient(client),
