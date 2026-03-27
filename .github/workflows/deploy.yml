@@ -58,17 +58,28 @@ jobs:
 
   # Job 2：通过 SSM SendCommand 在 EC2 上执行部署
   # 走 AWS API（HTTPS 443），无需开放 22 端口，无需 SSH Key
+  # OIDC：GitHub Runner 获取临时凭证调用 AWS API，无需存储任何长期 Access Key
   deploy:
     runs-on: ubuntu-latest
     needs: build-and-push
     timeout-minutes: 10
+    permissions:
+      id-token: write   # 允许 GitHub 颁发 OIDC token，用于 AssumeRoleWithWebIdentity
+      contents: read
 
     steps:
+      - name: 配置 AWS 凭证（OIDC）
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # Role ARN 来自 CloudFormation Stack Output（GitHubActionsDeployRoleArn）
+          # 部署 Stack 后执行以下命令获取：
+          # aws cloudformation describe-stacks --stack-name automation-ocr \
+          #   --query "Stacks[0].Outputs[?OutputKey=='GitHubActionsDeployRoleArn'].OutputValue"
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
       - name: SSM 部署
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_ACTOR: ${{ github.actor }}

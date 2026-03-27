@@ -241,26 +241,45 @@ Resources:
         - Key: Name
           Value: automation-ocr-eip
 
-  # ── 7. CodeCatalyst 部署 IAM Role（替代 GitHub Actions IAM User Key）───────
-  # CodeCatalyst Workflow 通过 AssumeRole 获得权限，无需长期 Access Key
-  CodeCatalystDeployRole:
+  # ── 7. GitHub Actions OIDC Provider ──────────────────────────────────────
+  # 每个 AWS 账号只需注册一次；若账号内已存在可删除此资源后 deploy（不影响其他 workflow）
+  # 工作原理：GitHub Runner 申请 JWT → AWS STS 用 OIDC 公钥验签 → 颁发 15min 临时凭证
+  # ThumbprintList 是 token.actions.githubusercontent.com TLS 证书指纹（AWS 官方文档固定值）
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+
+  # ── 8. GitHub Actions 部署 IAM Role（替代 IAM User Access Key）────────────
+  # Trust Policy 的 StringLike 条件绑定仓库，防止其他仓库冒用此 Role
+  # sub 格式：repo:<owner>/<repo>:ref:refs/heads/<branch> 或 :*（含 workflow_dispatch）
+  GitHubActionsDeployRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: automation-ocr-codecatalyst-deploy
+      RoleName: automation-ocr-github-deploy
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
-              # CodeCatalyst 使用 codecatalyst.amazonaws.com 作为 Service Principal
-              Service: codecatalyst.amazonaws.com
-            Action: sts:AssumeRole
+              Federated: !GetAtt GitHubOidcProvider.Arn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              # StringLike + * 通配：同时允许 push to main 和 workflow_dispatch 两种触发方式
+              StringLike:
+                token.actions.githubusercontent.com:sub: repo:kelvinlee97/automation-ocr:*
       Policies:
         - PolicyName: EcrPushPolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              # ECR Push 完整权限：初始化上传 + 推送层 + 推送镜像
               - Effect: Allow
                 Action:
                   - ecr:GetAuthorizationToken
@@ -278,24 +297,21 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              # SSM SendCommand：触发 EC2 部署脚本
               - Effect: Allow
                 Action:
                   - ssm:SendCommand
                 Resource:
-                  # 限定只能在本账号 EC2 上执行 AWS-RunShellScript
                   - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${AppInstance}"
                   - !Sub "arn:aws:ssm:${AWS::Region}::document/AWS-RunShellScript"
-              # 查询命令执行结果
               - Effect: Allow
                 Action:
                   - ssm:GetCommandInvocation
                   - ssm:ListCommandInvocations
                 Resource: "*"
 
-  # ── 8. SSM Parameter Store：GEMINI_API_KEY（SecureString）─────────────────
+  # ── 9. SSM Parameter Store：GEMINI_API_KEY（SecureString）─────────────────
   # SecureString 使用 AWS KMS 默认密钥（aws/ssm）加密，免费层不额外计费
-  # EC2 通过 Instance Role 读取，CodeCatalyst 不需要读取（部署时不用 key）
+  # EC2 通过 Instance Role 读取，GitHub Actions 不需要读取（部署时由 EC2 自取）
   GeminiApiKeyParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -310,7 +326,7 @@ Resources:
       Tags:
         Project: automation-ocr
 
-# ─── 输出（供 CodeCatalyst Workflow 和部署脚本引用）──────────────────────────
+# ─── 输出（供 GitHub Actions Workflow 和部署脚本引用）────────────────────────
 Outputs:
   EcrRepositoryUri:
     Description: "ECR 仓库完整 URI（用于 docker pull/push）"
@@ -330,8 +346,8 @@ Outputs:
     Export:
       Name: automation-ocr-public-ip
 
-  CodeCatalystDeployRoleArn:
-    Description: "CodeCatalyst Workflow 绑定的 IAM Role ARN"
-    Value: !GetAtt CodeCatalystDeployRole.Arn
+  GitHubActionsDeployRoleArn:
+    Description: "GitHub Actions OIDC Role ARN（填入 role-to-assume）"
+    Value: !GetAtt GitHubActionsDeployRole.Arn
     Export:
-      Name: automation-ocr-codecatalyst-role-arn
+      Name: automation-ocr-github-deploy-role-arn
