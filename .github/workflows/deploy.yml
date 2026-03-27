@@ -99,8 +99,7 @@ jobs:
           GHCR_ACTOR: ${{ github.actor }}
         run: |
           # 通过 SSM 在实例上执行部署脚本
-          # secret 通过 runner 环境变量传入，再经由 SSM parameters 注入远端 shell
-          # 避免将敏感值直接拼接进命令字符串
+          # SSM 以 root 运行，git safe.directory 避免 dubious ownership 报错
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${INSTANCE_ID}" \
             --document-name "AWS-RunShellScript" \
@@ -111,6 +110,7 @@ jobs:
               --arg ghcr_actor "${GHCR_ACTOR}" \
               '{commands: [
                 "set -e",
+                "git config --global --add safe.directory /home/ubuntu/automation-ocr",
                 "cd /home/ubuntu/automation-ocr",
                 "git pull origin main",
                 ("printf \"GEMINI_API_KEY=%s\\n\" \"" + $gemini_key + "\" > .env"),
