@@ -37,8 +37,11 @@ jobs:
           # GITHUB_TOKEN 是内置 token，无需在 Secrets 中手动配置
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 初始化 Buildx（docker-container driver 才支持 GHA cache 和直接推送）
+      - name: 初始化 Buildx
+        # 使用内置 docker driver，避免从 Docker Hub 拉取 buildkit 镜像触发限流
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
 
       - name: 生成镜像标签
         id: meta
@@ -55,10 +58,6 @@ jobs:
           context: ./wa-bot
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          # 利用 GitHub Actions 缓存加速重复构建
-          # 依赖层（npm install）未变时直接复用，构建时间从分钟级降到秒级
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   # Job 2：通过 SSM SendCommand 在 EC2 上执行部署
   # 走 AWS API（HTTPS 443），无需开放 22 端口，无需 SSH Key
