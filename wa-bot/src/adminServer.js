@@ -66,7 +66,7 @@ function requireSetup(req, res, next) {
 
 // ─── HTML 骨架 ─────────────────────────────────────────────────────────────────
 
-function htmlLayout(title, content) {
+function htmlLayout(title, content, currentPath = '') {
   // 根据当前连接状态动态渲染导航栏徽标
   const statusBadge = _waConnected
     ? '<span style="color:#86efac;font-size:12px">🟢 已连接</span>'
@@ -86,7 +86,8 @@ function htmlLayout(title, content) {
           display: flex; align-items: center; justify-content: space-between; height: 52px; }
     nav a { color: #a8b8d8; text-decoration: none; margin-left: 20px; font-size: 14px; }
     nav a:hover { color: #fff; }
-    nav .brand { font-weight: 700; font-size: 16px; color: #fff; letter-spacing: .5px; }
+    nav .brand { font-weight: 700; font-size: 16px; color: #fff; letter-spacing: .5px; margin-left: 0; }
+    nav .nav-active { color: #fff; border-bottom: 2px solid #3b82f6; padding-bottom: 2px; }
     nav .nav-right { display: flex; align-items: center; gap: 8px; }
     main { max-width: 1400px; margin: 32px auto; padding: 0 24px; }
     h1 { font-size: 22px; font-weight: 700; margin-bottom: 20px; }
@@ -152,12 +153,13 @@ function htmlLayout(title, content) {
 </head>
 <body>
   <nav>
-    <span class="brand">⚙ 管理后台</span>
+    <a href="/admin" class="brand">⚙ 管理后台</a>
     <div class="nav-right">
       ${statusBadge}
+      <a href="/admin" class="${currentPath === '/admin' ? 'nav-active' : ''}">📋 收据审核</a>
       <a href="/admin/export">⬇ 下载 Excel</a>
-      <a href="/admin/users">👥 用户管理</a>
-      <a href="/admin/change-password">🔑 修改密码</a>
+      <a href="/admin/users" class="${currentPath === '/admin/users' ? 'nav-active' : ''}">👥 用户管理</a>
+      <a href="/admin/change-password" class="${currentPath === '/admin/change-password' ? 'nav-active' : ''}">🔑 修改密码</a>
       <form class="inline" method="POST" action="/admin/logout">
         <button class="btn btn-logout" style="margin-left:12px">退出</button>
       </form>
@@ -324,7 +326,7 @@ function usersPage(users, currentUser, flash = "") {
       }
     </script>`;
 
-  return htmlLayout("用户管理", content);
+  return htmlLayout("用户管理", content, '/admin/users');
 }
 
 // ─── 新建用户页 ────────────────────────────────────────────────────────────────
@@ -353,7 +355,7 @@ function newUserPage(errorMsg = "") {
         <a href="/admin/users" class="btn btn-logout" style="padding:10px 24px">取消</a>
       </div>
     </form>`;
-  return htmlLayout("新建用户", content);
+  return htmlLayout("新建用户", content, '/admin/users');
 }
 
 // ─── 修改密码页 ────────────────────────────────────────────────────────────────
@@ -380,7 +382,7 @@ function changePasswordPage(errorMsg = "", successMsg = "") {
       </div>
       <button type="submit" class="btn btn-primary" style="padding:10px 24px">更新密码</button>
     </form>`;
-  return htmlLayout("修改密码", content);
+  return htmlLayout("修改密码", content, '/admin/change-password');
 }
 
 // ─── QR 码页（无需登录，供初始化时扫码用） ────────────────────────────────────
@@ -555,7 +557,7 @@ function escapeHtml(str) {
 
 function receiptsPage(receipts) {
   if (receipts.length === 0) {
-    return htmlLayout("收据审核", '<div class="empty">暂无收据记录</div>');
+    return htmlLayout("收据审核", '<div class="empty">暂无收据记录</div>', '/admin');
   }
 
   const rows = receipts
@@ -620,7 +622,7 @@ function receiptsPage(receipts) {
       }
     </script>`;
 
-  return htmlLayout("收据审核", content);
+  return htmlLayout("收据审核", content, '/admin');
 }
 
 // ─── 主函数：启动 Express 服务器 ───────────────────────────────────────────────
