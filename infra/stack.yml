@@ -139,7 +139,7 @@ Resources:
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "automation-ocr: HTTP 80 inbound only, HTTPS 443 outbound for SSM/ECR/API"
+      GroupDescription: "automation-ocr: HTTP 80 inbound, all outbound"
       # VpcId 必填：VPC 内的 SG 必须关联 VPC，否则 SecurityGroupEgress 报错
       VpcId: !Ref VpcId
       # 入站：仅 HTTP 80（WhatsApp bot 管理后台）
@@ -155,17 +155,12 @@ Resources:
           ToPort: 80
           CidrIpv6: ::/0
           Description: "HTTP inbound - admin panel IPv6"
+      # 出站：全放行（生产实践：出站由实例主动发起，入站才是攻击入口）
+      # apt/git/docker pull/ECR/SSM/Gemini API 涉及多端口，全放行避免维护成本
       SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+        - IpProtocol: "-1"
           CidrIp: 0.0.0.0/0
-          Description: "HTTPS outbound - SSM/ECR/API"
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIpv6: ::/0
-          Description: "HTTPS outbound - SSM/ECR/API IPv6"
+          Description: "Allow all outbound traffic"
       Tags:
         - Key: Name
           Value: automation-ocr-sg
