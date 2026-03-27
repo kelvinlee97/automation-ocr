@@ -31,6 +31,9 @@ services:
       - REDIS_PORT=${REDIS_PORT:-6379}
       # 收据图片和 JSON 存储目录，与下方 volumes 挂载路径保持一致
       - DATA_DIR=/opt/automation-ocr/data
+      # 固定 session secret，确保容器重启后浏览器 cookie 仍有效
+      # 若未设置则每次重启随机生成，导致重启即登出
+      - SESSION_SECRET=${SESSION_SECRET}
     volumes:
       # 挂载配置文件目录（Dockerfile 中已创建 /config -> /app/config 符号链接）
       - ./config:/app/config

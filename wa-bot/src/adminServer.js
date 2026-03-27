@@ -631,15 +631,19 @@ function startAdminServer() {
   app.use(express.urlencoded({ extended: false }));
   app.use(express.json());
 
-  // session 配置：secret 每次启动随机，重启自动清除所有登录态
+  // session 配置
+  // secret 从环境变量读取，保证重启后 cookie 仍有效；未配置时用随机值（开发环境）
+  // rolling: true — 每次请求自动续期，真正实现"久不用才踢出"而非"固定 N 小时过期"
+  const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
   app.use(
     session({
-      secret: crypto.randomBytes(32).toString("hex"),
+      secret: SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
+      rolling: true, // 有操作就续期，避免活跃使用中途被踢
       cookie: {
         httpOnly: true,
-        maxAge: 8 * 60 * 60 * 1000, // 8 小时自动过期
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天无操作后过期
       },
     })
   );
