@@ -46,7 +46,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: 构建并推送镜像
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./wa-bot
           push: true
@@ -71,21 +71,27 @@ jobs:
       - name: 配置 AWS 凭证（OIDC）
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # Role ARN 来自 CloudFormation Stack Output（GitHubActionsDeployRoleArn）
-          # 部署 Stack 后执行以下命令获取：
-          # aws cloudformation describe-stacks --stack-name automation-ocr \
-          #   --query "Stacks[0].Outputs[?OutputKey=='GitHubActionsDeployRoleArn'].OutputValue"
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: 从 CloudFormation 获取实例 ID
+        id: cfn
+        run: |
+          # 动态读取实例 ID，避免硬编码（重建 Stack 后 ID 会变）
+          INSTANCE_ID=$(aws cloudformation describe-stacks \
+            --stack-name automation-ocr \
+            --query "Stacks[0].Outputs[?OutputKey=='Ec2InstanceId'].OutputValue" \
+            --output text)
+          echo "instance_id=${INSTANCE_ID}" >> "$GITHUB_OUTPUT"
+          echo "实例 ID: ${INSTANCE_ID}"
+
       - name: SSM 部署
         env:
+          INSTANCE_ID: ${{ steps.cfn.outputs.instance_id }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_ACTOR: ${{ github.actor }}
         run: |
-          INSTANCE_ID="i-01e04810ff1f9f5d1"
-
           # 通过 SSM 在实例上执行部署脚本
           # secret 通过 runner 环境变量传入，再经由 SSM parameters 注入远端 shell
           # 避免将敏感值直接拼接进命令字符串
