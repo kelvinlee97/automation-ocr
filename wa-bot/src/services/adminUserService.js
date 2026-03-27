@@ -17,8 +17,9 @@ const fs     = require("fs");
 const path   = require("path");
 const crypto = require("crypto");
 
-// 与 receiptStore.js 保持相同的 DATA_DIR 路径约定
-const DATA_DIR   = path.resolve(__dirname, "../../../../data");
+// 优先使用环境变量 DATA_DIR（生产容器通过 docker-compose 注入）
+// 回退到相对路径供本地开发，与 receiptStore.js 保持相同约定
+const DATA_DIR   = process.env.DATA_DIR || path.resolve(__dirname, "../../../../data");
 const USERS_PATH = path.join(DATA_DIR, "admin_users.json");
 
 // scrypt 参数（OWASP 推荐最低值，低频登录场景足够安全）

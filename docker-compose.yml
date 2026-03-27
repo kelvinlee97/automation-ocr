@@ -29,6 +29,8 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - REDIS_HOST=redis
       - REDIS_PORT=${REDIS_PORT:-6379}
+      # 收据图片和 JSON 存储目录，与下方 volumes 挂载路径保持一致
+      - DATA_DIR=/opt/automation-ocr/data
     volumes:
       # 挂载配置文件目录（Dockerfile 中已创建 /config -> /app/config 符号链接）
       - ./config:/app/config

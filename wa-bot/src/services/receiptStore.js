@@ -14,9 +14,9 @@
 const fs   = require("fs");
 const path = require("path");
 
-// 路径基于容器内绝对路径（docker-compose 已将 ./data 挂载至 /opt/automation-ocr/data）
-// 本地开发时也能工作：向上四级到达 automation-ocr 根目录，再进 data/
-const DATA_DIR   = path.resolve(__dirname, "../../../../data");
+// 优先使用环境变量 DATA_DIR（生产容器通过 docker-compose 注入）
+// 回退到相对路径供本地开发：__dirname(/app/src/services) 向上四级 = 项目根目录/data
+const DATA_DIR   = process.env.DATA_DIR || path.resolve(__dirname, "../../../../data");
 const STORE_PATH = path.join(DATA_DIR, "pending_receipts.json");
 const IMAGES_DIR = path.join(DATA_DIR, "images");
 
