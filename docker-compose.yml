@@ -1,16 +1,34 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   wa-bot:
-    # 从 GHCR 拉取预构建镜像，不在服务器本地执行 docker build
-    # 服务器只做 pull + up，节省 1GB 内存机器的构建资源
-    image: ghcr.io/kelvinlee97/automation-ocr:latest
+    # 镜像地址通过 IMAGE_URI 环境变量注入，支持两种场景：
+    # - 生产（ECR）：IMAGE_URI=<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/automation-ocr:latest
+    # - 回退（GHCR）：IMAGE_URI=ghcr.io/kelvinlee97/automation-ocr:latest
+    # 注入方式：EC2 部署脚本执行前 export IMAGE_URI=$(cfn-output EcrRepositoryUri):latest
+    image: ${IMAGE_URI:-ghcr.io/kelvinlee97/automation-ocr:latest}
     container_name: wa-bot
     restart: always
+    depends_on:
+      - redis
     ports:
       - "80:3000"
     environment:
       - NODE_ENV=production
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      # ADMIN_USER/ADMIN_PASS 已迁移到管理后台内置用户系统，首次访问 /admin 完成设置
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT:-6379}
     volumes:
       # 挂载配置文件目录（Dockerfile 中已创建 /config -> /app/config 符号链接）
       - ./config:/app/config
@@ -25,3 +43,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  redis_data:

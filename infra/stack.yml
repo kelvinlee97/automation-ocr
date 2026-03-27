@@ -1,0 +1,337 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  automation-ocr 全栈基础设施：ECR 私有镜像仓库、EC2 实例（t3.micro）、
+  IAM Role（SSM + ECR pull）、SecurityGroup、CodeCatalyst 部署 Role。
+  由 CloudFormation 管理，替代手工创建的 Lightsail/EC2 资源。
+
+# ─── 参数 ────────────────────────────────────────────────────────────────────
+Parameters:
+  # 部署时必须提供，避免硬编码敏感值进模板
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Description: "Gemini API Key，存入 Parameter Store SecureString"
+
+  # EC2 镜像 ID 需按区域填写（此处为 ap-southeast-1 Ubuntu 22.04 LTS x86_64）
+  # 更新方式：aws ec2 describe-images --region ap-southeast-1 \
+  #   --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*" \
+  #   --query "sort_by(Images,&CreationDate)[-1].ImageId"
+  Ec2AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+    Description: "EC2 AMI ID（默认从 SSM Public Parameter 自动获取最新 Ubuntu 22.04）"
+
+  KeyPairName:
+    Type: String
+    Default: ""
+    Description: "EC2 Key Pair 名称（可选；留空则不配置，仅用 SSM Session Manager 访问）"
+
+# ─── 条件 ────────────────────────────────────────────────────────────────────
+Conditions:
+  # KeyPair 可选：有值时才在 EC2 上关联 Key Pair（生产环境推荐不配置，全用 SSM）
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
+
+# ─── 资源 ────────────────────────────────────────────────────────────────────
+Resources:
+
+  # ── 1. ECR 私有镜像仓库 ────────────────────────────────────────────────────
+  EcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: automation-ocr
+      # 启用镜像扫描，推送时自动检测 CVE，不影响拉取性能
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      # 生命周期策略：只保留最近 5 个镜像（含未打标签的层），控制存储费用
+      # ECR 存储约 $0.10/GB/月，保留 5 个镜像约 $0.3-0.5/月
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "只保留最近 5 个镜像，超出自动过期",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 5
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+
+  # ── 2. EC2 IAM Role（SSM Agent + ECR Pull，无需长期密钥）──────────────────
+  Ec2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: automation-ocr-ec2-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # SSM Agent 标准策略：Session Manager + SendCommand + Parameter Store 只读
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: EcrPullPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # ECR Pull 三件套：获取 Token + 批量拉取层 + 下载层数据
+              # 只有 pull 权限，无法 push，最小权限原则
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchCheckLayerAvailability
+                Resource: !GetAtt EcrRepository.Arn
+        - PolicyName: ParameterStoreReadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # 允许 EC2 从 Parameter Store 读取应用配置（如 GEMINI_API_KEY）
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/automation-ocr/*"
+              # KMS 解密：SecureString 参数用 AWS 默认 KMS Key 加密时需要此权限
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub "ssm.${AWS::Region}.amazonaws.com"
+
+  # ── 3. Instance Profile（将 Role 绑定到 EC2）──────────────────────────────
+  Ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: automation-ocr-ec2-profile
+      Roles:
+        - !Ref Ec2InstanceRole
+
+  # ── 4. Security Group（最小开放原则）─────────────────────────────────────
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "automation-ocr：仅开 80 入站，SSM 走 HTTPS 出站"
+      # 入站：仅 HTTP 80（WhatsApp bot 管理后台）
+      # SSH 22 不开放，通过 SSM Session Manager 访问（零 Attack Surface）
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: "HTTP 管理后台"
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIpv6: ::/0
+          Description: "HTTP 管理后台（IPv6）"
+      # 出站：HTTPS 443（SSM Agent + ECR + Gemini API + WhatsApp），无需开 22
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: "HTTPS 出站（SSM/ECR/API）"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIpv6: ::/0
+          Description: "HTTPS 出站（IPv6）"
+      Tags:
+        - Key: Name
+          Value: automation-ocr-sg
+
+  # ── 5. EC2 实例（t3.micro，替代 Lightsail micro $5/月）────────────────────
+  AppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      ImageId: !Ref Ec2AmiId
+      IamInstanceProfile: !Ref Ec2InstanceProfile
+      SecurityGroups:
+        - !Ref AppSecurityGroup
+      # Key Pair 可选：生产推荐不配置，全用 SSM Session Manager
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref AWS::NoValue]
+      # User Data：首次启动自动安装 Docker、Docker Compose、AWS CLI、克隆代码
+      # base64 编码由 CloudFormation 处理（UserData 原生接受 Base64 或 Fn::Base64）
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+
+          # 等待 apt 锁释放（cloud-init 可能并发运行 apt）
+          while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 2; done
+
+          apt-get update -qq
+          apt-get install -y -qq ca-certificates curl gnupg lsb-release unzip
+
+          # 安装 Docker（官方源）
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+            | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+            https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+            > /etc/apt/sources.list.d/docker.list
+          apt-get update -qq
+          apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
+          systemctl enable --now docker
+          usermod -aG docker ubuntu
+
+          # 安装 AWS CLI v2
+          curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+          unzip -q /tmp/awscliv2.zip -d /tmp/
+          /tmp/aws/install
+          rm -rf /tmp/awscliv2.zip /tmp/aws
+
+          # 克隆代码仓库（首次部署）
+          # 后续更新通过 CodeCatalyst Workflow + SSM SendCommand 触发
+          git clone https://github.com/kelvinlee97/automation-ocr.git \
+            /home/ubuntu/automation-ocr
+          chown -R ubuntu:ubuntu /home/ubuntu/automation-ocr
+
+          # 从 Parameter Store 读取 Gemini API Key 并写入 .env
+          GEMINI_KEY=$(aws ssm get-parameter \
+            --name /automation-ocr/gemini-api-key \
+            --with-decryption \
+            --region ${AWS::Region} \
+            --query Parameter.Value \
+            --output text)
+          printf 'GEMINI_API_KEY=%s\n' "${!GEMINI_KEY}" \
+            > /home/ubuntu/automation-ocr/.env
+
+          # ECR 登录（Instance Role 自动提供凭证，无需密钥）
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          aws ecr get-login-password --region ${AWS::Region} \
+            | docker login --username AWS --password-stdin \
+              "${!ACCOUNT_ID}.dkr.ecr.${AWS::Region}.amazonaws.com"
+
+          # 启动应用
+          cd /home/ubuntu/automation-ocr
+          docker compose up -d
+
+      Tags:
+        - Key: Name
+          Value: automation-ocr-app
+
+  # ── 6. Elastic IP（可选，重启后 IP 不变）─────────────────────────────────
+  # 注意：EIP 本身免费，但关联后实例停止时会收费（~$0.005/h）
+  # 生产建议分配，避免重启后 IP 变化导致防火墙规则失效
+  AppElasticIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref AppInstance
+      Tags:
+        - Key: Name
+          Value: automation-ocr-eip
+
+  # ── 7. CodeCatalyst 部署 IAM Role（替代 GitHub Actions IAM User Key）───────
+  # CodeCatalyst Workflow 通过 AssumeRole 获得权限，无需长期 Access Key
+  CodeCatalystDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: automation-ocr-codecatalyst-deploy
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              # CodeCatalyst 使用 codecatalyst.amazonaws.com 作为 Service Principal
+              Service: codecatalyst.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EcrPushPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # ECR Push 完整权限：初始化上传 + 推送层 + 推送镜像
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutImage
+                  - ecr:BatchGetImage
+                Resource: !GetAtt EcrRepository.Arn
+        - PolicyName: SsmDeployPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # SSM SendCommand：触发 EC2 部署脚本
+              - Effect: Allow
+                Action:
+                  - ssm:SendCommand
+                Resource:
+                  # 限定只能在本账号 EC2 上执行 AWS-RunShellScript
+                  - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${AppInstance}"
+                  - !Sub "arn:aws:ssm:${AWS::Region}::document/AWS-RunShellScript"
+              # 查询命令执行结果
+              - Effect: Allow
+                Action:
+                  - ssm:GetCommandInvocation
+                  - ssm:ListCommandInvocations
+                Resource: "*"
+
+  # ── 8. SSM Parameter Store：GEMINI_API_KEY（SecureString）─────────────────
+  # SecureString 使用 AWS KMS 默认密钥（aws/ssm）加密，免费层不额外计费
+  # EC2 通过 Instance Role 读取，CodeCatalyst 不需要读取（部署时不用 key）
+  GeminiApiKeyParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /automation-ocr/gemini-api-key
+      Type: String
+      # 注意：CFN 原生不支持 SecureString（AWS 限制），需要 deploy 后手动或用 CLI 更新为 SecureString
+      # 或使用 Custom Resource（Lambda）。此处先写 String，部署后用以下命令转换：
+      # aws ssm put-parameter --name /automation-ocr/gemini-api-key \
+      #   --value "$GEMINI_API_KEY" --type SecureString --overwrite
+      Value: !Ref GeminiApiKey
+      Description: "Gemini API Key（部署后请用 CLI 升级为 SecureString）"
+      Tags:
+        Project: automation-ocr
+
+# ─── 输出（供 CodeCatalyst Workflow 和部署脚本引用）──────────────────────────
+Outputs:
+  EcrRepositoryUri:
+    Description: "ECR 仓库完整 URI（用于 docker pull/push）"
+    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/automation-ocr"
+    Export:
+      Name: automation-ocr-ecr-uri
+
+  Ec2InstanceId:
+    Description: "EC2 实例 ID（用于 SSM SendCommand）"
+    Value: !Ref AppInstance
+    Export:
+      Name: automation-ocr-ec2-instance-id
+
+  AppPublicIp:
+    Description: "应用公网 IP（访问管理后台）"
+    Value: !Ref AppElasticIp
+    Export:
+      Name: automation-ocr-public-ip
+
+  CodeCatalystDeployRoleArn:
+    Description: "CodeCatalyst Workflow 绑定的 IAM Role ARN"
+    Value: !GetAtt CodeCatalystDeployRole.Arn
+    Export:
+      Name: automation-ocr-codecatalyst-role-arn
