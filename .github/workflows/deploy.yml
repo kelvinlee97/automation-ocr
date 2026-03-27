@@ -94,27 +94,28 @@ jobs:
       - name: SSM 部署
         env:
           INSTANCE_ID: ${{ steps.cfn.outputs.instance_id }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_ACTOR: ${{ github.actor }}
         run: |
           # 通过 SSM 在实例上执行部署脚本
           # SSM 以最小环境的 root 运行，需显式设 HOME 和 safe.directory
+          # GEMINI_API_KEY 由 EC2 自身从 Parameter Store 取得（SecureString），不经过 Runner
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${INSTANCE_ID}" \
             --document-name "AWS-RunShellScript" \
             --region "$AWS_DEPLOY_REGION" \
             --parameters "$(jq -n \
-              --arg gemini_key "${GEMINI_API_KEY}" \
               --arg ghcr_token "${GHCR_TOKEN}" \
               --arg ghcr_actor "${GHCR_ACTOR}" \
+              --arg region "${AWS_DEPLOY_REGION}" \
               '{commands: [
                 "set -e",
                 "export HOME=/root",
                 "git config --global --add safe.directory /home/ubuntu/automation-ocr",
                 "cd /home/ubuntu/automation-ocr",
                 "git pull origin main",
-                ("printf \"GEMINI_API_KEY=%s\\n\" \"" + $gemini_key + "\" > .env"),
+                ("GEMINI_KEY=$(aws ssm get-parameter --name /automation-ocr/gemini-api-key --with-decryption --query Parameter.Value --output text --region " + $region + ")"),
+                "echo \"GEMINI_API_KEY=${GEMINI_KEY}\" > .env",
                 ("echo \"" + $ghcr_token + "\" | docker login ghcr.io -u \"" + $ghcr_actor + "\" --password-stdin"),
                 "docker compose pull",
                 "docker compose up -d --remove-orphans",
