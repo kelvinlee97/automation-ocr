@@ -329,7 +329,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - cloudformation:DescribeStacks
-                Resource: !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/automation-ocr/*"
+                Resource: "*"
 
   # ── 9. SSM Parameter Store：GEMINI_API_KEY（SecureString）─────────────────
   # SecureString 使用 AWS KMS 默认密钥（aws/ssm）加密，免费层不额外计费
