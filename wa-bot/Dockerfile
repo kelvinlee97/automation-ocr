@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/mirror/docker/library/node:18-slim
+FROM public.ecr.aws/docker/library/node:18-slim
 
 WORKDIR /app
 
