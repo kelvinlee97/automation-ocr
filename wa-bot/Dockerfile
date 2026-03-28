@@ -23,7 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 先复制 package.json，利用 layer 缓存
 COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
+# npm ci 严格按 lockfile 安装，确保镜像与开发环境依赖一致
+RUN npm ci --omit=dev
 
 # 复制 bot 代码
 COPY . .
