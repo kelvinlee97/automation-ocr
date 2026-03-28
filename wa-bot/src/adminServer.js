@@ -1017,8 +1017,12 @@ function startAdminServer() {
   app.use(express.json());
 
   // session 配置
-  // secret 从环境变量读取，保证重启后 cookie 仍有效；未配置时用随机值（开发环境）
+  // secret 从环境变量读取，保证重启后 cookie 签名仍有效；未配置时用随机值（开发环境）
+  // 注意：当前使用 MemoryStore，进程重启后 session 数据必然清空，SESSION_SECRET 仅防止 cookie 签名失效
   // rolling: true — 每次请求自动续期，真正实现"久不用才踢出"而非"固定 N 小时过期"
+  if (!process.env.SESSION_SECRET) {
+    logger.warn("未配置 SESSION_SECRET，将使用随机值——重启后所有 session 失效，用户须重新登录");
+  }
   const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
   app.use(
     session({
@@ -1108,10 +1112,10 @@ function startAdminServer() {
     if (adminUserService.authenticate(username, password)) {
       req.session.authenticated = true;
       req.session.username = username;
-      // 等 session 写入完成再跳转，避免 redirect 时 session 尚未落盘导致认证失败
+      // 等 session 写入 store 完成再跳转，避免 redirect 先到达时认证状态尚未提交
       req.session.save((err) => {
         if (err) {
-          logger.error("session 写入失败", { error: err.message });
+          logger.error("session 写入失败", { error: String(err) });
           return res.send(loginPage("登录失败，请重试"));
         }
         res.redirect("/admin");
@@ -1123,7 +1127,11 @@ function startAdminServer() {
 
   // 登出
   app.post("/admin/logout", (req, res) => {
-    req.session.destroy(() => {
+    req.session.destroy((err) => {
+      if (err) {
+        // destroy 失败不阻塞用户登出流程，但需记录日志排查
+        logger.error("session 销毁失败（登出）", { error: String(err) });
+      }
       res.redirect("/admin/login");
     });
   });
@@ -1181,7 +1189,10 @@ function startAdminServer() {
     if (!result.ok) return res.send(changePasswordPage(result.error));
     logger.info("密码已更新", { username: req.session.username });
     // 改密后销毁 session，要求重新登录
-    req.session.destroy(() => {
+    req.session.destroy((err) => {
+      if (err) {
+        logger.error("session 销毁失败（改密）", { error: String(err) });
+      }
       res.redirect("/admin/login");
     });
   });
