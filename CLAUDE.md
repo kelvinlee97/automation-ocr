@@ -91,7 +91,9 @@ bot:
 ```bash
 GEMINI_API_KEY=your_key_here
 
-# 生产环境必须设置，否则每次重启会生成新随机 secret，导致所有用户 session 失效被强制重新登录
+# 建议生产环境设置，防止重启后 cookie 签名失效。
+# 注意：当前使用内存 session store，重启仍会清空所有 session，用户须重新登录；
+# 如需重启后保持登录状态，需替换为持久化 store（如 session-file-store）。
 SESSION_SECRET=your_random_secret_here
 ```
 
