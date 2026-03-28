@@ -347,10 +347,13 @@ function htmlLayout(title, content, currentPath = '') {
 
     /* ── 表格横向滚动 ── */
     .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    table { min-width: 900px; }
+    /* 限定只影响收据表格，避免污染其他页面的 table */
+    .table-wrapper table { min-width: 900px; }
 
-    /* ── 按钮触控优化 ── */
-    .btn { min-height: 44px; padding: 10px 16px; }
+    /* ── 按钮触控优化（仅移动端） ── */
+    @media (max-width: 768px) {
+      .btn { min-height: 44px; padding: 10px 16px; }
+    }
 
     /* ── 响应式布局 ── */
     @media (max-width: 768px) {
@@ -969,6 +972,9 @@ function receiptsPage(receipts) {
     return htmlLayout("收据审核", '<div class="empty">暂无收据记录</div>', '/admin');
   }
 
+  // 收据状态枚举——用于白名单校验，防止非法值混入 HTML 属性
+  const VALID_RECEIPT_STATUSES = new Set(['pending_review', 'ai_extracted', 'confirmed', 'rejected']);
+
   // 统计各状态数量
   const stats = receipts.reduce((acc, r) => {
     const s = r.status || 'pending_review';
@@ -1007,7 +1013,9 @@ function receiptsPage(receipts) {
       const thumbSrc = `/admin/images/${r.imageFilename}`;
       const thumb = `<img class="thumb" src="${thumbSrc}" alt="收据" onclick="openLightbox('${thumbSrc}')" />`;
 
-      return `<tr data-status="${r.status || ''}" id="row-${r.id}">
+      // 白名单校验 status，防止非法值注入 HTML 属性
+      const safeStatus = VALID_RECEIPT_STATUSES.has(r.status) ? r.status : '';
+      return `<tr data-status="${safeStatus}" id="row-${r.id}">
       <td>${receipts.length - idx}</td>
       <td>${r.submittedAt ? new Date(r.submittedAt).toLocaleString("zh-CN") : "—"}</td>
       <td style="font-size:12px">${(r.phone || "—").replace(/@c\.us$/, "")}</td>
@@ -1066,6 +1074,9 @@ function receiptsPage(receipts) {
           });
           resultCount.textContent = '共 ' + visible + ' 条';
         }
+
+        // 元素不存在时静默退出，防止 DOM 缺失时 TypeError 崩溃
+        if (!searchInput || !statusFilter || !resultCount) return;
 
         searchInput.addEventListener('input', filter);
         statusFilter.addEventListener('change', filter);
