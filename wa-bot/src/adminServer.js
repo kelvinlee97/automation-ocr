@@ -11,6 +11,7 @@ const session = require("express-session");
 const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
+const rateLimit = require("express-rate-limit");
 const { getExcelPath } = require("./services/excelService");
 const receiptStore = require("./services/receiptStore");
 const { processReceipt } = require("./services/aiService");
@@ -18,6 +19,23 @@ const adminUserService = require("./services/adminUserService");
 const logger = require("./utils/logger");
 
 const ADMIN_PORT = 3000;
+
+// ─── Rate Limiter 配置 ──────────────────────────────────────────────────────────────
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 分钟
+  max: 20, // 每个 IP 最多 20 次尝试
+  message: "尝试次数过多，请 15 分钟后重试",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 分钟
+  max: 60, // 每个 IP 最多 60 次请求
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // ─── 模块级状态（通过 setClient/setQR 注入，无需传参） ─────────────────────────
 
@@ -96,6 +114,55 @@ function htmlLayout(title, content, currentPath = '') {
       --accent-amber:   #F59E0B;  /* 琥珀（待提取/待审核） */
       --accent-blue:    #3B82F6;  /* 蓝（AI 已提取） */
       --accent-rose:    #F43F5E;  /* 玫红（已拒绝/错误） */
+    }
+
+    /* ── 亮色主题：覆盖所有颜色变量，强调色保持不变以维持品牌一致性 ── */
+    [data-theme="light"] {
+      --bg-base:        #F8FAFC;
+      --bg-surface:     #FFFFFF;
+      --bg-surface-2:   #F1F5F9;
+      --border:         #E2E8F0;
+      --text-primary:   #0F172A;
+      --text-secondary: #475569;
+      --text-muted:     #94A3B8;
+    }
+
+    /* 亮色下导航背景需单独覆盖（暗色用了 rgba 半透明） */
+    [data-theme="light"] nav {
+      background: rgba(248, 250, 252, 0.92);
+      box-shadow: 0 1px 0 var(--border);
+    }
+
+    /* 亮色下徽标发光降低以避免在白底上过亮 */
+    [data-theme="light"] .badge-pending_review { box-shadow: 0 0 6px rgba(245,158,11,0.15); }
+    [data-theme="light"] .badge-ai_extracted   { box-shadow: 0 0 6px rgba(59,130,246,0.15); }
+    [data-theme="light"] .badge-confirmed      { box-shadow: 0 0 6px rgba(16,185,129,0.15); }
+    [data-theme="light"] .badge-rejected       { box-shadow: 0 0 6px rgba(244,63,94,0.12);  }
+
+    /* 主题切换时所有颜色平滑过渡 */
+    *, *::before, *::after {
+      transition: background-color .25s ease, border-color .25s ease, color .2s ease,
+                  box-shadow .25s ease;
+    }
+    /* 排除动画元素避免过渡干扰 */
+    .status-dot, .btn, nav a { transition: none; }
+    .btn { transition: opacity .15s, transform .1s; }
+    nav a { transition: color .15s; }
+
+    /* ── 主题切换按钮 ── */
+    .theme-toggle {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 15px; padding: 0;
+      transition: background .15s, border-color .15s, transform .1s !important;
+    }
+    .theme-toggle:hover {
+      background: var(--bg-surface-2);
+      border-color: var(--text-muted);
+      transform: rotate(20deg);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -322,6 +389,13 @@ function htmlLayout(title, content, currentPath = '') {
     /* ── 等宽数据字段（手机号、IC 号） ── */
     .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .5px; }
   </style>
+  <\!-- 防止主题闪烁（FOUC）：在 DOM 渲染前同步读取 localStorage 并设置 data-theme -->
+  <script>
+    (function() {
+      var t = localStorage.getItem('admin-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 </head>
 <body>
   <nav>
@@ -332,8 +406,9 @@ function htmlLayout(title, content, currentPath = '') {
       <a href="/admin/export">⬇ 下载 Excel</a>
       <a href="/admin/users" class="${currentPath === '/admin/users' ? 'nav-active' : ''}">👥 用户管理</a>
       <a href="/admin/change-password" class="${currentPath === '/admin/change-password' ? 'nav-active' : ''}">🔑 修改密码</a>
+      <button class="theme-toggle" id="themeToggle" title="切换主题" aria-label="切换明暗主题">🌙</button>
       <form class="inline" method="POST" action="/admin/logout">
-        <button class="btn btn-logout" style="margin-left:12px">退出</button>
+        <button class="btn btn-logout" style="margin-left:4px">退出</button>
       </form>
     </div>
   </nav>
@@ -358,6 +433,29 @@ function htmlLayout(title, content, currentPath = '') {
     document.getElementById('lightbox').addEventListener('click', function(e) {
       if (e.target === this) closeLightbox();
     });
+
+    // ── 主题切换逻辑 ──────────────────────────────────────────────
+    (function() {
+      const STORAGE_KEY = 'admin-theme';
+      const btn = document.getElementById('themeToggle');
+
+      // 根据当前主题更新按钮图标
+      function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        btn.textContent = theme === 'light' ? '🌙' : '☀️';
+        btn.title = theme === 'light' ? '切换到深色模式' : '切换到浅色模式';
+        localStorage.setItem(STORAGE_KEY, theme);
+      }
+
+      // 读取持久化设置，默认深色
+      const saved = localStorage.getItem(STORAGE_KEY) || 'dark';
+      applyTheme(saved);
+
+      btn.addEventListener('click', function() {
+        const current = document.documentElement.getAttribute('data-theme');
+        applyTheme(current === 'light' ? 'dark' : 'light');
+      });
+    })();
   </script>
 </body>
 </html>`;
@@ -937,6 +1035,15 @@ function startAdminServer() {
 
   // ── 路由 ──────────────────────────────────────────────────────────────────
 
+  // Health check（无需认证，用于容器健康探测）
+  app.get("/health", (req, res) => {
+    res.json({ 
+      status: "ok", 
+      whatsapp: _waConnected ? "connected" : "disconnected",
+      timestamp: new Date().toISOString()
+    });
+  });
+
   // 根路径：已登录直接渲染收据审核页，未登录跳登录
   app.get("/admin", requireSetup, (req, res) => {
     if (!req.session.authenticated) {
@@ -996,7 +1103,7 @@ function startAdminServer() {
     res.send(loginPage());
   });
 
-  app.post("/admin/login", requireSetup, (req, res) => {
+  app.post("/admin/login", requireSetup, authLimiter, (req, res) => {
     const { username, password } = req.body;
     if (adminUserService.authenticate(username, password)) {
       req.session.authenticated = true;
@@ -1086,7 +1193,7 @@ function startAdminServer() {
   });
 
   // AI 提取：读取图片 → 调用 Gemini → 保存结果（JSON API，前端 AJAX 调用）
-  app.post("/admin/receipts/:id/ai-extract", requireAuth, async (req, res) => {
+  app.post("/admin/receipts/:id/ai-extract", requireAuth, apiLimiter, async (req, res) => {
     const { id } = req.params;
 
     const record = receiptStore.getById(id);
