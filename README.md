@@ -28,7 +28,7 @@
 ② 注册成功 → 发收据截图
        │
        ▼
-③ OCR 自动识别：品牌 / 消费金额 / 单据号
+③ AI 自动识别：品牌 / 消费金额 / 单据号
        │
        ├─ ✅ 合格（品牌在白名单 + 金额 ≥ RM500）
        │       → 回复"恭喜通过，单据号 xxx，金额 RM xxx"
@@ -76,7 +76,7 @@
 │         ┌─────────────┴─────────────┐                  │
 │         ▼                           ▼                  │
 │  ┌───────────────┐         ┌─────────────────┐        │
-│  │  Gemini AI    │         │   Redis         │        │
+│  │  Gemini AI    │         │   JSON 文件     │        │
 │  │  (OCR 识别)   │         │  (会话持久化)   │        │
 │  └───────────────┘         └─────────────────┘        │
 └─────────────────────────────────────────────────────────┘
@@ -86,7 +86,7 @@
 
 1. **注册流程**: 用户发送 IC -> Bot 进入 `WAITING_IC` 状态 -> 验证 IC 格式 -> 写入 Excel -> 状态转为 `WAITING_RECEIPT`。
 2. **收据处理**: 用户发送图片 -> Bot 下载并转 Base64 -> Gemini AI 识别品牌和金额 -> 资格判定 -> 写入 Excel。
-3. **会话持久化**: Redis Hash 存储会话状态，TTL 自动过期，Bot 重启不会丢失会话。
+3. **会话持久化**: 本地 JSON 文件存储会话状态，Bot 重启不会丢失会话。
 
 ---
 
@@ -94,11 +94,10 @@
 
 - **模糊品牌匹配**：用 Gemini AI 识别收据中的品牌名称，支持模糊匹配
 - **智能金额提取**：优先识别 Total/Jumlah 关键词附近的数字
-- **会话持久化**：Redis 存储用户会话状态，Bot 重启不会丢失会话
-- **内存降级**：Redis 不可用时自动降级到内存模式，保持可用性
-- **并发安全**：Redis 原子操作保证多用户同时提交时数据不冲突
+- **会话持久化**：本地 JSON 文件存储用户会话状态，Bot 重启不会丢失会话
+- **并发安全**：文件锁机制保证多用户同时提交时数据不冲突
 - **防刷限制**：每用户每日最多提交 5 次（可配置）
-- **会话超时**：30 分钟无操作自动过期（Redis TTL）
+- **会话超时**：30 分钟无操作自动过期
 
 ---
 
@@ -107,7 +106,6 @@
 ### 环境要求
 
 - Node.js ≥ 18
-- Redis ≥ 6
 - 一个 **专用** WhatsApp 号码（会长期保持登录状态）
 - Gemini API Key
 
@@ -126,9 +124,6 @@
 git clone https://github.com/kelvinlee97/automation-ocr.git
 cd automation-ocr
 
-# 安装 Redis
-sudo apt-get install redis-server
-
 # Node.js 依赖
 cd wa-bot
 npm install
@@ -136,12 +131,6 @@ npm install
 
 ### 启动
 
-**启动 Redis：**
-```bash
-redis-server
-```
-
-**启动 Bot：**
 ```bash
 cd wa-bot
 GEMINI_API_KEY=your_key npm start
@@ -170,11 +159,6 @@ eligibility:
 bot:
   session_timeout_minutes: 30
   max_receipts_per_day: 5
-
-redis:
-  host: "localhost"
-  port: 6379
-  # password: ""  # 有密码时取消注释
 ```
 
 ---
@@ -184,16 +168,16 @@ redis:
 ```
 automation-ocr/
 ├── config/
-│   └── config.yaml          ← 业务规则（品牌、金额门槛、Redis 配置等）
+│   └── config.yaml          ← 业务规则（品牌、金额门槛）
 ├── wa-bot/                   ← Node.js WhatsApp Bot
 │   └── src/
 │       ├── bot.js                ← WhatsApp 客户端初始化
-│       ├── sessionManager.js    ← 会话状态机（Redis + 内存降级）
-│       ├── redisClient.js       ← Redis 连接管理
+│       ├── sessionManager.js    ← 会话状态机（JSON 文件存储）
 │       ├── messageHandler.js   ← 消息路由
 │       ├── adminServer.js      ← 管理后台 Express 服务器
 │       └── handlers/            ← 注册 / 收据处理逻辑
 └── data/
+    ├── sessions.json        ← 用户会话存储（运行后自动创建）
     └── excel/records.xlsx   ← 最终输出（运行后自动创建）
 ```
 
@@ -212,7 +196,7 @@ cd automation-ocr
 cp .env.example .env
 # 编辑 .env，填入 GEMINI_API_KEY
 
-# 启动所有服务（Redis + Bot）
+# 启动服务
 docker compose up -d --build
 
 # 查看启动状态
@@ -239,8 +223,6 @@ docker compose down
 
 ```bash
 GEMINI_API_KEY=your_key_here
-REDIS_HOST=redis
-REDIS_PORT=6379
 ```
 
 ---
@@ -248,7 +230,7 @@ REDIS_PORT=6379
 ## 注意事项
 
 - `wa-bot/.wwebjs_auth/` 含 WhatsApp 登录凭证，已加入 `.gitignore`，**切勿提交到版本控制**
-- Redis 数据通过 Docker volume 持久化，重启不丢失
+- `data/sessions.json` 存储用户会话数据，Docker 部署时需挂载持久化
 - 本项目使用 [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) 非官方库，存在被 WhatsApp 封号风险，建议使用专用号码而非个人主号
 
 ---

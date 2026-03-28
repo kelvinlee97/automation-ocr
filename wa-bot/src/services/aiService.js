@@ -54,7 +54,16 @@ async function processReceipt(base64Image, mimeType = "image/jpeg") {
     return { success: true, ...data };
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return { success: false, message: error.message || "AI 识别服务暂时不可用" };
+    const isRetryable = error.message?.includes('429') || 
+                         error.message?.includes('500') || 
+                         error.message?.includes('503') ||
+                         error.message?.includes('network') ||
+                         error.message?.includes('ETIMEDOUT');
+    return { 
+      success: false, 
+      retryable: isRetryable,
+      message: error.message || "AI 识别服务暂时不可用" 
+    };
   }
 }
 
