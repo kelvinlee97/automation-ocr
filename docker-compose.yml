@@ -8,7 +8,9 @@ services:
     container_name: wa-bot
     restart: always
     ports:
-      - "80:3000"
+      # 只绑定 loopback，由宿主机 Nginx 统一处理 80/443 后反代至此
+      # 避免外网绕过 Nginx 直接访问，也是 Certbot HTTP-01 Challenge 的前提
+      - "127.0.0.1:3000:3000"
     environment:
       - NODE_ENV=production
       - GEMINI_API_KEY=${GEMINI_API_KEY}

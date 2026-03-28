@@ -1013,8 +1013,13 @@ function receiptsPage(receipts) {
 function startAdminServer() {
   const app = express();
 
+  // Nginx 反代后 req.ip 会是 127.0.0.1，rate-limit 和日志无法获取真实客户端 IP
+  // trust proxy = 1：只信任第一跳（Nginx），防止客户端伪造多级 X-Forwarded-For
+  app.set("trust proxy", 1);
+
   app.use(express.urlencoded({ extended: false }));
-  app.use(express.json());
+  // 限制 JSON body 大小，防止超大 payload 打满内存（管理后台不需要大 JSON）
+  app.use(express.json({ limit: "1mb" }));
 
   // session 配置
   // secret 从环境变量读取，保证重启后 cookie 签名仍有效；未配置时用随机值（开发环境）
@@ -1032,6 +1037,9 @@ function startAdminServer() {
       rolling: true, // 有操作就续期，避免活跃使用中途被踢
       cookie: {
         httpOnly: true,
+        // HTTPS 配置完成后自动启用 secure，防止 cookie 通过 HTTP 明文传输
+        // NODE_ENV=production 且经过 Nginx 反代（trust proxy 已设置）时生效
+        secure: process.env.NODE_ENV === "production",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天无操作后过期
       },
     })
