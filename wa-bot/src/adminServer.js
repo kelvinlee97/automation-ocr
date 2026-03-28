@@ -389,7 +389,7 @@ function htmlLayout(title, content, currentPath = '') {
     /* ── 等宽数据字段（手机号、IC 号） ── */
     .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .5px; }
   </style>
-  <\!-- 防止主题闪烁（FOUC）：在 DOM 渲染前同步读取 localStorage 并设置 data-theme -->
+  <!-- 防止主题闪烁（FOUC）：在 DOM 渲染前同步读取 localStorage 并设置 data-theme -->
   <script>
     (function() {
       var t = localStorage.getItem('admin-theme') || 'dark';
@@ -1303,6 +1303,19 @@ function startAdminServer() {
         res.status(500).send("下载失败：" + err.message);
       }
     });
+  });
+
+  // ── 根路径智能跳转 ────────────────────────────────────────────────────────
+  // 访问 / 或任何未匹配路径时，根据当前状态重定向到有效页面，避免 404
+  app.get("/", (req, res) => {
+    if (adminUserService.isEmpty()) return res.redirect("/admin/setup");
+    if (req.session && req.session.authenticated) return res.redirect("/admin");
+    res.redirect("/admin/login");
+  });
+
+  // 其余未匹配路由统一跳到根路径，让上面的逻辑接管
+  app.use((req, res) => {
+    res.redirect("/");
   });
 
   // ── 启动监听 ──────────────────────────────────────────────────────────────

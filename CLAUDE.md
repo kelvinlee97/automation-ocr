@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 WhatsApp OCR 收据验证自动化系统。用户通过 WhatsApp 提交马来西亚身份证号和收据截图，系统使用 Gemini AI 识别收据、验证资格（品牌白名单 + 金额门槛），结果写入 Excel。
 
-**当前架构**：纯 Node.js 单服务，使用 Gemini 1.5 Flash 替代原 Python EasyOCR 方案。README.md 中的架构图已过时（仍描述旧双进程方案）。
+**当前架构**：纯 Node.js 单服务，使用 Gemini 2.5 Flash Lite。移除 Redis，改为本地 JSON 文件存储会话。
 
 ## 常用命令
 
@@ -17,11 +17,19 @@ cd wa-bot && npm run dev
 # 生产启动
 cd wa-bot && npm start
 
+# 代码风格检查
+cd wa-bot && npm run lint
+
 # Docker（推荐，含持久化卷）
 docker compose up -d --build
 docker compose logs -f wa-bot   # 查看日志 / 首次扫码
 docker compose down
 ```
+
+### 接口
+
+- **Health Check**: `GET /health` — 返回 `{ status, whatsapp, timestamp }`
+- **Rate Limiting**: 登录 15 分钟 20 次，API 1 分钟 60 次
 
 **首次启动**：访问 `http://<服务器 IP>/admin/qr` 扫码（Web UI），或在终端日志中查看 QR 码，凭证保存在 `wa-bot/.wwebjs_auth/`（已 gitignore，重启无需重新扫）。
 
@@ -32,7 +40,7 @@ wa-bot/src/
 ├── adminServer.js          # 管理后台 Express 服务器（端口 3000，含认证、审核、WhatsApp 通知）
 ├── bot.js                  # Client 初始化、二维码、断线重连（指数退避）
 ├── messageHandler.js       # 消息入口：仅处理私聊图片，其他静默忽略
-├── sessionManager.js       # 用户会话状态机（内存 Map，TTL 30min）
+├── sessionManager.js       # 用户会话状态机（JSON 文件存储，TTL 30min）
 ├── handlers/
 │   ├── receiptHandler.js   # 图片 → Gemini → 判定 → 写 Excel
 │   └── registrationHandler.js  # IC 格式验证 → 写 Excel
@@ -50,8 +58,8 @@ wa-bot/src/
 新用户 → WAITING_IC → (IC 验证通过) → WAITING_RECEIPT → (收据处理完) → DONE
 ```
 
-- 状态存在内存 Map，Bot 重启后丢失，用户需重新提交 IC
-- 每 10 分钟自动清理超时（30min）的 session
+- 状态存储在 `data/sessions.json`，Bot 重启后自动恢复
+- 自动清理超时（30min）的 session
 
 ### 数据流（收据处理）
 
@@ -77,8 +85,6 @@ bot:
   session_timeout_minutes: 30
   max_receipts_per_day: 5                         # 防刷
 ```
-
-> **注意**：`config.yaml` 中 `ocr.*`、`services.ocr_service_url`、`brand_match_threshold` 均为旧 Python OCR 遗留配置，当前代码不使用。
 
 ### `.env` — 必填环境变量
 
@@ -120,7 +126,4 @@ docker compose logs -f wa-bot  # 等待 QR 码，手机扫码
 
 ## 已知限制
 
-- **会话不持久**：重启丢失所有活跃会话
 - **无测试框架**：无单元测试 / 集成测试
-- **无 ESLint**：无代码风格检查
-- **重试未实现**：config 配置了 `ocr_max_retries: 3`，但 aiService.js 未实现重试逻辑

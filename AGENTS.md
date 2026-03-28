@@ -37,6 +37,9 @@ cd wa-bot && npm run dev
 
 # 生产启动
 cd wa-bot && npm start
+
+# 代码风格检查
+cd wa-bot && npm run lint
 ```
 
 ### Docker 部署
@@ -197,7 +200,6 @@ wa-bot/src/
 ## 5. 已知限制
 
 - **无单元测试**：项目未配置测试框架
-- **无 ESLint**：代码风格检查依赖人工
 - **无 TypeScript**：使用原生 JavaScript
 
 ---
