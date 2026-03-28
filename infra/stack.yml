@@ -23,8 +23,13 @@ Parameters:
 
   KeyPairName:
     Type: String
-    Default: ""
+    Default: "kelvin97"
     Description: "EC2 Key Pair 名称（可选；留空则不配置，仅用 SSM Session Manager 访问）"
+
+  SshAllowedCidr:
+    Type: String
+    Default: "175.139.248.201/32"
+    Description: "允许 SSH 22 端口访问的 IP CIDR（建议填写个人 IP /32，IP 变化时更新此参数）"
 
   # VPC 内的 SecurityGroup 必须关联 VpcId，否则 CFN 报错
   # 默认使用账号默认 VPC，无需手动创建
@@ -142,8 +147,8 @@ Resources:
       GroupDescription: "automation-ocr: HTTP 80 inbound, all outbound"
       # VpcId 必填：VPC 内的 SG 必须关联 VPC，否则 SecurityGroupEgress 报错
       VpcId: !Ref VpcId
-      # 入站：仅 HTTP 80（WhatsApp bot 管理后台）
-      # SSH 22 不开放，通过 SSM Session Manager 访问（零 Attack Surface）
+      # 入站：HTTP 80 + HTTPS 443（管理后台）+ SSH 22（仅限指定 IP）
+      # SSH 22 不对外全放行，通过 SshAllowedCidr 参数限制来源 IP
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -155,6 +160,21 @@ Resources:
           ToPort: 80
           CidrIpv6: ::/0
           Description: "HTTP inbound - admin panel IPv6"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: "HTTPS inbound"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIpv6: ::/0
+          Description: "HTTPS inbound IPv6"
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SshAllowedCidr
+          Description: "SSH inbound - restricted to admin IP"
       # 出站：全放行（生产实践：出站由实例主动发起，入站才是攻击入口）
       # apt/git/docker pull/ECR/SSM/Gemini API 涉及多端口，全放行避免维护成本
       SecurityGroupEgress:
