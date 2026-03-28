@@ -90,6 +90,9 @@ bot:
 
 ```bash
 GEMINI_API_KEY=your_key_here
+
+# 生产环境必须设置，否则每次重启会生成新随机 secret，导致所有用户 session 失效被强制重新登录
+SESSION_SECRET=your_random_secret_here
 ```
 
 > `ADMIN_USER` / `ADMIN_PASS` 已从环境变量迁移到管理后台内置用户系统。首次访问 `/admin` 会自动引导创建管理员账号，凭据加密存储在 `data/admin_users.json`（scrypt 哈希，Docker volume 持久化）。
