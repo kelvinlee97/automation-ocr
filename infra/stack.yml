@@ -26,6 +26,15 @@ Parameters:
     Default: ""
     Description: "EC2 Key Pair 名称（可选；留空则不配置，仅用 SSM Session Manager 访问）"
 
+  # 部署时通过 --parameter-overrides 传入，不写入代码仓库
+  # IP 变化时只需更新此参数重新 deploy，SG 规则自动替换
+  SshAllowedCidr:
+    Type: String
+    Default: ""
+    AllowedPattern: "^(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/\\d{1,2})?$"
+    ConstraintDescription: "合法的 IPv4 CIDR（如 1.2.3.4/32），或留空不开放 SSH"
+    Description: "允许 SSH 22 端口访问的 IP CIDR（部署时传入，留空则不创建 SSH 规则）"
+
   # VPC 内的 SecurityGroup 必须关联 VpcId，否则 CFN 报错
   # 默认使用账号默认 VPC，无需手动创建
   VpcId:
@@ -43,6 +52,8 @@ Parameters:
 Conditions:
   # KeyPair 可选：有值时才在 EC2 上关联 Key Pair（生产环境推荐不配置，全用 SSM）
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
+  # SSH 规则可选：SshAllowedCidr 非空时才创建入站规则，避免空 CIDR 导致 CFN 报错
+  HasSshCidr: !Not [!Equals [!Ref SshAllowedCidr, ""]]
 
 # ─── 资源 ────────────────────────────────────────────────────────────────────
 Resources:
@@ -142,8 +153,7 @@ Resources:
       GroupDescription: "automation-ocr: HTTP 80 inbound, all outbound"
       # VpcId 必填：VPC 内的 SG 必须关联 VPC，否则 SecurityGroupEgress 报错
       VpcId: !Ref VpcId
-      # 入站：仅 HTTP 80（WhatsApp bot 管理后台）
-      # SSH 22 不开放，通过 SSM Session Manager 访问（零 Attack Surface）
+      # 入站：HTTP 80 + HTTPS 443（管理后台）；SSH 22 通过独立资源条件化开放
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -155,6 +165,16 @@ Resources:
           ToPort: 80
           CidrIpv6: ::/0
           Description: "HTTP inbound - admin panel IPv6"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: "HTTPS inbound"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIpv6: ::/0
+          Description: "HTTPS inbound IPv6"
       # 出站：全放行（生产实践：出站由实例主动发起，入站才是攻击入口）
       # apt/git/docker pull/ECR/SSM/Gemini API 涉及多端口，全放行避免维护成本
       SecurityGroupEgress:
@@ -241,7 +261,21 @@ Resources:
         - Key: Name
           Value: automation-ocr-app
 
-  # ── 6. Elastic IP（可选，重启后 IP 不变）─────────────────────────────────
+  # ── 6. SSH 入站规则（条件化，SshAllowedCidr 非空时才创建）────────────────────
+  # 拆为独立资源而非写入 SecurityGroupIngress 列表，原因：
+  # CFN 的 SecurityGroupIngress 列表项不支持 !If 条件内联，只有顶层资源才能用 Condition 字段
+  SshIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasSshCidr
+    Properties:
+      GroupId: !GetAtt AppSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: !Ref SshAllowedCidr
+      Description: "SSH inbound - restricted to admin IP"
+
+  # ── 8. Elastic IP（可选，重启后 IP 不变）─────────────────────────────────
   # 注意：EIP 本身免费，但关联后实例停止时会收费（~$0.005/h）
   # 生产建议分配，避免重启后 IP 变化导致防火墙规则失效
   AppElasticIp:
@@ -253,7 +287,7 @@ Resources:
         - Key: Name
           Value: automation-ocr-eip
 
-  # ── 7. GitHub Actions OIDC Provider ──────────────────────────────────────
+  # ── 9. GitHub Actions OIDC Provider ──────────────────────────────────────
   # 每个 AWS 账号只需注册一次；若账号内已存在可删除此资源后 deploy（不影响其他 workflow）
   # 工作原理：GitHub Runner 申请 JWT → AWS STS 用 OIDC 公钥验签 → 颁发 15min 临时凭证
   # ThumbprintList 是 token.actions.githubusercontent.com TLS 证书指纹（AWS 官方文档固定值）
@@ -267,7 +301,7 @@ Resources:
         - 6938fd4d98bab03faadb97b34396831e3780aea1
         - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
 
-  # ── 8. GitHub Actions 部署 IAM Role（替代 IAM User Access Key）────────────
+  # ── 10. GitHub Actions 部署 IAM Role（替代 IAM User Access Key）────────────
   # Trust Policy 的 StringLike 条件绑定仓库，防止其他仓库冒用此 Role
   # sub 格式：repo:<owner>/<repo>:ref:refs/heads/<branch> 或 :*（含 workflow_dispatch）
   GitHubActionsDeployRole:
@@ -326,7 +360,7 @@ Resources:
                   - cloudformation:DescribeStacks
                 Resource: "*"
 
-  # ── 9. SSM Parameter Store：GEMINI_API_KEY（SecureString）─────────────────
+  # ── 11. SSM Parameter Store：GEMINI_API_KEY（SecureString）─────────────────
   # SecureString 使用 AWS KMS 默认密钥（aws/ssm）加密，免费层不额外计费
   # EC2 通过 Instance Role 读取，GitHub Actions 不需要读取（部署时由 EC2 自取）
   GeminiApiKeyParameter:
