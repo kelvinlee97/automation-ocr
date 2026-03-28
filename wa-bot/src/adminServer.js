@@ -332,8 +332,37 @@ function htmlLayout(title, content, currentPath = '') {
     }
     .reject-note { color: var(--accent-rose); font-size: 12px; margin-bottom: 2px; }
     form.inline { display: inline; }
-    .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+    .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
     .empty { text-align: center; padding: 40px; color: var(--text-muted); font-size: 14px; }
+
+    /* ── 统计卡片 ── */
+    .stats-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: var(--bg-surface); padding: 16px; border-radius: 8px; text-align: center; }
+    .stat-label { color: var(--text-muted); font-size: 12px; margin-bottom: 4px; }
+    .stat-value { font-size: 24px; font-weight: 600; }
+    .stat-pending .stat-value { color: var(--accent-amber); }
+    .stat-ai .stat-value { color: var(--accent-blue); }
+    .stat-confirmed .stat-value { color: var(--accent-emerald); }
+    .stat-rejected .stat-value { color: var(--accent-rose); }
+
+    /* ── 表格横向滚动 ── */
+    .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    /* 限定只影响收据表格，避免污染其他页面的 table */
+    .table-wrapper table { min-width: 900px; }
+
+    /* ── 按钮触控优化（仅移动端） ── */
+    @media (max-width: 768px) {
+      .btn { min-height: 44px; padding: 10px 16px; }
+    }
+
+    /* ── 响应式布局 ── */
+    @media (max-width: 768px) {
+      nav { flex-wrap: wrap; gap: 8px; padding: 12px; }
+      nav .nav-right { flex-wrap: wrap; }
+      main { padding: 16px; }
+      .toolbar { flex-direction: column; align-items: stretch; }
+      .toolbar input, .toolbar select { max-width: 100% !important; }
+    }
 
     /* ── 图片缩略图 ── */
     .thumb {
@@ -943,13 +972,50 @@ function receiptsPage(receipts) {
     return htmlLayout("收据审核", '<div class="empty">暂无收据记录</div>', '/admin');
   }
 
+  // 收据状态枚举——用于白名单校验，防止非法值混入 HTML 属性
+  const VALID_RECEIPT_STATUSES = new Set(['pending_review', 'ai_extracted', 'confirmed', 'rejected']);
+
+  // 统计各状态数量
+  const stats = receipts.reduce((acc, r) => {
+    const s = r.status || 'pending_review';
+    acc[s] = (acc[s] || 0) + 1;
+    return acc;
+  }, {});
+
+  const statsCards = `
+    <div class="stats-cards">
+      <div class="stat-card">
+        <div class="stat-label">总计</div>
+        <div class="stat-value">${receipts.length}</div>
+      </div>
+      <div class="stat-card stat-pending">
+        <div class="stat-label">待审核</div>
+        <div class="stat-value">${stats.pending_review || 0}</div>
+      </div>
+      <div class="stat-card stat-ai">
+        <div class="stat-label">AI已提取</div>
+        <div class="stat-value">${stats.ai_extracted || 0}</div>
+      </div>
+      <div class="stat-card stat-confirmed">
+        <div class="stat-label">已通过</div>
+        <div class="stat-value">${stats.confirmed || 0}</div>
+      </div>
+      <div class="stat-card stat-rejected">
+        <div class="stat-label">已拒绝</div>
+        <div class="stat-value">${stats.rejected || 0}</div>
+      </div>
+    </div>
+  `;
+
   const rows = receipts
     .map((r, idx) => {
       const statusBadge = `<span class="badge badge-${r.status}">${STATUS_LABEL[r.status] || r.status}</span>`;
       const thumbSrc = `/admin/images/${r.imageFilename}`;
       const thumb = `<img class="thumb" src="${thumbSrc}" alt="收据" onclick="openLightbox('${thumbSrc}')" />`;
 
-      return `<tr id="row-${r.id}">
+      // 白名单校验 status，防止非法值注入 HTML 属性
+      const safeStatus = VALID_RECEIPT_STATUSES.has(r.status) ? r.status : '';
+      return `<tr data-status="${safeStatus}" id="row-${r.id}">
       <td>${receipts.length - idx}</td>
       <td>${r.submittedAt ? new Date(r.submittedAt).toLocaleString("zh-CN") : "—"}</td>
       <td style="font-size:12px">${(r.phone || "—").replace(/@c\.us$/, "")}</td>
@@ -963,9 +1029,20 @@ function receiptsPage(receipts) {
     .join("");
 
   const content = `
+    ${statsCards}
     <div class="toolbar">
-      <span style="color:#666;font-size:13px">共 ${receipts.length} 条记录</span>
+      <input type="text" id="searchInput" placeholder="搜索手机号/IC号..." 
+        style="padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);flex:1;min-width:200px;max-width:300px">
+      <select id="statusFilter" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary)">
+        <option value="">全部状态</option>
+        <option value="pending_review">待审核</option>
+        <option value="ai_extracted">AI已提取</option>
+        <option value="confirmed">已通过</option>
+        <option value="rejected">已拒绝</option>
+      </select>
+      <span id="resultCount" style="color:var(--text-muted);font-size:13px">共 ${receipts.length} 条</span>
     </div>
+    <div class="table-wrapper">
     <table>
       <thead>
         <tr>
@@ -975,7 +1052,36 @@ function receiptsPage(receipts) {
       </thead>
       <tbody>${rows}</tbody>
     </table>
+    </div>
     <script>
+      (function() {
+        var rows = document.querySelectorAll('table tbody tr');
+        var searchInput = document.getElementById('searchInput');
+        var statusFilter = document.getElementById('statusFilter');
+        var resultCount = document.getElementById('resultCount');
+
+        function filter() {
+          var query = (searchInput.value || '').toLowerCase();
+          var status = statusFilter.value;
+          var visible = 0;
+          rows.forEach(function(row) {
+            var text = row.textContent.toLowerCase();
+            var rowStatus = row.dataset.status || '';
+            var matchText = !query || text.includes(query);
+            var matchStatus = !status || rowStatus === status;
+            row.style.display = matchText && matchStatus ? '' : 'none';
+            if (matchText && matchStatus) visible++;
+          });
+          resultCount.textContent = '共 ' + visible + ' 条';
+        }
+
+        // 元素不存在时静默退出，防止 DOM 缺失时 TypeError 崩溃
+        if (!searchInput || !statusFilter || !resultCount) return;
+
+        searchInput.addEventListener('input', filter);
+        statusFilter.addEventListener('change', filter);
+      })();
+
       /**
        * AJAX 触发 AI 提取，不刷整页
        * 提取成功后重载页面以显示最新状态和发送表单
