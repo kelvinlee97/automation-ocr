@@ -1108,7 +1108,15 @@ function startAdminServer() {
     if (adminUserService.authenticate(username, password)) {
       req.session.authenticated = true;
       req.session.username = username;
-      return res.redirect("/admin");
+      // 等 session 写入完成再跳转，避免 redirect 时 session 尚未落盘导致认证失败
+      req.session.save((err) => {
+        if (err) {
+          logger.error("session 写入失败", { error: err.message });
+          return res.send(loginPage("登录失败，请重试"));
+        }
+        res.redirect("/admin");
+      });
+      return;
     }
     res.send(loginPage("用户名或密码错误，请重试"));
   });
