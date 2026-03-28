@@ -1,11 +1,13 @@
 /**
  * 用户会话状态机
- * 状态流转：INIT → WAITING_IC → WAITING_RECEIPT → DONE
- * 使用 Redis 存储，支持内存降级模式
+ * 状态流转：WAITING_IC → WAITING_RECEIPT → DONE
+ * 使用本地 JSON 文件存储，Bot 重启后自动恢复
  */
 
+const fs = require('fs');
+const path = require('path');
+const yaml = require('js-yaml');
 const logger = require('./utils/logger');
-const redisClient = require('./redisClient');
 
 const SESSION_STATE = {
 	WAITING_IC: 'WAITING_IC',
@@ -13,29 +15,17 @@ const SESSION_STATE = {
 	DONE: 'DONE',
 };
 
-const SESSION_PREFIX = 'session:';
-const MEMORY_SESSIONS_KEY = 'memory_sessions';
-const MEMORY_SESSION_MAP = new Map();
+const SESSIONS_FILE = path.join(__dirname, '../../../data/sessions.json');
 
 let config = null;
-let redis = null;
+let sessionsCache = null;
 
 function _getConfig() {
 	if (!config) {
-		const yaml = require('js-yaml');
-		const fs = require('fs');
-		const path = require('path');
 		const configPath = path.join(__dirname, '../../config/config.yaml');
 		config = yaml.load(fs.readFileSync(configPath, 'utf8'));
 	}
 	return config;
-}
-
-function _getRedis() {
-	if (!redis) {
-		redis = redisClient.getClient();
-	}
-	return redis;
 }
 
 function _getTimeoutMs() {
@@ -52,124 +42,76 @@ function _today() {
 	return new Date().toISOString().slice(0, 10);
 }
 
-function _sessionKey(phone) {
-	return `${SESSION_PREFIX}${phone}`;
-}
-
-async function _memoryGetSession(phone) {
-	const r = _getRedis();
-	const data = await r.hgetall(_sessionKey(phone));
-	if (!data || Object.keys(data).length === 0) {
-		return null;
+function _ensureDataDir() {
+	const dir = path.dirname(SESSIONS_FILE);
+	if (!fs.existsSync(dir)) {
+		fs.mkdirSync(dir, { recursive: true });
 	}
-	return _deserialize(data);
 }
 
-async function _memorySetSession(phone, session) {
-	const r = _getRedis();
-	const data = _serialize(session);
-	await r.hset(_sessionKey(phone), data);
-	await r.expire(_sessionKey(phone), Math.floor(_getTimeoutMs() / 1000));
-}
+function _loadSessions() {
+	if (sessionsCache) return sessionsCache;
 
-async function _memoryDeleteSession(phone) {
-	const r = _getRedis();
-	await r.del(_sessionKey(phone));
-}
+	_ensureDataDir();
 
-async function _memoryGetAllSessions() {
-	const r = _getRedis();
-	const keys = await r.keys(`${SESSION_PREFIX}*`);
-	if (keys.length === 0) return [];
-	
-	const pipeline = r.pipeline();
-	for (const key of keys) {
-		pipeline.hgetall(key);
+	if (!fs.existsSync(SESSIONS_FILE)) {
+		sessionsCache = {};
+		fs.writeFileSync(SESSIONS_FILE, JSON.stringify({}, null, 2), 'utf8');
+		return sessionsCache;
 	}
-	const results = await pipeline.exec();
-	
-	const sessions = [];
-	for (const [err, data] of results) {
-		if (!err && data && Object.keys(data).length > 0) {
-			sessions.push(_deserialize(data));
-		}
+
+	try {
+		const data = fs.readFileSync(SESSIONS_FILE, 'utf8');
+		sessionsCache = JSON.parse(data);
+	} catch (err) {
+		logger.error('读取会话文件失败，使用空会话', { error: err.message });
+		sessionsCache = {};
 	}
-	return sessions;
+
+	return sessionsCache;
 }
 
-function _serialize(session) {
-	const obj = {};
-	for (const [key, value] of Object.entries(session)) {
-		obj[key] = typeof value === 'object' ? JSON.stringify(value) : String(value);
-	}
-	return obj;
+function _saveSessions(sessions) {
+	sessionsCache = sessions;
+	_ensureDataDir();
+	fs.writeFileSync(SESSIONS_FILE, JSON.stringify(sessions, null, 2), 'utf8');
 }
 
-function _deserialize(obj) {
-	return {
-		phone: obj.phone,
-		ic: obj.ic === 'null' ? null : obj.ic,
-		state: obj.state,
-		createdAt: parseInt(obj.createdAt, 10),
-		updatedAt: parseInt(obj.updatedAt, 10),
-		receiptCount: parseInt(obj.receiptCount, 10) || 0,
-		receiptCountDate: obj.receiptCountDate || _today(),
-	};
-}
+function _getSession(phone) {
+	const sessions = _loadSessions();
+	const session = sessions[phone];
 
-async function _memoryFallbackGet(phone) {
-	const data = MEMORY_SESSION_MAP.get(phone);
-	if (!data) return null;
-	
-	const session = data;
+	if (!session) return null;
+
 	if (Date.now() - session.updatedAt > _getTimeoutMs()) {
-		MEMORY_SESSION_MAP.delete(phone);
+		delete sessions[phone];
+		_saveSessions(sessions);
 		return null;
 	}
+
 	return session;
 }
 
-async function _memoryFallbackSet(phone, session) {
-	MEMORY_SESSION_MAP.set(phone, session);
+function _setSession(phone, session) {
+	const sessions = _loadSessions();
+	sessions[phone] = session;
+	_saveSessions(sessions);
 }
 
-async function _memoryFallbackDelete(phone) {
-	MEMORY_SESSION_MAP.delete(phone);
+function _deleteSession(phone) {
+	const sessions = _loadSessions();
+	delete sessions[phone];
+	_saveSessions(sessions);
 }
 
-async function _memoryFallbackGetAll() {
-	const timeoutMs = _getTimeoutMs();
-	const now = Date.now();
-	const expired = [];
-	
-	for (const [phone, session] of MEMORY_SESSION_MAP.entries()) {
-		if (now - session.updatedAt > timeoutMs) {
-			expired.push(phone);
-		}
-	}
-	
-	for (const phone of expired) {
-		MEMORY_SESSION_MAP.delete(phone);
-	}
-	
-	return Array.from(MEMORY_SESSION_MAP.values());
-}
+function getOrCreateSession(phone) {
+	let session = _getSession(phone);
 
-async function getOrCreateSession(phone) {
-	const useMemory = redisClient.isMemoryFallback();
-	
-	let session;
-	if (useMemory) {
-		session = await _memoryFallbackGet(phone);
-	} else {
-		session = await _memoryGetSession(phone);
-	}
-	
 	if (session) {
 		logger.debug('获取已有会话', { phone: _maskPhone(phone), state: session.state });
 		return session;
 	}
-	
+
 	session = {
 		phone,
 		ic: null,
@@ -179,104 +121,70 @@ async function getOrCreateSession(phone) {
 		receiptCount: 0,
 		receiptCountDate: _today(),
 	};
-	
-	if (useMemory) {
-		await _memoryFallbackSet(phone, session);
-	} else {
-		await _memorySetSession(phone, session);
-	}
-	
+
+	_setSession(phone, session);
+
 	logger.info('新建会话', { phone: _maskPhone(phone), state: session.state });
 	return session;
 }
 
-async function updateSession(phone, updates) {
-	const useMemory = redisClient.isMemoryFallback();
-	
-	let session;
-	if (useMemory) {
-		session = await _memoryFallbackGet(phone);
-	} else {
-		session = await _memoryGetSession(phone);
-	}
-	
+function updateSession(phone, updates) {
+	const session = _getSession(phone);
+
 	if (!session) {
 		throw new Error(`会话不存在: ${phone}`);
 	}
-	
+
 	Object.assign(session, updates, { updatedAt: Date.now() });
-	
-	if (useMemory) {
-		await _memoryFallbackSet(phone, session);
-	} else {
-		await _memorySetSession(phone, session);
-	}
-	
+	_setSession(phone, session);
+
 	logger.debug('会话更新', { phone: _maskPhone(phone), updates });
 }
 
-async function checkReceiptLimit(phone) {
+function checkReceiptLimit(phone) {
 	const maxPerDay = _getMaxPerDay();
-	const useMemory = redisClient.isMemoryFallback();
-	
-	let session;
-	if (useMemory) {
-		session = await _memoryFallbackGet(phone);
-	} else {
-		session = await _memoryGetSession(phone);
-	}
-	
+	const session = _getSession(phone);
+
 	if (!session) {
 		return { allowed: false, reason: '会话不存在' };
 	}
-	
+
 	if (session.receiptCountDate !== _today()) {
 		session.receiptCount = 0;
 		session.receiptCountDate = _today();
-		
-		if (useMemory) {
-			await _memoryFallbackSet(phone, session);
-		} else {
-			await _memorySetSession(phone, session);
-		}
+		_setSession(phone, session);
 	}
-	
+
 	if (session.receiptCount >= maxPerDay) {
 		return { allowed: false, reason: `今日已达最大提交次数（${maxPerDay}次）` };
 	}
-	
+
 	return { allowed: true };
 }
 
-async function incrementReceiptCount(phone) {
-	const useMemory = redisClient.isMemoryFallback();
-	
-	let session;
-	if (useMemory) {
-		session = await _memoryFallbackGet(phone);
-	} else {
-		session = await _memoryGetSession(phone);
-	}
-	
+function incrementReceiptCount(phone) {
+	const session = _getSession(phone);
+
 	if (session) {
 		session.receiptCount += 1;
 		session.updatedAt = Date.now();
-		
-		if (useMemory) {
-			await _memoryFallbackSet(phone, session);
-		} else {
-			await _memorySetSession(phone, session);
-		}
+		_setSession(phone, session);
 	}
 }
 
-async function getAllSessions() {
-	const useMemory = redisClient.isMemoryFallback();
-	
-	if (useMemory) {
-		return _memoryFallbackGetAll();
+function getAllSessions() {
+	const sessions = _loadSessions();
+	const timeoutMs = _getTimeoutMs();
+	const now = Date.now();
+	const validSessions = [];
+
+	for (const session of Object.values(sessions)) {
+		if (now - session.updatedAt <= timeoutMs) {
+			validSessions.push(session);
+		}
 	}
-	return _memoryGetAllSessions();
+
+	return validSessions;
 }
 
 function _maskPhone(phone) {
@@ -285,8 +193,8 @@ function _maskPhone(phone) {
 	return `****${last4}`;
 }
 
-function init(redisClient) {
-	logger.info('SessionManager 初始化', { mode: redisClient.isMemoryFallback() ? 'memory' : 'redis' });
+function init() {
+	logger.info('SessionManager 初始化', { mode: 'file' });
 }
 
 module.exports = {

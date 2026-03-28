@@ -14,38 +14,11 @@ eligibility:
   # 品牌模糊匹配阈值（百分比），低于此值视为不匹配
   brand_match_threshold: 85
 
-ocr:
-  # EasyOCR 支持的语言列表
-  languages:
-    - "en"
-    - "ms"
-  # OCR 置信度门槛，低于此值的识别结果会被标注为低可信度
-  confidence_threshold: 0.5
-  # OpenCV 图像预处理选项
-  preprocessing:
-    grayscale: true
-    enhance_contrast: true  # CLAHE 自适应直方图均衡
-    denoise: true           # 非局部均值去噪
-
 bot:
   # 用户会话超时时间（分钟），超时后需重新注册
   session_timeout_minutes: 30
   # 每个用户每天最多提交收据次数（防刷）
   max_receipts_per_day: 5
-  # OCR 服务请求超时时间（秒）
-  ocr_timeout_seconds: 30
-  # OCR 请求失败时的最大重试次数
-  ocr_max_retries: 3
-
-redis:
-  # Redis 连接配置
-  host: "localhost"
-  port: 6379
-  # password: ""  # 有密码时取消注释
-
-services:
-  # Python OCR 服务地址
-  ocr_service_url: "http://localhost:8000"
 
 excel:
   # Excel 文件路径（相对于项目根目录）

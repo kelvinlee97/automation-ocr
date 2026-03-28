@@ -8,23 +8,15 @@ const { createBot } = require('./src/bot');
 const sessionManager = require('./src/sessionManager');
 const { initExcel } = require('./src/services/excelService');
 const { startAdminServer, setClient, setQR } = require('./src/adminServer');
-const { createClient, connect } = require('./src/redisClient');
 const logger = require('./src/utils/logger');
 
 async function main() {
     logger.info('启动 WhatsApp Bot (AI 版)...');
 
     try {
-        // 1. 加载配置并初始化 Redis
-        const yaml = require('js-yaml');
-        const fs = require('fs');
-        const path = require('path');
-        const config = yaml.load(fs.readFileSync(path.join(__dirname, 'config/config.yaml'), 'utf8'));
-
-        const redis = createClient(config);
-        await connect(redis);
-        sessionManager.init(redis);
-        logger.info('Redis 初始化完成');
+        // 1. 初始化会话存储（本地 JSON 文件）
+        sessionManager.init();
+        logger.info('会话存储初始化完成');
 
         // 2. 初始化 Excel 文件
         await initExcel();
