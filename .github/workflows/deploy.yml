@@ -98,7 +98,7 @@ jobs:
         run: |
           # 通过 SSM 在实例上执行部署脚本
           # SSM 以最小环境的 root 运行，需显式设 HOME 和 safe.directory
-          # GEMINI_API_KEY 由 EC2 自身从 Parameter Store 取得（SecureString），不经过 Runner
+          # GEMINI_API_KEY 和 SESSION_SECRET 均由 EC2 自身从 Parameter Store 取得（SecureString），不经过 Runner
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${INSTANCE_ID}" \
             --document-name "AWS-RunShellScript" \
@@ -114,7 +114,8 @@ jobs:
                 "cd /home/ubuntu/automation-ocr",
                 "git pull origin main",
                 ("GEMINI_KEY=$(aws ssm get-parameter --name /automation-ocr/gemini-api-key --with-decryption --query Parameter.Value --output text --region " + $region + ")"),
-                "echo \"GEMINI_API_KEY=${GEMINI_KEY}\" > .env",
+                ("SESSION_SECRET=$(aws ssm get-parameter --name /automation-ocr/session-secret --with-decryption --query Parameter.Value --output text --region " + $region + ")"),
+                "printf 'GEMINI_API_KEY=%s\\nSESSION_SECRET=%s\\n' \"${GEMINI_KEY}\" \"${SESSION_SECRET}\" > .env",
                 ("echo \"" + $ghcr_token + "\" | docker login ghcr.io -u \"" + $ghcr_actor + "\" --password-stdin"),
                 "docker compose pull",
                 "docker compose up -d --remove-orphans",
