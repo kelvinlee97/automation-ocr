@@ -60,9 +60,26 @@ async function createBot({ onQR, onReady } = {}) {
 		puppeteer: {
 			headless: true,
 			args: [
+				// ── 安全 / 沙盒（容器环境必需）──────────────────────────
 				'--no-sandbox',
 				'--disable-setuid-sandbox',
-				'--disable-dev-shm-usage',  // 低内存环境必需
+
+				// ── 内存优化（914MB 低内存机器）────────────────────────
+				// /dev/shm 在 Docker 中默认只有 64MB，改用 /tmp 避免共享内存不足崩溃
+				'--disable-dev-shm-usage',
+				// 禁用 GPU 进程，无头模式不需要，可节省 ~40MB
+				'--disable-gpu',
+				// 限制 V8 老生代堆上限，WhatsApp Web 正常运行无需超过此值
+				'--js-flags=--max-old-space-size=128',
+				// 只保留一个 renderer 进程，避免多 tab 时内存倍增
+				'--renderer-process-limit=1',
+				// 禁用不必要的后台功能，减少后台内存占用
+				'--disable-background-networking',
+				'--disable-default-apps',
+				'--disable-extensions',
+				'--disable-sync',
+				'--metrics-recording-only',
+				'--no-first-run',
 			],
 		},
 	});
