@@ -42,14 +42,19 @@ function clearChromiumSingletonLocks() {
 }
 
 
+// 模块级 client 引用，供 requestPairingCode 使用
+// 不直接导出 client，避免外部持有引用造成生命周期混乱
+let _activeClient = null;
+
 /**
  * 创建并启动 WhatsApp Bot
  * 使用 LocalAuth 持久化 session，重启后无需重新扫码
  * @param {Object} callbacks
- * @param {Function} [callbacks.onQR]    - QR 码刷新时回调，参数为 base64 data URI
- * @param {Function} [callbacks.onReady] - Bot 就绪时回调，参数为 client 实例
+ * @param {Function} [callbacks.onQR]               - QR 码刷新时回调，参数为 base64 data URI
+ * @param {Function} [callbacks.onReady]             - Bot 就绪时回调，参数为 client 实例
+ * @param {Function} [callbacks.onPairingCodeReady]  - client 进入可请求配对码状态时回调（qr 事件触发后）
  */
-async function createBot({ onQR, onReady } = {}) {
+async function createBot({ onQR, onReady, onPairingCodeReady } = {}) {
 	// 每次启动前清理残留锁文件，防止容器重启后 Chromium 因 profile 被"占用"而无法启动
 	clearChromiumSingletonLocks();
 
@@ -84,6 +89,9 @@ async function createBot({ onQR, onReady } = {}) {
 		},
 	});
 
+	// 保存到模块级，供 requestPairingCode 在 qr 事件后使用
+	_activeClient = client;
+
 	let reconnectAttempts = 0;
 	let isReconnecting = false;
 
@@ -102,6 +110,10 @@ async function createBot({ onQR, onReady } = {}) {
 				logger.error('QR 码转 base64 失败', { error: err.message });
 			}
 		}
+
+		// qr 事件触发说明 client 已初始化且进入认证窗口期，此时可调用 requestPairingCode
+		// 通知 adminServer：现在可以接受配对码请求了
+		if (onPairingCodeReady) onPairingCodeReady();
 	});
 
 	// 登录成功：此时才注册消息监听，避免处理 ready 之前同步的离线积压消息
@@ -173,5 +185,19 @@ async function createBot({ onQR, onReady } = {}) {
 	return client;
 }
 
+/**
+ * 向已连接的 WhatsApp 客户端请求配对码
+ * 必须在 qr 事件触发后（client 已初始化但未认证）调用
+ * @param {string} phone - 含国际区号的纯数字手机号，如 "601234567890"
+ * @returns {Promise<string>} 8 位配对码，如 "WXYZ-ABCD"
+ */
+async function requestPairingCode(phone) {
+	if (!_activeClient) {
+		throw new Error('WhatsApp client 尚未初始化');
+	}
+	// whatsapp-web.js 要求手机号为纯数字字符串（含国际区号）
+	return await _activeClient.requestPairingCode(phone);
+}
 
-module.exports = { createBot };
+
+module.exports = { createBot, requestPairingCode };
