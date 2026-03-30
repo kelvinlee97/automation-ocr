@@ -115,7 +115,19 @@ Receipts 表新增 3 列：`Review Status`（pending/approved/rejected）、`Rev
 
 ## 部署
 
-目标环境：Ubuntu，Docker 容器化。推荐 AWS Lightsail $5/月套餐（1GB RAM 足够）。
+目标环境：Ubuntu，Docker 容器化。当前运行在 **AWS EC2**（`ap-southeast-1`，实例 `i-03cc623049dc8d891`，公网 IP `52.220.177.67`）。
+
+**Security Group**：`sg-0839e7d276d8f6459`
+- Port 22（SSH）：仅允许管理员本地 IP（动态 IP，换网络后需手动更新）
+- Port 80/443：开放给所有（Admin Panel）
+
+> SSH 规则更新命令（IP 变动时执行）：
+> ```bash
+> NEW_IP=$(curl -s https://checkip.amazonaws.com)
+> # 先查旧规则 ID：aws ec2 describe-security-groups --group-ids sg-0839e7d276d8f6459 --region ap-southeast-1
+> aws ec2 revoke-security-group-ingress --group-id sg-0839e7d276d8f6459 --protocol tcp --port 22 --cidr <旧IP>/32 --region ap-southeast-1
+> aws ec2 authorize-security-group-ingress --group-id sg-0839e7d276d8f6459 --ip-permissions "[{\"IpProtocol\":\"tcp\",\"FromPort\":22,\"ToPort\":22,\"IpRanges\":[{\"CidrIp\":\"$NEW_IP/32\",\"Description\":\"SSH - home IP\"}]}]" --region ap-southeast-1
+> ```
 
 ```bash
 # 服务器上
