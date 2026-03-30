@@ -1143,9 +1143,10 @@ function startAdminServer() {
       rolling: true, // 有操作就续期，避免活跃使用中途被踢
       cookie: {
         httpOnly: true,
-        // HTTPS 配置完成后自动启用 secure，防止 cookie 通过 HTTP 明文传输
-        // NODE_ENV=production 且经过 Nginx 反代（trust proxy 已设置）时生效
-        secure: process.env.NODE_ENV === "production",
+        // 根据实际请求协议决定是否启用 secure，而非依赖 NODE_ENV
+        // 'auto' 模式：express-session 会检查 req.secure（已设置 trust proxy），
+        // HTTP 访问时 secure=false，HTTPS 访问时 secure=true，无需改代码即可平滑升级到 HTTPS
+        secure: "auto",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天无操作后过期
       },
     })
