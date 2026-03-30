@@ -42,6 +42,8 @@ const apiLimiter = rateLimit({
 let _client = null;
 let _qrBase64 = null;    // QR 码 data URI（base64 PNG）
 let _waConnected = false;
+// qr 事件触发后置为 true，表示 client 已进入认证窗口期，可调用 requestPairingCode
+let _pairingCodeReady = false;
 
 /**
  * Bot 就绪后注入 client 实例
@@ -51,6 +53,7 @@ function setClient(client) {
   _client = client;
   _waConnected = true;
   _qrBase64 = null;
+  _pairingCodeReady = false; // 已认证，重置配对码窗口期标志
   logger.info("WhatsApp client 已注入管理后台");
 }
 
@@ -60,6 +63,13 @@ function setClient(client) {
 function setQR(base64DataUri) {
   _qrBase64 = base64DataUri;
   _waConnected = false;
+}
+
+/**
+ * 通知 adminServer：client 已进入配对码请求窗口期（qr 事件触发后）
+ */
+function setPairingCodeReady(ready) {
+  _pairingCodeReady = ready;
 }
 
 // ─── 认证中间件 ────────────────────────────────────────────────────────────────
@@ -819,11 +829,12 @@ function qrPage() {
       border: 1px solid rgba(99, 102, 241, 0.2);
       box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
       border-radius: 16px; padding: 40px 48px; text-align: center;
+      min-width: 340px;
     }
 
     h2 {
       font-family: 'Syne', sans-serif;
-      font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #E2E8F0;
+      font-size: 18px; font-weight: 700; margin-bottom: 16px; color: #E2E8F0;
     }
 
     .hint { color: #64748B; font-size: 13px; margin-top: 16px; line-height: 1.6; }
@@ -837,6 +848,84 @@ function qrPage() {
       box-shadow: 0 0 6px rgba(244, 63, 94, 0.5);
     }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+
+    /* ─── Tab 切换 ─────────────────────────────────── */
+    .tabs {
+      display: flex; gap: 4px;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 10px; padding: 4px;
+      margin-bottom: 28px;
+    }
+    .tab-btn {
+      flex: 1; padding: 8px 16px;
+      background: transparent; border: none; cursor: pointer;
+      color: #64748B; font-family: inherit; font-size: 14px; font-weight: 500;
+      border-radius: 7px; transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: rgba(99, 102, 241, 0.2);
+      color: #A5B4FC;
+      box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3);
+    }
+    .tab-btn:hover:not(.active) { color: #94A3B8; background: rgba(255,255,255,0.04); }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ─── 配对码 Tab 专属样式 ─────────────────────────── */
+    .phone-input-group {
+      display: flex; gap: 8px; margin-bottom: 16px;
+    }
+    .phone-input {
+      flex: 1; padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid #334155; border-radius: 8px;
+      color: #E2E8F0; font-family: inherit; font-size: 14px;
+      outline: none; transition: border-color 0.2s;
+    }
+    .phone-input:focus { border-color: #6366F1; }
+    .phone-input::placeholder { color: #475569; }
+
+    .btn-pairing {
+      padding: 10px 18px; white-space: nowrap;
+      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      border: none; border-radius: 8px; cursor: pointer;
+      color: #fff; font-family: inherit; font-size: 14px; font-weight: 600;
+      transition: opacity 0.2s;
+    }
+    .btn-pairing:hover { opacity: 0.85; }
+    .btn-pairing:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* 配对码展示框 */
+    .code-display {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 10px; padding: 20px;
+      margin: 16px 0; min-height: 70px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .code-value {
+      font-family: 'Syne', monospace; font-size: 28px; font-weight: 700;
+      color: #A5B4FC; letter-spacing: 4px;
+    }
+    .code-placeholder { color: #475569; font-size: 14px; }
+
+    /* 错误提示 */
+    .error-msg {
+      color: #F87171; font-size: 13px; margin-top: 8px;
+      background: rgba(248, 113, 113, 0.1); border-radius: 6px;
+      padding: 8px 12px; display: none;
+    }
+
+    /* 使用说明步骤 */
+    .steps {
+      text-align: left; margin-top: 16px;
+      background: rgba(15, 23, 42, 0.4);
+      border-radius: 8px; padding: 12px 16px;
+    }
+    .steps p { font-size: 12px; color: #64748B; margin-bottom: 6px; font-weight: 600; }
+    .steps ol { padding-left: 18px; }
+    .steps li { font-size: 12px; color: #475569; line-height: 1.8; }
   </style>
 </head>
 <body>
@@ -846,18 +935,110 @@ function qrPage() {
   </nav>
   <div class="container">
     <div class="card">
-      <h2>📱 扫描下方二维码登录 WhatsApp</h2>
-      <div style="margin:24px 0;display:flex;justify-content:center">
-        ${qrContent}
+      <h2>📱 连接 WhatsApp</h2>
+
+      <!-- Tab 切换按钮 -->
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('qr', this)">扫描二维码</button>
+        <button class="tab-btn" onclick="switchTab('pairing', this)">配对码登录</button>
       </div>
-      <div class="hint">
-        用 WhatsApp 扫码后页面自动跳转<br>
-        <small>二维码约每 20 秒刷新一次</small>
+
+      <!-- Tab A：QR 码 -->
+      <div id="tab-qr" class="tab-panel active">
+        <div style="margin:0 0 16px;display:flex;justify-content:center">
+          ${qrContent}
+        </div>
+        <div class="hint">
+          用 WhatsApp 扫码后页面自动跳转<br>
+          <small>二维码约每 20 秒刷新一次</small>
+        </div>
+      </div>
+
+      <!-- Tab B：配对码 -->
+      <div id="tab-pairing" class="tab-panel">
+        <div class="phone-input-group">
+          <input
+            type="text" id="phone-input" class="phone-input"
+            placeholder="601234567890（含区号，纯数字）"
+            maxlength="15" inputmode="numeric"
+          />
+          <button class="btn-pairing" id="get-code-btn" onclick="requestCode()">获取配对码</button>
+        </div>
+
+        <div class="code-display" id="code-display">
+          <span class="code-placeholder" id="code-placeholder">点击上方按钮获取配对码</span>
+          <span class="code-value" id="code-value" style="display:none"></span>
+        </div>
+
+        <div class="error-msg" id="error-msg"></div>
+
+        <div class="steps">
+          <p>📌 如何使用配对码</p>
+          <ol>
+            <li>打开手机 WhatsApp</li>
+            <li>进入「设置」→「已连接的设备」</li>
+            <li>点击「用手机号码连接」</li>
+            <li>输入上方显示的 8 位配对码</li>
+          </ol>
+        </div>
       </div>
     </div>
   </div>
   <script>
-    // 每 3 秒轮询连接状态
+    // ─── Tab 切换 ────────────────────────────────────────
+    function switchTab(name, btn) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    // ─── 配对码请求 ──────────────────────────────────────
+    async function requestCode() {
+      const phone = document.getElementById('phone-input').value.trim();
+      const btn = document.getElementById('get-code-btn');
+      const errEl = document.getElementById('error-msg');
+      const codeVal = document.getElementById('code-value');
+      const codePlaceholder = document.getElementById('code-placeholder');
+
+      // 重置上次状态
+      errEl.style.display = 'none';
+      codeVal.style.display = 'none';
+      codePlaceholder.style.display = 'block';
+      codePlaceholder.textContent = '正在请求配对码…';
+
+      btn.disabled = true;
+      btn.textContent = '请求中…';
+
+      try {
+        const res = await fetch('/admin/request-pairing-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          errEl.textContent = data.error || '请求失败，请稍后重试';
+          errEl.style.display = 'block';
+          codePlaceholder.textContent = '点击上方按钮获取配对码';
+        } else {
+          // 展示配对码
+          codeVal.textContent = data.code;
+          codeVal.style.display = 'block';
+          codePlaceholder.style.display = 'none';
+        }
+      } catch (e) {
+        errEl.textContent = '网络错误，请检查连接后重试';
+        errEl.style.display = 'block';
+        codePlaceholder.textContent = '点击上方按钮获取配对码';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '重新获取';
+      }
+    }
+
+    // ─── 连接状态轮询（QR 和配对码 Tab 共用） ────────────
     const CHECK_INTERVAL = 3000;
     let lastHasQR = ${!!_qrBase64};
 
@@ -867,7 +1048,7 @@ function qrPage() {
         const { connected, hasQR } = await res.json();
 
         if (connected) {
-          // 扫码成功，跳转到审核页
+          // 认证成功，跳转到审核页
           window.location.href = '/admin';
           return;
         }
@@ -1209,6 +1390,41 @@ function startAdminServer() {
     res.send(qrPage());
   });
 
+  // 配对码登录 API（无需登录）
+  // 接收手机号，调用 whatsapp-web.js requestPairingCode，返回 8 位配对码
+  app.post("/admin/request-pairing-code", apiLimiter, async (req, res) => {
+    const { phone } = req.body;
+
+    // 验证手机号格式：含国际区号的纯数字，长度 10-15 位
+    if (!phone || !/^\d{10,15}$/.test(phone)) {
+      return res.status(400).json({
+        error: "手机号格式错误，请输入含区号的纯数字（如 601234567890）",
+      });
+    }
+
+    if (_waConnected) {
+      return res.status(400).json({ error: "WhatsApp 已连接，无需配对" });
+    }
+
+    // _pairingCodeReady 由 qr 事件触发后置为 true
+    // 若尚未进入认证窗口期，拒绝调用，防止 client 抛 "Already authenticated"
+    if (!_pairingCodeReady) {
+      return res.status(503).json({
+        error: "WhatsApp 客户端尚未就绪，请等待初始化完成后重试（通常需要 10-20 秒）",
+      });
+    }
+
+    try {
+      const { requestPairingCode } = require("./bot");
+      const code = await requestPairingCode(phone);
+      logger.info("配对码已生成", { phone: phone.slice(0, 5) + "****" }); // 手机号脱敏
+      res.json({ code });
+    } catch (err) {
+      logger.error("请求配对码失败", { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // WhatsApp 连接状态 API（供 QR 页轮询）
   app.get("/admin/wa-status", (req, res) => {
     res.json({ connected: _waConnected, hasQR: !!_qrBase64 });
@@ -1457,4 +1673,4 @@ function startAdminServer() {
   });
 }
 
-module.exports = { startAdminServer, setClient, setQR };
+module.exports = { startAdminServer, setClient, setQR, setPairingCodeReady };
