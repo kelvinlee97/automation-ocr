@@ -55,7 +55,7 @@ async function createBot({ onQR, onReady } = {}) {
 
 	const client = new Client({
 		authStrategy: new LocalAuth({
-			dataPath: '.wwebjs_auth',
+			dataPath: AUTH_DATA_PATH,
 		}),
 		puppeteer: {
 			headless: true,
@@ -139,6 +139,8 @@ async function createBot({ onQR, onReady } = {}) {
 
 		setTimeout(async () => {
 			try {
+				// 断线重连前同样需要清理锁文件，防止 Chromium 异常退出后残留锁导致重连失败
+				clearChromiumSingletonLocks();
 				await client.initialize();
 			} catch (err) {
 				logger.error('重连失败', { error: err.message });
