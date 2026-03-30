@@ -3,6 +3,8 @@
  * 封装 whatsapp-web.js 的初始化、QR 码展示、断线重连逻辑
  */
 
+const fs = require('fs');
+const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { handleMessage } = require('./messageHandler');
@@ -11,6 +13,33 @@ const logger = require('./utils/logger');
 // 断线后最大重连次数
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 5000;
+
+// Chromium user data 目录，与 LocalAuth dataPath 保持一致
+const AUTH_DATA_PATH = '.wwebjs_auth';
+
+/**
+ * 清理 Chromium 遗留的 Singleton 锁文件
+ * 容器重启后旧的 SingletonLock/SingletonCookie/SingletonSocket 仍残留在
+ * 持久化 volume 中，导致新进程认为 profile 已被其他主机占用而拒绝启动
+ */
+function clearChromiumSingletonLocks() {
+	// LocalAuth 将 session 存储在 <dataPath>/session-<clientId>/ 下，默认 clientId 为 'default'
+	const sessionDir = path.join(AUTH_DATA_PATH, 'session-default');
+	const lockPatterns = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
+
+	for (const name of lockPatterns) {
+		const lockPath = path.join(sessionDir, name);
+		try {
+			fs.unlinkSync(lockPath);
+			logger.info(`已清理 Chromium 锁文件: ${lockPath}`);
+		} catch (err) {
+			// ENOENT 表示文件不存在，属于正常情况（首次启动或已清理），不需要记录
+			if (err.code !== 'ENOENT') {
+				logger.warn(`清理锁文件失败: ${lockPath}`, { error: err.message });
+			}
+		}
+	}
+}
 
 
 /**
@@ -21,6 +50,9 @@ const RECONNECT_DELAY_MS = 5000;
  * @param {Function} [callbacks.onReady] - Bot 就绪时回调，参数为 client 实例
  */
 async function createBot({ onQR, onReady } = {}) {
+	// 每次启动前清理残留锁文件，防止容器重启后 Chromium 因 profile 被"占用"而无法启动
+	clearChromiumSingletonLocks();
+
 	const client = new Client({
 		authStrategy: new LocalAuth({
 			dataPath: '.wwebjs_auth',
