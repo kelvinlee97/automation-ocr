@@ -23,3 +23,6 @@ logs/*.log
 
 .gemini/
 gha-creds-*.json
+
+# Git worktrees（隔离开发目录，不入版本控制）
+.worktrees/
