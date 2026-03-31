@@ -1322,14 +1322,30 @@ function startAdminServer() {
   }
   const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
   const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 天，与 cookie.maxAge 对齐
+  const SESSION_DIR = path.join(DATA_DIR, "admin_sessions");
+
+  // FileStore 构造函数内部调用同步 fs.mkdirsSync，权限不足或挂载卷未就绪时同步抛出。
+  // 捕获后给出明确错误上下文，避免进程崩溃日志只有裸 stacktrace。
+  let fileStore;
+  try {
+    fileStore = new FileStore({
+      path: SESSION_DIR,
+      ttl: SESSION_TTL_SECONDS,
+      retries: 1, // 读取失败最多重试 1 次，避免因磁盘 I/O 抖动误判
+      // 桥接到 Winston：I/O 重试、JSON 解析失败等内部诊断信息不再被静默吞掉
+      logFn: (msg) => logger.warn("[session-file-store]", { msg }),
+    });
+  } catch (err) {
+    logger.error("FileStore 初始化失败，请检查 SESSION_DIR 是否可写", {
+      path: SESSION_DIR,
+      error: err.message,
+    });
+    throw err; // 无法持久化 session 时拒绝启动，避免静默降级为 MemoryStore
+  }
+
   app.use(
     session({
-      store: new FileStore({
-        path: path.join(DATA_DIR, "admin_sessions"), // DATA_DIR 已定义，存放在 data/ 下
-        ttl: SESSION_TTL_SECONDS,
-        retries: 1, // 读取失败最多重试 1 次，避免因磁盘 I/O 抖动误判
-        logFn: () => {}, // 静默 session-file-store 内部日志，使用项目统一 logger
-      }),
+      store: fileStore,
       secret: SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
