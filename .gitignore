@@ -26,3 +26,18 @@ gha-creds-*.json
 
 # Git worktrees（隔离开发目录，不入版本控制）
 .worktrees/
+
+# IDE 和工具
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 本地测试文件
+.playwright-mcp/
+opencode.json
+
+# 根目录 package.json（仅供本地测试）
+package-lock.json
+root package.json
+!wa-bot/package.json
