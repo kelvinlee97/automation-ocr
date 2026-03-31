@@ -196,22 +196,23 @@ async function requestPairingCode(phone) {
 		throw new Error('WhatsApp client 尚未初始化');
 	}
 
-	// whatsapp-web.js 仅在 pairWithPhoneNumber 模式初始化时，才通过 page.exposeFunction()
-	// 将 onCodeReceivedEvent 注入到 Puppeteer 浏览器上下文。
-	// QR 模式启动后手动调用 requestPairingCode()，该函数不存在于 window，
-	// 导致 page.evaluate() 内部抛出 "window.onCodeReceivedEvent is not a function"。
-	// 此处先检测再按需注入，避免重复注册（exposeFunction 重复调用会报错）。
 	const page = _activeClient.pupPage;
-	const alreadyExposed = await page.evaluate(
-		() => typeof window.onCodeReceivedEvent === 'function'
-	);
-	if (!alreadyExposed) {
-		await page.exposeFunction('onCodeReceivedEvent', (code) => {
-			// 将配对码通过标准 EventEmitter 事件冒泡到业务层
-			_activeClient.emit('code', code);
-			return code;
-		});
-	}
+
+	// whatsapp-web.js 的 requestPairingCode() 在 page.evaluate() 中调用
+	// window.onCodeReceivedEvent(code)，并直接 return 其返回值作为配对码。
+	// QR 模式启动时该函数未被注册，必须在调用前手动注入。
+	//
+	// 不使用 page.exposeFunction()：它依赖 CDP binding，注入的函数在浏览器侧
+	// 是异步的（返回 Promise），而库代码 `return window.onCodeReceivedEvent(...)`
+	// 期望同步返回值，两者不兼容。
+	//
+	// 用 page.evaluate() 直接在浏览器侧赋值：纯浏览器 JS 执行，
+	// 函数同步返回 code，与库的调用约定完全一致。
+	await page.evaluate(() => {
+		if (typeof window.onCodeReceivedEvent !== 'function') {
+			window.onCodeReceivedEvent = (code) => code;
+		}
+	});
 
 	// whatsapp-web.js 要求手机号为纯数字字符串（含国际区号）
 	return await _activeClient.requestPairingCode(phone);
