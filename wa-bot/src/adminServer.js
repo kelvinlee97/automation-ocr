@@ -47,6 +47,8 @@ let _qrBase64 = null;    // QR 码 data URI（base64 PNG）
 let _waConnected = false;
 // qr 事件触发后置为 true，表示 client 已进入认证窗口期，可调用 requestPairingCode
 let _pairingCodeReady = false;
+// FileStore 实例引用，在 startAdminServer() 初始化后赋值，供 setDisconnected() 调用
+let _sessionStore = null;
 
 /**
  * Bot 就绪后注入 client 实例
@@ -76,14 +78,28 @@ function setPairingCodeReady(ready) {
 }
 
 /**
- * WhatsApp 断线时重置连接状态
+ * WhatsApp 断线时重置连接状态，并强制清空所有管理后台 sessions
  * disconnected 事件触发时调用，防止后台仍显示"已连接"
+ * 清空 sessions 后，所有已登录管理员下次请求时将被重定向到登录页，
+ * 避免 WA 掉线期间后台仍可正常操作造成状态不一致
  */
 function setDisconnected() {
   _waConnected = false;
   _client = null;
   _pairingCodeReady = false;
   logger.info("WhatsApp 已断线，连接状态重置");
+
+  // 清空所有管理后台 sessions，强制管理员重新登录
+  // _sessionStore 在 startAdminServer() 完成后才赋值，此处需判空防止启动阶段误触发
+  if (_sessionStore) {
+    _sessionStore.clear((err) => {
+      if (err) {
+        logger.error("断线后清空 admin sessions 失败", { error: String(err) });
+      } else {
+        logger.info("已清空所有 admin sessions（WA 断线触发）");
+      }
+    });
+  }
 }
 
 // ─── 认证中间件 ────────────────────────────────────────────────────────────────
@@ -1318,6 +1334,8 @@ function startAdminServer() {
       // 桥接到 Winston：I/O 重试、JSON 解析失败等内部诊断信息不再被静默吞掉
       logFn: (msg) => logger.warn("[session-file-store]", { msg }),
     });
+    // 提升到模块作用域，使 setDisconnected() 可以在 WA 断线时清空所有 sessions
+    _sessionStore = fileStore;
   } catch (err) {
     logger.error("FileStore 初始化失败，请检查 SESSION_DIR 是否可写", {
       path: SESSION_DIR,
