@@ -81,6 +81,7 @@ function _normalizeIC(input) {
  * 允许年份 00-99（跨世纪），但月份须 01-12，日期须 01-31
  */
 function _isValidBirthDate(yymmdd) {
+	const yy = parseInt(yymmdd.slice(0, 2), 10);
 	const mm = parseInt(yymmdd.slice(2, 4), 10);
 	const dd = parseInt(yymmdd.slice(4, 6), 10);
 	return mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31;

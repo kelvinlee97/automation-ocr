@@ -21,7 +21,7 @@ function maskPhone(phone) {
   const suffix = atIndex > -1 ? phone.slice(atIndex) : '';
 
   // 号码过短时只保留前 2 位，避免完整暴露
-  if (number.length <= 6) return `${number.slice(0, 2)}***${suffix}`;
+  if (number.length <= 5) return `${number.slice(0, 2)}***${number.slice(-1)}${suffix}`;
 
   // 保留前 3 位（通常是国家码，如 601）和末 3 位，中间脱敏
   return `${number.slice(0, 3)}****${number.slice(-3)}${suffix}`;
