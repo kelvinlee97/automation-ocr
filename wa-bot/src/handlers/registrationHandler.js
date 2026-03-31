@@ -19,24 +19,25 @@ const { maskPhone } = require("../utils/maskPhone");
  */
 async function handleRegistration(msg, session, sessionManager) {
   const text = msg.body.trim();
-  const ic = icParser.validateIC(text);
+  // validateIC 返回 { valid, normalized, reason }，需解构后使用
+  const { valid, normalized } = icParser.validateIC(text);
 
-  if (!ic) {
+  if (!valid) {
     // IC 格式不对，静默忽略（用户可能只是发了普通文字）
     logger.debug("IC 格式无效，忽略", { phone: maskPhone(msg.from), text: text.slice(0, 20) });
     return;
   }
 
   try {
-    const result = await addRegistration(msg.from, ic);
+    const result = await addRegistration(msg.from, normalized);
 
     if (result.duplicate) {
       // 重复注册，记录日志，session 仍更新以允许继续提交收据
       logger.info("重复注册，已允许继续提交收据", { phone: maskPhone(msg.from) });
     }
 
-    // 无论首次还是重复注册，都将 IC 写入 session，允许后续提交收据
-    session.ic = ic;
+    // 无论首次还是重复注册，都将标准化 IC 写入 session，允许后续提交收据
+    session.ic = normalized;
     session.state = "WAITING_RECEIPT";
     await sessionManager.updateSession(msg.from, session);
     logger.info("IC 注册完成，等待收据", { phone: maskPhone(msg.from) });
