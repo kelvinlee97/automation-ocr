@@ -90,21 +90,24 @@ async function addRegistration(phone, ic) {
     const sheet = workbook.getWorksheet("Registrations");
 
     // 检查重复（必须在锁内执行，确保读取到最新状态）
-    const icColumn = sheet.getColumn("ic");
+    // 注意：ExcelJS 从磁盘读取 xlsx 后不恢复 column key 元数据，
+    // 不能用 sheet.getColumn("ic")，改为按列位置（第 4 列 = IC Number）遍历
     let isDuplicate = false;
-    icColumn.eachCell((cell) => {
-      if (cell.value === ic) isDuplicate = true;
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // 跳过表头
+      if (row.getCell(4).value === ic) isDuplicate = true;
     });
 
     if (isDuplicate) return { success: false, duplicate: true };
 
-    sheet.addRow({
-      no: sheet.rowCount,
-      time: new Date().toISOString(),
+    // addRow 用数组形式，避免 key 不存在时静默写入空行
+    sheet.addRow([
+      sheet.rowCount, // No（含表头行）
+      new Date().toISOString(),
       phone,
       ic,
-      status: "Registered",
-    });
+      "Registered",
+    ]);
 
     await workbook.xlsx.writeFile(EXCEL_PATH);
     return { success: true };
@@ -120,21 +123,24 @@ async function addReceipt(data) {
     await workbook.xlsx.readFile(EXCEL_PATH);
     const sheet = workbook.getWorksheet("Receipts");
 
-    sheet.addRow({
-      no: sheet.rowCount,
-      time: new Date().toISOString(),
-      phone: data.phone,
-      ic: data.ic,
-      receipt_no: data.receipt_no,
-      brand: data.brand,
-      amount: data.amount,
-      qualified: data.qualified ? "YES" : "NO",
-      reason: data.disqualify_reason || "",
-      confidence: data.confidence,
-      review_status: "pending",
-      reviewer_note: "",
-      reviewed_at: "",
-    });
+    // addRow 用数组形式（按列顺序），避免 key 不持久化导致写入空行
+    // 列顺序：No, Time, Phone, IC Number, Receipt No, Brand, Amount, Qualified,
+    //         Reason, Confidence, Review Status, Reviewer Note, Reviewed At
+    sheet.addRow([
+      sheet.rowCount,
+      new Date().toISOString(),
+      data.phone,
+      data.ic,
+      data.receipt_no,
+      data.brand,
+      data.amount,
+      data.qualified ? "YES" : "NO",
+      data.disqualify_reason || "",
+      data.confidence,
+      "pending",
+      "",
+      "",
+    ]);
 
     await workbook.xlsx.writeFile(EXCEL_PATH);
   });
