@@ -262,7 +262,7 @@ automation-ocr/
 
 ## 生产部署
 
-### Docker Compose（推荐 AWS Lightsail）
+### Docker Compose
 
 ```bash
 # 克隆项目
@@ -282,49 +282,13 @@ docker compose ps
 # 首次运行需扫码登录：查看 wa-bot 日志获取二维码
 docker compose logs -f wa-bot
 
-# 查看实时日志
-docker compose logs -f
-
 # 停止服务（不删除数据）
 docker compose down
 ```
 
 > **成本参考（AWS ap-southeast-1 新加坡）：**
-> - Lightsail $5/月套餐（1GB RAM）足够
-> - 加上 EBS 30GB 存储：约 $1.5/月
-> - **估算总成本：~$7/月**
-
-#### AWS Lightsail 部署步骤
-
-**1. 准备工作**
-
-- 在 AWS Console 开通 **Lightsail 实例**：Ubuntu 22.04 LTS，$5 USD (1GB RAM)
-- 创建 **Static IP** 并关联实例（防止 IP 变动导致 WhatsApp 封号）
-- 获取 **Gemini API Key**：[Google AI Studio](https://aistudio.google.com/app/apikey)
-
-**2. 服务器环境安装**
-
-```bash
-sudo apt update
-sudo apt install -y docker.io docker-compose
-sudo usermod -aG docker $USER
-newgrp docker
-```
-
-**3. 部署**
-
-```bash
-git clone https://github.com/kelvinlee97/automation-ocr.git
-cd automation-ocr
-echo "GEMINI_API_KEY=你的_KEY" > .env
-sudo docker-compose up -d --build
-sudo docker logs -f wa-bot  # 查看二维码
-```
-
-**4. 常见问题**
-
-- 扫码失败：调小终端字体或查看日志中的文字版二维码
-- 内存不足：1GB RAM 运行 Chrome Headless 稍紧，确保无其他大内存进程
+> - t3.micro（按需）足够，GitHub Actions 自动部署
+> - 估算成本：~$5-10/月
 
 ### Nginx 反向代理（可选）
 

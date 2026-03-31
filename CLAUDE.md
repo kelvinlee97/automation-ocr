@@ -115,7 +115,7 @@ Receipts 表新增 3 列：`Review Status`（pending/approved/rejected）、`Rev
 
 ## 部署
 
-目标环境：Ubuntu，Docker 容器化。当前运行在 **AWS EC2**（`ap-southeast-1`，实例 `i-03cc623049dc8d891`，公网 IP `52.220.177.67`）。
+目标环境：Ubuntu，Docker 容器化。当前运行在 **AWS EC2**（`ap-southeast-1`）。
 
 **Security Group**：`sg-0839e7d276d8f6459`
 - Port 22（SSH）：仅允许管理员本地 IP（动态 IP，换网络后需手动更新）
