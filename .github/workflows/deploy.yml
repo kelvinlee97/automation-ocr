@@ -97,7 +97,7 @@ jobs:
           GHCR_ACTOR: ${{ github.actor }}
         run: |
           # 通过 SSM 在实例上执行部署脚本
-          # SSM 以最小环境的 root 运行，需显式设 HOME 和 safe.directory
+          # SSM 以 root 运行；取密钥后通过 sudo -u ubuntu 切换用户执行 git/docker，避免文件归属为 root
           # GEMINI_API_KEY 和 SESSION_SECRET 均由 EC2 自身从 Parameter Store 取得（SecureString），不经过 Runner
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${INSTANCE_ID}" \
@@ -109,18 +109,18 @@ jobs:
               --arg region "${AWS_DEPLOY_REGION}" \
               '{commands: [
                 "set -e",
-                "export HOME=/root",
-                "git config --global --add safe.directory /home/ubuntu/automation-ocr",
-                "cd /home/ubuntu/automation-ocr",
-                "git pull origin main",
+                "# SSM 以 root 运行，仅取密钥时使用 root（需要 IAM 权限），其余操作切换到 ubuntu 执行",
                 ("GEMINI_KEY=$(aws ssm get-parameter --name /automation-ocr/gemini-api-key --with-decryption --query Parameter.Value --output text --region " + $region + ")"),
                 ("SESSION_SECRET=$(aws ssm get-parameter --name /automation-ocr/session-secret --with-decryption --query Parameter.Value --output text --region " + $region + ")"),
-                "echo \"GEMINI_API_KEY=${GEMINI_KEY}\" > .env",
-                "echo \"SESSION_SECRET=${SESSION_SECRET}\" >> .env",
-                ("echo \"" + $ghcr_token + "\" | docker login ghcr.io -u \"" + $ghcr_actor + "\" --password-stdin"),
-                "docker compose pull",
-                "docker compose up -d --remove-orphans",
-                "docker image prune -f",
+                "# 写入 .env：以 ubuntu 用户写入，确保文件归属正确",
+                "printf 'GEMINI_API_KEY=%s\\nSESSION_SECRET=%s\\n' \"${GEMINI_KEY}\" \"${SESSION_SECRET}\" | sudo -u ubuntu tee /home/ubuntu/automation-ocr/.env > /dev/null",
+                "# git pull：以 ubuntu 用户执行，拉取的文件归属 ubuntu",
+                "sudo -u ubuntu git -C /home/ubuntu/automation-ocr pull origin main",
+                "# docker 操作：ubuntu 已在 docker 组，无需 root",
+                ("echo \"" + $ghcr_token + "\" | sudo -u ubuntu docker login ghcr.io -u \"" + $ghcr_actor + "\" --password-stdin"),
+                "sudo -u ubuntu docker compose -f /home/ubuntu/automation-ocr/docker-compose.yml pull",
+                "sudo -u ubuntu docker compose -f /home/ubuntu/automation-ocr/docker-compose.yml up -d --remove-orphans",
+                "sudo -u ubuntu docker image prune -f",
                 "docker ps --filter name=wa-bot --format \"table {{.Names}}\\t{{.Status}}\\t{{.Ports}}\""
               ]}')" \
             --query "Command.CommandId" \
