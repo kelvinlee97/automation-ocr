@@ -8,6 +8,7 @@
 
 const express = require("express");
 const session = require("express-session");
+const FileStore = require("session-file-store")(session);
 const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
@@ -19,6 +20,8 @@ const adminUserService = require("./services/adminUserService");
 const logger = require("./utils/logger");
 
 const ADMIN_PORT = 3000;
+// 与 adminUserService / sessionManager 保持一致：优先使用容器注入的 DATA_DIR 环境变量
+const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, "../../data");
 
 // ─── Rate Limiter 配置 ──────────────────────────────────────────────────────────────
 
@@ -1048,8 +1051,10 @@ function qrPage() {
         const { connected, hasQR } = await res.json();
 
         if (connected) {
-          // 认证成功，跳转到审核页
-          window.location.href = '/admin';
+          // WhatsApp 认证成功；跳登录页，而非直接跳 /admin
+          // 若后台 session 已存在，服务端会自动 redirect 到主页（零用户感知）
+          // 若 session 不存在，用户看到登录表单而非神秘报错，UX 清晰
+          window.location.href = '/admin/login';
           return;
         }
 
@@ -1310,14 +1315,37 @@ function startAdminServer() {
 
   // session 配置
   // secret 从环境变量读取，保证重启后 cookie 签名仍有效；未配置时用随机值（开发环境）
-  // 注意：当前使用 MemoryStore，进程重启后 session 数据必然清空，SESSION_SECRET 仅防止 cookie 签名失效
+  // 使用 FileStore 持久化 session，容器重启后登录状态依然有效
   // rolling: true — 每次请求自动续期，真正实现"久不用才踢出"而非"固定 N 小时过期"
   if (!process.env.SESSION_SECRET) {
-    logger.warn("未配置 SESSION_SECRET，将使用随机值——重启后所有 session 失效，用户须重新登录");
+    logger.warn("未配置 SESSION_SECRET，将使用随机值——重启后 cookie 签名失效，用户须重新登录");
   }
   const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
+  const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 天，与 cookie.maxAge 对齐
+  const SESSION_DIR = path.join(DATA_DIR, "admin_sessions");
+
+  // FileStore 构造函数内部调用同步 fs.mkdirsSync，权限不足或挂载卷未就绪时同步抛出。
+  // 捕获后给出明确错误上下文，避免进程崩溃日志只有裸 stacktrace。
+  let fileStore;
+  try {
+    fileStore = new FileStore({
+      path: SESSION_DIR,
+      ttl: SESSION_TTL_SECONDS,
+      retries: 1, // 读取失败最多重试 1 次，避免因磁盘 I/O 抖动误判
+      // 桥接到 Winston：I/O 重试、JSON 解析失败等内部诊断信息不再被静默吞掉
+      logFn: (msg) => logger.warn("[session-file-store]", { msg }),
+    });
+  } catch (err) {
+    logger.error("FileStore 初始化失败，请检查 SESSION_DIR 是否可写", {
+      path: SESSION_DIR,
+      error: err.message,
+    });
+    throw err; // 无法持久化 session 时拒绝启动，避免静默降级为 MemoryStore
+  }
+
   app.use(
     session({
+      store: fileStore,
       secret: SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
@@ -1328,7 +1356,7 @@ function startAdminServer() {
         // 'auto' 模式：express-session 会检查 req.secure（已设置 trust proxy），
         // HTTP 访问时 secure=false，HTTPS 访问时 secure=true，无需改代码即可平滑升级到 HTTPS
         secure: "auto",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天无操作后过期
+        maxAge: SESSION_TTL_SECONDS * 1000, // 7 天无操作后过期
       },
     })
   );
@@ -1386,7 +1414,12 @@ function startAdminServer() {
   // QR 码扫码页（无需登录，Bot 未就绪时供非技术用户扫码）
   app.get("/admin/qr", (req, res) => {
     if (_waConnected) {
-      return res.redirect("/admin");
+      // WhatsApp 已连接；根据管理员登录状态决定跳转目标，避免盲重定向造成 UX 断裂：
+      // 用户以为扫 WhatsApp 码 = 登入后台，实际上需要单独完成管理员账号登录
+      if (req.session && req.session.authenticated) {
+        return res.redirect("/admin");
+      }
+      return res.redirect("/admin/login");
     }
     res.send(qrPage());
   });
