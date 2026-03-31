@@ -107,7 +107,6 @@ SESSION_SECRET=your_random_secret_here
 - **注册用户**：查看所有注册用户
 - **下载 Excel**：一键下载完整数据报表
 - **用户管理**：`/admin/users` — 新建/删除管理员账号、重置任意用户密码
-- **修改密码**：`/admin/change-password` — 修改当前登录账号密码
 
 Receipts 表新增 3 列：`Review Status`（pending/approved/rejected）、`Reviewer Note`、`Reviewed At`。
 旧 Excel 文件在下次启动时会自动追加这 3 列（无损迁移）。

@@ -447,7 +447,6 @@ function htmlLayout(title, content, currentPath = '') {
       <a href="/admin" class="${currentPath === '/admin' ? 'nav-active' : ''}">📋 收据审核</a>
       <a href="/admin/export">⬇ 下载 Excel</a>
       <a href="/admin/users" class="${currentPath === '/admin/users' ? 'nav-active' : ''}">👥 用户管理</a>
-      <a href="/admin/change-password" class="${currentPath === '/admin/change-password' ? 'nav-active' : ''}">🔑 修改密码</a>
       <button class="theme-toggle" id="themeToggle" title="切换主题" aria-label="切换明暗主题">🌙</button>
       <form class="inline" method="POST" action="/admin/logout">
         <button class="btn btn-logout" style="margin-left:4px">退出</button>
@@ -738,33 +737,6 @@ function newUserPage(errorMsg = "") {
       </div>
     </form>`;
   return htmlLayout("新建用户", content, '/admin/users');
-}
-
-// ─── 修改密码页 ────────────────────────────────────────────────────────────────
-
-function changePasswordPage(errorMsg = "", successMsg = "") {
-  const content = `
-    ${errorMsg   ? `<div style="background:#fff0f0;border-left:4px solid #c0392b;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">${errorMsg}</div>` : ""}
-    ${successMsg ? `<div style="background:#e6f9f0;border-left:4px solid #10b981;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">${successMsg}</div>` : ""}
-    <form method="POST" action="/admin/change-password" style="max-width:400px;background:#fff;padding:32px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
-      <div style="margin-bottom:16px">
-        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">当前密码</label>
-        <input type="password" name="oldPassword" required
-               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" />
-      </div>
-      <div style="margin-bottom:16px">
-        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">新密码（至少 8 位）</label>
-        <input type="password" name="newPassword" required minlength="8"
-               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" />
-      </div>
-      <div style="margin-bottom:24px">
-        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">确认新密码</label>
-        <input type="password" name="confirm" required minlength="8"
-               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" />
-      </div>
-      <button type="submit" class="btn btn-primary" style="padding:10px 24px">更新密码</button>
-    </form>`;
-  return htmlLayout("修改密码", content, '/admin/change-password');
 }
 
 // ─── QR 码页（无需登录，供初始化时扫码用） ────────────────────────────────────
@@ -1540,27 +1512,6 @@ function startAdminServer() {
     if (!result.ok) return res.redirect(`/admin/users?flash=错误：${result.error}`);
     logger.info("管理员账号已删除", { by: req.session.username, deleted: username });
     res.redirect("/admin/users?flash=用户已删除");
-  });
-
-  // ── 修改当前用户密码 ────────────────────────────────────────────────────────
-
-  app.get("/admin/change-password", requireAuth, (req, res) => {
-    res.send(changePasswordPage());
-  });
-
-  app.post("/admin/change-password", requireAuth, (req, res) => {
-    const { oldPassword, newPassword, confirm } = req.body;
-    if (newPassword !== confirm) return res.send(changePasswordPage("两次密码输入不一致"));
-    const result = adminUserService.changePassword(req.session.username, oldPassword, newPassword);
-    if (!result.ok) return res.send(changePasswordPage(result.error));
-    logger.info("密码已更新", { username: req.session.username });
-    // 改密后销毁 session，要求重新登录
-    req.session.destroy((err) => {
-      if (err) {
-        logger.error("session 销毁失败（改密）", { error: String(err) });
-      }
-      res.redirect("/admin/login");
-    });
   });
 
   // ── 收据相关路由 ──────────────────────────────────────────────────────────
