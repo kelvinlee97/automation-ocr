@@ -213,6 +213,7 @@ async function requestPairingCode(phone) {
 	// 用 page.evaluate() 直接在浏览器侧赋值：纯浏览器 JS 执行，
 	// 函数同步返回 code，与库的调用约定完全一致。
 	await page.evaluate(() => {
+		/* global window */
 		if (typeof window.onCodeReceivedEvent !== 'function') {
 			window.onCodeReceivedEvent = (code) => code;
 		}
