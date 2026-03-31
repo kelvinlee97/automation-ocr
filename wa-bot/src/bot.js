@@ -195,6 +195,24 @@ async function requestPairingCode(phone) {
 	if (!_activeClient) {
 		throw new Error('WhatsApp client 尚未初始化');
 	}
+
+	// whatsapp-web.js 仅在 pairWithPhoneNumber 模式初始化时，才通过 page.exposeFunction()
+	// 将 onCodeReceivedEvent 注入到 Puppeteer 浏览器上下文。
+	// QR 模式启动后手动调用 requestPairingCode()，该函数不存在于 window，
+	// 导致 page.evaluate() 内部抛出 "window.onCodeReceivedEvent is not a function"。
+	// 此处先检测再按需注入，避免重复注册（exposeFunction 重复调用会报错）。
+	const page = _activeClient.pupPage;
+	const alreadyExposed = await page.evaluate(
+		() => typeof window.onCodeReceivedEvent === 'function'
+	);
+	if (!alreadyExposed) {
+		await page.exposeFunction('onCodeReceivedEvent', (code) => {
+			// 将配对码通过标准 EventEmitter 事件冒泡到业务层
+			_activeClient.emit('code', code);
+			return code;
+		});
+	}
+
 	// whatsapp-web.js 要求手机号为纯数字字符串（含国际区号）
 	return await _activeClient.requestPairingCode(phone);
 }
