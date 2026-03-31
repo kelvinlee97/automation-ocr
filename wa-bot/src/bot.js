@@ -6,7 +6,6 @@
 const fs = require('fs');
 const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
 const { handleMessage } = require('./messageHandler');
 const logger = require('./utils/logger');
 
@@ -98,8 +97,8 @@ async function createBot({ onQR, onReady, onPairingCodeReady } = {}) {
 	// QR 码扫码（首次登录或 session 失效时触发）
 	client.on('qr', async (qr) => {
 		logger.info('请扫描二维码登录 WhatsApp');
-		qrcode.generate(qr, { small: true }); // 保留终端显示，方便 SSH 调试
-
+		// SSH 场景下可将此字符串复制到 QR 生成工具（如 qr.io）扫码
+		logger.debug('QR data: %s', qr);
 		// 将 QR 转为 base64 data URI 注入管理后台 Web 页面
 		if (onQR) {
 			try {
