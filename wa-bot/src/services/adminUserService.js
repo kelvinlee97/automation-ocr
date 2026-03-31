@@ -128,23 +128,6 @@ function createUser(username, password) {
 }
 
 /**
- * 修改当前用户的密码（需验证旧密码）
- * @returns {{ ok: boolean, error?: string }}
- */
-function changePassword(username, oldPassword, newPassword) {
-  const users = readUsers();
-  const user  = users.find(u => u.username === username);
-  if (!user) return { ok: false, error: "用户不存在" };
-  if (!verifyPassword(oldPassword, user.passwordHash)) return { ok: false, error: "旧密码错误" };
-  if (!newPassword || newPassword.length < 8) return { ok: false, error: "新密码至少 8 个字符" };
-
-  const idx = users.indexOf(user);
-  users[idx].passwordHash = hashPassword(newPassword);
-  writeUsers(users);
-  return { ok: true };
-}
-
-/**
  * 重置任意用户密码（管理员操作，无需旧密码）
  * @returns {{ ok: boolean, error?: string }}
  */
@@ -188,7 +171,6 @@ module.exports = {
   isEmpty,
   authenticate,
   createUser,
-  changePassword,
   resetPassword,
   deleteUser,
   listUsers,
