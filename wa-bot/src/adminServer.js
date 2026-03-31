@@ -1421,8 +1421,10 @@ function startAdminServer() {
       logger.info("配对码已生成", { phone: phone.slice(0, 5) + "****" }); // 手机号脱敏
       res.json({ code });
     } catch (err) {
-      logger.error("请求配对码失败", { error: err.message });
-      res.status(500).json({ error: err.message });
+      // 库内部有时 throw 字符串而非 Error 对象，用 String() 兜底确保完整记录
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error("请求配对码失败", { error: errMsg, stack: err?.stack });
+      res.status(500).json({ error: errMsg });
     }
   });
 

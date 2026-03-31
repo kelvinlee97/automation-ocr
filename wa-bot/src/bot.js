@@ -214,7 +214,18 @@ async function requestPairingCode(phone) {
 	});
 
 	// whatsapp-web.js 要求手机号为纯数字字符串（含国际区号）
-	return await _activeClient.requestPairingCode(phone);
+	const result = await _activeClient.requestPairingCode(phone);
+
+	// 诊断：打印原始返回值类型和内容，帮助判断 WA 内部状态
+	logger.debug('requestPairingCode 原始返回值', { type: typeof result, value: String(result).slice(0, 20) });
+
+	// 库在某些错误状态下会返回短字符串错误码（如 "t"）而非抛出异常
+	// 正常配对码格式为 8 位含连字符，如 "ABCD-1234"
+	if (!result || typeof result !== 'string' || !result.includes('-')) {
+		throw new Error(`获取配对码失败，WA 返回：${String(result)}`);
+	}
+
+	return result;
 }
 
 
