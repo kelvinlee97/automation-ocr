@@ -75,6 +75,17 @@ function setPairingCodeReady(ready) {
   _pairingCodeReady = ready;
 }
 
+/**
+ * WhatsApp 断线时重置连接状态
+ * disconnected 事件触发时调用，防止后台仍显示"已连接"
+ */
+function setDisconnected() {
+  _waConnected = false;
+  _client = null;
+  _pairingCodeReady = false;
+  logger.info("WhatsApp 已断线，连接状态重置");
+}
+
 // ─── 认证中间件 ────────────────────────────────────────────────────────────────
 
 function requireAuth(req, res, next) {
@@ -1709,4 +1720,4 @@ function startAdminServer() {
   });
 }
 
-module.exports = { startAdminServer, setClient, setQR, setPairingCodeReady };
+module.exports = { startAdminServer, setClient, setQR, setPairingCodeReady, setDisconnected };
