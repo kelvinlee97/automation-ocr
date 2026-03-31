@@ -229,8 +229,10 @@ async function requestPairingCode(phone) {
 	logger.debug('requestPairingCode 原始返回值', { type: typeof result, value: String(result).slice(0, 20) });
 
 	// 库在某些错误状态下会返回短字符串错误码（如 "t"）而非抛出异常
-	// 正常配对码格式为 8 位含连字符，如 "ABCD-1234"
-	if (!result || typeof result !== 'string' || !result.includes('-')) {
+	// WhatsApp 返回格式不稳定，有时含连字符（ABCD-1234），有时为纯 8 位（ABCD1234）
+	// 用正则匹配合法配对码：8 位字母数字，中间连字符可选
+	const PAIRING_CODE_PATTERN = /^[A-Z0-9]{4}-?[A-Z0-9]{4}$/i;
+	if (!result || typeof result !== 'string' || !PAIRING_CODE_PATTERN.test(result)) {
 		throw new Error(`获取配对码失败，WA 返回：${String(result)}`);
 	}
 
