@@ -19,11 +19,16 @@ const AUTH_DATA_PATH = '.wwebjs_auth';
 /**
  * 清理 Chromium 遗留的 Singleton 锁文件
  * 容器重启后旧的 SingletonLock/SingletonCookie/SingletonSocket 仍残留在
- * 持久化 volume 中，导致新进程认为 profile 已被其他主机占用而拒绝启动
+ * 持久化 volume 中，导致新进程认为 profile 已被其他主机占用而拒绝启动。
+ *
+ * LocalAuth 目录结构：
+ *   未设 clientId：<dataPath>/session/
+ *   设了 clientId：<dataPath>/session-<clientId>/
+ * 本项目未设 clientId，因此实际路径为 .wwebjs_auth/session/
  */
 function clearChromiumSingletonLocks() {
-	// LocalAuth 将 session 存储在 <dataPath>/session-<clientId>/ 下，默认 clientId 为 'default'
-	const sessionDir = path.join(AUTH_DATA_PATH, 'session-default');
+	// 未设 clientId 时 LocalAuth 使用 "session" 目录（无后缀）
+	const sessionDir = path.join(AUTH_DATA_PATH, 'session');
 	const lockPatterns = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
 
 	for (const name of lockPatterns) {
@@ -207,6 +212,7 @@ async function requestPairingCode(phone) {
 	//
 	// 用 page.evaluate() 直接在浏览器侧赋值：纯浏览器 JS 执行，
 	// 函数同步返回 code，与库的调用约定完全一致。
+	/* eslint-env browser */
 	await page.evaluate(() => {
 		if (typeof window.onCodeReceivedEvent !== 'function') {
 			window.onCodeReceivedEvent = (code) => code;
