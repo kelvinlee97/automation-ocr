@@ -214,6 +214,7 @@ async function requestPairingCode(phone) {
 	// 函数同步返回 code，与库的调用约定完全一致。
 	/* eslint-env browser */
 	await page.evaluate(() => {
+		/* global window */
 		if (typeof window.onCodeReceivedEvent !== 'function') {
 			window.onCodeReceivedEvent = (code) => code;
 		}
