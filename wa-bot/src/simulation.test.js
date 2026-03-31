@@ -11,9 +11,6 @@
 
 // ─── mock 系统边界：文件 I/O ──────────────────────────────────────────────────
 
-jest.mock('fs');
-jest.mock('js-yaml');
-
 jest.mock('./utils/logger', () => ({
   info:  jest.fn(),
   debug: jest.fn(),
