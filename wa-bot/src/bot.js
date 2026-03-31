@@ -58,7 +58,7 @@ let _activeClient = null;
  * @param {Function} [callbacks.onReady]             - Bot 就绪时回调，参数为 client 实例
  * @param {Function} [callbacks.onPairingCodeReady]  - client 进入可请求配对码状态时回调（qr 事件触发后）
  */
-async function createBot({ onQR, onReady, onPairingCodeReady } = {}) {
+async function createBot({ onQR, onReady, onPairingCodeReady, onDisconnected } = {}) {
 	// 每次启动前清理残留锁文件，防止容器重启后 Chromium 因 profile 被"占用"而无法启动
 	clearChromiumSingletonLocks();
 
@@ -153,6 +153,9 @@ async function createBot({ onQR, onReady, onPairingCodeReady } = {}) {
 	// 断线处理：指数退避重连
 	client.on('disconnected', async (reason) => {
 		logger.warn('WhatsApp 已断线', { reason, reconnectAttempts });
+
+		// 立即通知 adminServer 重置连接状态，确保后台不再显示"已连接"
+		if (onDisconnected) onDisconnected();
 
 		// 防止 disconnected 事件多次触发导致并发重连
 		if (isReconnecting) {

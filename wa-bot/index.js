@@ -7,7 +7,7 @@
 const { createBot } = require('./src/bot');
 const sessionManager = require('./src/sessionManager');
 const { initExcel } = require('./src/services/excelService');
-const { startAdminServer, setClient, setQR, setPairingCodeReady } = require('./src/adminServer');
+const { startAdminServer, setClient, setQR, setPairingCodeReady, setDisconnected } = require('./src/adminServer');
 const logger = require('./src/utils/logger');
 
 async function main() {
@@ -31,6 +31,8 @@ async function main() {
             onReady: (client) => setClient(client),
             // qr 事件触发后通知 adminServer：client 已进入认证窗口期，可接受配对码请求
             onPairingCodeReady: () => setPairingCodeReady(true),
+            // disconnected 事件触发后通知 adminServer 重置连接状态，防止后台仍显示"已连接"
+            onDisconnected: () => setDisconnected(),
         });
 
         logger.info('Bot 已就绪，系统全面启动');
