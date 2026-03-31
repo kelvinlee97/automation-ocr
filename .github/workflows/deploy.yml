@@ -97,7 +97,7 @@ jobs:
           GHCR_ACTOR: ${{ github.actor }}
         run: |
           # 通过 SSM 在实例上执行部署脚本
-          # SSM 以最小环境的 root 运行，需显式设 HOME 和 safe.directory
+          # SSM 以 root 运行；取密钥后通过 sudo -u ubuntu 切换用户执行 git/docker，避免文件归属为 root
           # GEMINI_API_KEY 和 SESSION_SECRET 均由 EC2 自身从 Parameter Store 取得（SecureString），不经过 Runner
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${INSTANCE_ID}" \
