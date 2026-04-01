@@ -1,17 +1,21 @@
 'use strict';
 
-// icHandler 是纯函数（无副作用、不写文件），最适合作为第一批测试用例
-const { validateIC } = require('../icHandler');
+// icParser 是纯函数（无副作用、不写文件），最适合作为第一批测试用例
+const { validateIC } = require('../../utils/icParser');
 
-describe('icHandler - 身份证格式校验', () => {
+describe('icParser - 身份证格式校验', () => {
   // --- 合法格式 ---
   describe('合法输入', () => {
     test('标准格式带连字符', () => {
-      expect(validateIC('900101-14-1234')).toEqual({ valid: true });
+      const result = validateIC('900101-14-1234');
+      expect(result.valid).toBe(true);
+      expect(result.normalized).toBe('900101-14-1234');
     });
 
     test('纯数字格式（不含连字符）', () => {
-      expect(validateIC('900101141234')).toEqual({ valid: true });
+      const result = validateIC('900101141234');
+      expect(result.valid).toBe(true);
+      expect(result.normalized).toBe('900101-14-1234');
     });
   });
 
@@ -20,7 +24,7 @@ describe('icHandler - 身份证格式校验', () => {
     test('位数不足', () => {
       const result = validateIC('90010114123');
       expect(result.valid).toBe(false);
-      expect(result.message).toBeDefined();
+      expect(result.reason).toBeDefined();
     });
 
     test('包含字母', () => {

@@ -55,10 +55,11 @@ async function processReceipt(base64Image, mimeType = "image/jpeg") {
   } catch (error) {
     console.error("Gemini API Error:", error);
     const isRetryable = error.message?.includes('429') || 
-                         error.message?.includes('500') || 
-                         error.message?.includes('503') ||
-                         error.message?.includes('network') ||
-                         error.message?.includes('ETIMEDOUT');
+                          error.message?.includes('500') || 
+                          error.message?.includes('503') ||
+                          error.message?.includes('network') ||
+                          error.message?.includes('ETIMEDOUT') ||
+                          error.code === 'ETIMEDOUT';
     return { 
       success: false, 
       retryable: isRetryable,

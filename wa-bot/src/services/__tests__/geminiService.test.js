@@ -1,41 +1,41 @@
 'use strict';
 
 // mock 必须在 require 之前声明，Jest 会自动提升到文件顶部
-jest.mock('@google/generative-ai');
+const mockGenerateContent = jest.fn();
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { analyzeReceipt } = require('../geminiService');
-
-describe('geminiService - Gemini API 封装', () => {
-  let mockGenerateContent;
-
-  beforeEach(() => {
-    // 构造 mock 调用链：new GoogleGenerativeAI().getGenerativeModel().generateContent()
-    mockGenerateContent = jest.fn();
-    GoogleGenerativeAI.mockImplementation(() => ({
+jest.mock('@google/generative-ai', () => {
+  return {
+    GoogleGenerativeAI: jest.fn().mockImplementation(() => ({
       getGenerativeModel: () => ({
         generateContent: mockGenerateContent,
       }),
-    }));
+    })),
+  };
+});
+
+const { processReceipt } = require('../aiService');
+
+describe('aiService - Gemini API 封装', () => {
+  beforeEach(() => {
+    mockGenerateContent.mockReset();
   });
 
   test('API 返回有效数据时，解析为标准结构', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => JSON.stringify({
-          merchantName: '测试超市',
-          totalAmount: 88.50,
-          receiptDate: '2024-01-15',
-          eligible: true,
+          amount: 88.50,
+          summary: '测试超市收据',
+          confidence: 0.95,
         }),
       },
     });
 
-    const result = await analyzeReceipt('base64ImageData');
+    const result = await processReceipt('base64ImageData');
 
     expect(result.success).toBe(true);
-    expect(result.data.merchantName).toBe('测试超市');
-    expect(result.data.eligible).toBe(true);
+    expect(result.amount).toBe(88.50);
+    expect(result.confidence).toBe(0.95);
   });
 
   test('网络超时时，返回 retryable: true', async () => {
@@ -43,7 +43,7 @@ describe('geminiService - Gemini API 封装', () => {
     timeoutError.code = 'ETIMEDOUT';
     mockGenerateContent.mockRejectedValue(timeoutError);
 
-    const result = await analyzeReceipt('base64ImageData');
+    const result = await processReceipt('base64ImageData');
 
     expect(result.success).toBe(false);
     expect(result.retryable).toBe(true);
@@ -57,7 +57,7 @@ describe('geminiService - Gemini API 封装', () => {
       },
     });
 
-    const result = await analyzeReceipt('base64ImageData');
+    const result = await processReceipt('base64ImageData');
 
     expect(result.success).toBe(false);
     expect(result.retryable).toBe(false);
