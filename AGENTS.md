@@ -176,7 +176,138 @@ git branch -d <branch-name>
 
 ---
 
-## 5. 注意事项
+## 5. CI/CD 流程
+
+### 完整链路概览
+
+```
+本地开发
+  │  git push origin <branch>
+  ▼
+PR 阶段（自动触发 CI）
+  ├── Lint       → ESLint 检查代码规范
+  ├── Test       → Jest 单元测试
+  └── Docker Build → 验证镜像能否构建并启动
+  │
+  │  PR 通过 review → 合并到 main
+  ▼
+部署阶段（自动触发 Deploy）
+  ├── 构建镜像   → GitHub Actions Runner 构建并推送至 GHCR
+  └── 部署到 EC2 → SSM SendCommand 在服务器执行拉镜像 + up -d
+```
+
+---
+
+### CI（`ci.yml` + `test.yml`）
+
+**触发条件**：向 `main` 推送，或任意 PR 指向 `main`
+
+| Job | 内容 | 依赖 |
+|-----|------|------|
+| `lint` | `eslint src --ext .js` | — |
+| `test` | `jest`（`GEMINI_API_KEY=test-placeholder`） | — |
+| `docker-build` | `docker compose build` + smoke test | lint、test 均通过 |
+
+> ⚠️ **注意**：`ci.yml` 和 `test.yml` 目前存在重复（两者都跑 lint + test）。
+> `ci.yml` 额外增加了 `docker-build` job，是更完整的版本。
+> 后续可考虑删除 `test.yml`，以 `ci.yml` 为唯一标准。
+
+**本地手动执行 CI 等效命令**：
+
+```bash
+cd wa-bot
+npm run lint        # 对应 lint job
+npm test            # 对应 test job
+docker compose build wa-bot  # 对应 docker-build job
+```
+
+---
+
+### CD（`deploy.yml`）
+
+**触发条件**：push 到 `main`，或手动触发（`workflow_dispatch`）
+
+**并发控制**：同一时间只允许一个部署任务运行（`group: deploy-production`），新部署不会中断进行中的部署。
+
+#### 架构说明
+
+```
+GitHub Actions Runner
+  │  OIDC（临时凭证，无需存储 Access Key）
+  ▼
+AWS IAM（AssumeRoleWithWebIdentity）
+  │
+  ├── GHCR：推送镜像（使用内置 GITHUB_TOKEN）
+  │
+  └── SSM SendCommand → EC2（不开放 22 端口，走 HTTPS 443）
+        │  root 权限取密钥
+        ▼
+        AWS Parameter Store（SecureString）
+          GEMINI_API_KEY / SESSION_SECRET
+        │  以 ubuntu 用户执行
+        ▼
+        git pull → 写 .env → docker compose pull → up -d
+```
+
+**关键设计决策**：
+
+- **OIDC 代替 Access Key**：Runner 每次获取临时凭证，不存储长期密钥，泄露风险为零
+- **SSM 代替 SSH**：不开放 22 端口，攻击面更小；密钥从 Parameter Store 实时获取，不经过 Runner
+- **写 .env 在 git pull 之后**：防止 `git pull` 覆盖刚写入的密钥（见 PR #30）
+- **镜像构建在 Runner，不在 EC2**：避免占用服务器内存，构建与部署完全解耦
+
+#### Job 执行顺序
+
+```
+build-and-push（在 GitHub Runner 上）
+  1. 登录 GHCR（GITHUB_TOKEN）
+  2. 构建镜像（context: ./wa-bot）
+  3. 推送 latest + sha-<commit> 两个 tag
+  │
+  │  outputs: image tag
+  ▼
+deploy（在 EC2 上，通过 SSM）
+  1. OIDC 获取 AWS 临时凭证
+  2. 从 CloudFormation outputs 动态读取 EC2 实例 ID
+  3. SSM SendCommand 执行部署脚本：
+     a. 从 Parameter Store 取 GEMINI_API_KEY / SESSION_SECRET
+     b. git pull origin main
+     c. 写入 /home/ubuntu/automation-ocr/.env
+     d. docker login GHCR
+     e. docker compose pull
+     f. docker compose up -d --remove-orphans
+     g. docker image prune -f
+  4. 轮询等待（每 10s，最多 8 分钟）
+```
+
+#### 部署后验证
+
+```bash
+# 查看部署日志
+docker compose logs -f wa-bot
+
+# 确认环境变量注入正确
+docker inspect wa-bot --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E "GEMINI|SESSION"
+
+# 确认容器状态
+docker ps --filter name=wa-bot
+```
+
+#### 部署失败排查
+
+| 现象 | 可能原因 | 排查命令 |
+|------|---------|---------|
+| `docker compose up` 后容器立即退出 | 环境变量缺失或代码异常 | `docker compose logs wa-bot` |
+| AI 提取报 403 | `GEMINI_API_KEY` 未注入 | `docker inspect wa-bot \| grep GEMINI` |
+| 容器运行但功能异常 | 新代码 bug | `docker compose logs -f wa-bot` |
+| SSM Command Failed | EC2 磁盘满 / IAM 权限变更 | AWS Console → SSM → Run Command 查看输出 |
+
+> **重要**：改了 `.env` 或 `docker-compose.yml` 后必须用 `docker compose up -d` 重建容器，
+> `docker compose restart` 不会重新读取环境变量。
+
+---
+
+## 6. 注意事项
 
 1. WhatsApp 登录凭证存于 `wa-bot/.wwebjs_auth/`，已 gitignore，Docker 部署需挂载外部卷持久化
 2. 会话数据 `data/sessions.json` 同上，Docker 需挂载外部卷
