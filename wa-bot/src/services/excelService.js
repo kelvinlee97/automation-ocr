@@ -4,6 +4,25 @@ const path = require("path");
 
 const EXCEL_PATH = path.join(__dirname, "../../../data/excel/records.xlsx");
 
+// 马来西亚时区（UTC+8），Excel 时间列对业务人员可读
+const MY_TIMEZONE = "Asia/Kuala_Lumpur";
+
+/**
+ * 返回当前马来西亚本地时间字符串，格式：YYYY-MM-DD HH:mm:ss
+ * sv-SE locale 恰好输出该格式，无需手动拼接
+ */
+function nowMY() {
+  return new Date().toLocaleString("sv-SE", { timeZone: MY_TIMEZONE });
+}
+
+/**
+ * 去除 WhatsApp 手机号的 "@c.us" 后缀
+ * 写入 Excel 时只保留纯数字号码，方便阅读和导出使用
+ */
+function stripWaId(phone) {
+  return phone ? phone.replace(/@c\.us$/, "") : phone;
+}
+
 // 写操作互斥锁：防止并发"读取→修改→写回"导致后写覆盖先写（TOCTOU race condition）
 // 原理：每次写操作都追加到上一次的 Promise 尾部，形成串行执行链
 // catch 吞掉错误是故意的：避免单次失败导致整个队列永久卡死
@@ -90,21 +109,32 @@ async function addRegistration(phone, ic) {
     const sheet = workbook.getWorksheet("Registrations");
 
     // 检查重复（必须在锁内执行，确保读取到最新状态）
-    const icColumn = sheet.getColumn("ic");
+    // 注意：ExcelJS 从磁盘读取 xlsx 后不恢复 column key 元数据，
+    // 通过表头字符串动态定位列号，与 updateReviewStatus 保持一致风格，
+    // 避免硬编码列位置——列顺序调整时能自动适应。
+    const headerRow = sheet.getRow(1);
+    const colIndex = {};
+    headerRow.eachCell((cell, colNumber) => {
+      colIndex[cell.value] = colNumber;
+    });
+    const icColNum = colIndex["IC Number"];
+
     let isDuplicate = false;
-    icColumn.eachCell((cell) => {
-      if (cell.value === ic) isDuplicate = true;
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // 跳过表头
+      if (icColNum && row.getCell(icColNum).value === ic) isDuplicate = true;
     });
 
     if (isDuplicate) return { success: false, duplicate: true };
 
-    sheet.addRow({
-      no: sheet.rowCount,
-      time: new Date().toISOString(),
-      phone,
+    // addRow 用数组形式，避免 key 不存在时静默写入空行
+    sheet.addRow([
+      sheet.rowCount, // No（含表头行）
+      nowMY(),
+      stripWaId(phone),
       ic,
-      status: "Registered",
-    });
+      "Registered",
+    ]);
 
     await workbook.xlsx.writeFile(EXCEL_PATH);
     return { success: true };
@@ -120,21 +150,24 @@ async function addReceipt(data) {
     await workbook.xlsx.readFile(EXCEL_PATH);
     const sheet = workbook.getWorksheet("Receipts");
 
-    sheet.addRow({
-      no: sheet.rowCount,
-      time: new Date().toISOString(),
-      phone: data.phone,
-      ic: data.ic,
-      receipt_no: data.receipt_no,
-      brand: data.brand,
-      amount: data.amount,
-      qualified: data.qualified ? "YES" : "NO",
-      reason: data.disqualify_reason || "",
-      confidence: data.confidence,
-      review_status: "pending",
-      reviewer_note: "",
-      reviewed_at: "",
-    });
+    // addRow 用数组形式（按列顺序），避免 key 不持久化导致写入空行
+    // 列顺序：No, Time, Phone, IC Number, Receipt No, Brand, Amount, Qualified,
+    //         Reason, Confidence, Review Status, Reviewer Note, Reviewed At
+    sheet.addRow([
+      sheet.rowCount,
+      nowMY(),
+      stripWaId(data.phone),
+      data.ic,
+      data.receipt_no,
+      data.brand,
+      data.amount,
+      data.qualified ? "YES" : "NO",
+      data.disqualify_reason || "",
+      data.confidence,
+      "pending",
+      "",
+      "",
+    ]);
 
     await workbook.xlsx.writeFile(EXCEL_PATH);
   });
