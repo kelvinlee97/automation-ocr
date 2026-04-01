@@ -1522,7 +1522,7 @@ function receiptsPage(receipts, lang = "zh") {
       return `<tr data-status="${safeStatus}" id="row-${r.id}">
       <td>${receipts.length - idx}</td>
       <td>${r.submittedAt ? new Date(r.submittedAt).toLocaleString(locale) : "—"}</td>
-      <td style="font-size:12px">${(r.phone || "—").replace(/@c\.us$/, "")}</td>
+      <td style="font-size:12px">${(r.phone || "—").replace(/@\w+$/, "")}</td>
       <td style="font-size:12px">${r.ic || "—"}</td>
       <td>${thumb}</td>
       <td>${statusBadge}</td>
