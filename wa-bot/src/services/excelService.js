@@ -4,6 +4,25 @@ const path = require("path");
 
 const EXCEL_PATH = path.join(__dirname, "../../../data/excel/records.xlsx");
 
+// 马来西亚时区（UTC+8），Excel 时间列对业务人员可读
+const MY_TIMEZONE = "Asia/Kuala_Lumpur";
+
+/**
+ * 返回当前马来西亚本地时间字符串，格式：YYYY-MM-DD HH:mm:ss
+ * sv-SE locale 恰好输出该格式，无需手动拼接
+ */
+function nowMY() {
+  return new Date().toLocaleString("sv-SE", { timeZone: MY_TIMEZONE });
+}
+
+/**
+ * 去除 WhatsApp 手机号的 "@c.us" 后缀
+ * 写入 Excel 时只保留纯数字号码，方便阅读和导出使用
+ */
+function stripWaId(phone) {
+  return phone ? phone.replace(/@c\.us$/, "") : phone;
+}
+
 // 写操作互斥锁：防止并发"读取→修改→写回"导致后写覆盖先写（TOCTOU race condition）
 // 原理：每次写操作都追加到上一次的 Promise 尾部，形成串行执行链
 // catch 吞掉错误是故意的：避免单次失败导致整个队列永久卡死
@@ -111,8 +130,8 @@ async function addRegistration(phone, ic) {
     // addRow 用数组形式，避免 key 不存在时静默写入空行
     sheet.addRow([
       sheet.rowCount, // No（含表头行）
-      new Date().toISOString(),
-      phone,
+      nowMY(),
+      stripWaId(phone),
       ic,
       "Registered",
     ]);
@@ -136,8 +155,8 @@ async function addReceipt(data) {
     //         Reason, Confidence, Review Status, Reviewer Note, Reviewed At
     sheet.addRow([
       sheet.rowCount,
-      new Date().toISOString(),
-      data.phone,
+      nowMY(),
+      stripWaId(data.phone),
       data.ic,
       data.receipt_no,
       data.brand,
