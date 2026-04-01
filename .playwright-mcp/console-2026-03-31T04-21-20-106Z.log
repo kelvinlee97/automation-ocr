@@ -1,8 +1,0 @@
-[  126718ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://13.250.194.112/admin/request-pairing-code:0
-[  138655ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://13.250.194.112/admin/request-pairing-code:0
-[  194432ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://13.250.194.112/admin/wa-status:0
-[  197454ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://13.250.194.112/admin/wa-status:0
-[  200551ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://13.250.194.112/admin/qr:0
-[  200573ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://13.250.194.112/favicon.ico:0
-[  219393ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://13.250.194.112/admin/request-pairing-code:0
-[  219606ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://13.250.194.112/admin/request-pairing-code:0
