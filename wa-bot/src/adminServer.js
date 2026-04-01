@@ -267,8 +267,7 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh') {
     }
     nav .nav-active {
       color: var(--text-primary);
-      border-bottom: 2px solid var(--accent-primary);
-      padding-bottom: 2px;
+      font-weight: 600;
     }
     nav .nav-right { display: flex; align-items: center; gap: 8px; }
 
