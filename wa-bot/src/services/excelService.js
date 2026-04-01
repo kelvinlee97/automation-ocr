@@ -91,11 +91,19 @@ async function addRegistration(phone, ic) {
 
     // 检查重复（必须在锁内执行，确保读取到最新状态）
     // 注意：ExcelJS 从磁盘读取 xlsx 后不恢复 column key 元数据，
-    // 不能用 sheet.getColumn("ic")，改为按列位置（第 4 列 = IC Number）遍历
+    // 通过表头字符串动态定位列号，与 updateReviewStatus 保持一致风格，
+    // 避免硬编码列位置——列顺序调整时能自动适应。
+    const headerRow = sheet.getRow(1);
+    const colIndex = {};
+    headerRow.eachCell((cell, colNumber) => {
+      colIndex[cell.value] = colNumber;
+    });
+    const icColNum = colIndex["IC Number"];
+
     let isDuplicate = false;
     sheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return; // 跳过表头
-      if (row.getCell(4).value === ic) isDuplicate = true;
+      if (icColNum && row.getCell(icColNum).value === ic) isDuplicate = true;
     });
 
     if (isDuplicate) return { success: false, duplicate: true };

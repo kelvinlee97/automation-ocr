@@ -47,7 +47,7 @@ function parseArgs() {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--phone' && args[i + 1]) result.phone = args[++i];
     if (args[i] === '--ic'    && args[i + 1]) result.ic    = args[++i];
-    if (args[i] === '--count' && args[i + 1]) result.count = parseInt(args[++i], 10);
+    if (args[i] === '--count' && args[i + 1]) result.count = parseInt(args[++i], 10) || 1;
   }
 
   // WhatsApp 消息的 from 字段格式为 "手机号@c.us"
