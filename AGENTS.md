@@ -135,3 +135,4 @@ wa-bot/src/
 3. 管理后台首次访问引导创建管理员账号
 4. Gemini API 失败返回 `retryable: true`，前端可显示"重试"按钮
 5. 所有代码改动必须通过 PR 处理
+6. 当AI AGENTS在当前会话消耗了100000 tokens时自动做compact

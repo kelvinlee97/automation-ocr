@@ -5,6 +5,8 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+.playwright-mcp
+.serena/
 
 # WhatsApp session 数据（含登录凭证，不入版本控制）
 wa-bot/.wwebjs_auth/
@@ -13,6 +15,9 @@ wa-bot/.wwebjs_cache/
 # 业务数据文件（按需备份，不入版本控制）
 data/excel/*.xlsx
 data/uploads/
+data/images/
+data/pending_receipts.json
+data/sessions.json
 
 # 日志文件
 logs/*.log
