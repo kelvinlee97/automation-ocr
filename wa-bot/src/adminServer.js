@@ -306,14 +306,11 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh') {
       font-size: 13px;
       vertical-align: middle;
       color: var(--text-secondary);
-      /* 悬停左边彩条用透明 border-left 占位，避免布局跳动 */
-      border-left: 3px solid transparent;
-      transition: border-left-color .15s, background .15s;
+      transition: background .15s;
     }
     tr:last-child td { border-bottom: none; }
     tr:hover td {
       background: var(--bg-surface-2);
-      border-left-color: var(--accent-primary);
     }
 
     /* ── 状态徽标：宝石色系 + 微发光阴影（暗色背景下可感知） ── */
