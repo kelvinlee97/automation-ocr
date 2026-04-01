@@ -178,6 +178,7 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh') {
     [data-theme="light"] .badge-ai_extracted   { box-shadow: 0 0 6px rgba(59,130,246,0.15); }
     [data-theme="light"] .badge-confirmed      { box-shadow: 0 0 6px rgba(16,185,129,0.15); }
     [data-theme="light"] .badge-rejected       { box-shadow: 0 0 6px rgba(244,63,94,0.12);  }
+    [data-theme="light"] .badge-waiting_user_reply { box-shadow: 0 0 6px rgba(139,92,246,0.15); }
 
     /* 主题切换时所有颜色平滑过渡 */
     *, *::before, *::after {
@@ -346,6 +347,13 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh') {
       border: 1px solid rgba(244, 63, 94, 0.3);
       box-shadow: 0 0 8px rgba(244, 63, 94, 0.15);
     }
+    /* 紫色系，区分已完成（绿）和待处理（橙/蓝）的过渡状态 */
+    .badge-waiting_user_reply {
+      background: rgba(139, 92, 246, 0.15);
+      color: #a78bfa;
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      box-shadow: 0 0 8px rgba(139, 92, 246, 0.2);
+    }
 
     /* ── 按钮系统 ── */
     .btn {
@@ -397,6 +405,7 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh') {
     .stat-ai .stat-value { color: var(--accent-blue); }
     .stat-confirmed .stat-value { color: var(--accent-emerald); }
     .stat-rejected .stat-value { color: var(--accent-rose); }
+    .stat-waiting .stat-value { color: #a78bfa; }
 
     /* ── 表格横向滚动 ── */
     .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -1227,6 +1236,7 @@ const TRANSLATIONS = {
     status_ai_extracted: "待发消息",
     status_confirmed: "已发送",
     status_rejected: "已拒绝",
+    status_waiting_user_reply: "等待用户回复",
 
     // 操作按钮和提示
     ai_extract: "AI 提取",
@@ -1356,6 +1366,7 @@ const TRANSLATIONS = {
     status_ai_extracted: "Pending Send",
     status_confirmed: "Sent",
     status_rejected: "Rejected",
+    status_waiting_user_reply: "Waiting Reply",
 
     // Actions & prompts
     ai_extract: "AI Extract",
@@ -1425,16 +1436,16 @@ function renderAiResult(aiResult, lang = "zh") {
  */
 function renderActions(r, lang = "zh") {
   const locale = lang === 'zh' ? "zh-CN" : "en-US";
+  let actionsHtml = "";
+
+  // pending_review：显示 AI 提取按钮
   if (r.status === "pending_review") {
-    return `<button class="btn btn-ai" onclick="aiExtract('${r.id}', this)">🤖 ${t('ai_extract', lang)}</button>`;
+    actionsHtml += `<button class="btn btn-ai" onclick="aiExtract('${r.id}', this)">🤖 ${t('ai_extract', lang)}</button>`;
   }
 
+  // ai_extracted：显示拒绝按钮（发消息已通用化，在下方统一渲染）
   if (r.status === "ai_extracted") {
-    return `<form class="send-form" method="POST" action="/admin/receipts/${r.id}/send-message">
-      <textarea name="message" placeholder="${t('message_placeholder', lang)}" required></textarea>
-      <button type="submit" class="btn btn-send">📤 ${t('send_to_user', lang)}</button>
-    </form>
-    <form class="reject-form" method="POST" action="/admin/receipts/${r.id}/reject"
+    actionsHtml += `<form class="reject-form" method="POST" action="/admin/receipts/${r.id}/reject"
           onsubmit="return confirm('${t('confirm_reject', lang)}')">
       <input name="note" placeholder="${t('reject_note', lang)}"
              onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.requestSubmit();}" />
@@ -1442,23 +1453,46 @@ function renderActions(r, lang = "zh") {
     </form>`;
   }
 
+  // confirmed：显示已发送记录
   if (r.status === "confirmed") {
     const sentTime = r.sentAt ? new Date(r.sentAt).toLocaleString(locale) : "—";
     const sentMsg  = r.sentMessage
       ? `<div class="sent-msg">${escapeHtml(r.sentMessage)}</div>`
       : "";
-    return `<div class="sent-record">
+    actionsHtml += `<div class="sent-record">
       ${sentMsg}
-      <span class="sent-time">${t('sent_at', lang)} ${sentTime}</span>
+      <span class="sent-time">✓ ${t('sent_at', lang)} ${sentTime}</span>
     </div>`;
   }
 
-  // rejected
-  const rejectTime = r.reviewedAt ? new Date(r.reviewedAt).toLocaleString(locale) : "—";
-  const rejectNote = r.reviewNote
-    ? `<div class="reject-note">${escapeHtml(r.reviewNote)}</div>`
-    : "";
-  return `<div>${rejectNote}<span style="color:#aaa;font-size:12px">${t('rejected_at', lang)} ${rejectTime}</span></div>`;
+  // rejected：显示拒绝记录
+  if (r.status === "rejected") {
+    const rejectTime = r.reviewedAt ? new Date(r.reviewedAt).toLocaleString(locale) : "—";
+    const rejectNote = r.reviewNote
+      ? `<div class="reject-note">${escapeHtml(r.reviewNote)}</div>`
+      : "";
+    actionsHtml += `<div>${rejectNote}<span style="color:#aaa;font-size:12px">${t('rejected_at', lang)} ${rejectTime}</span></div>`;
+  }
+
+  // waiting_user_reply：显示上次发送记录（等待用户回复中）
+  if (r.status === "waiting_user_reply") {
+    const sentTime = r.sentAt ? new Date(r.sentAt).toLocaleString(locale) : "—";
+    const sentMsg  = r.sentMessage
+      ? `<div class="sent-msg">${escapeHtml(r.sentMessage)}</div>`
+      : "";
+    actionsHtml += `<div class="sent-record">
+      ${sentMsg}
+      <span class="sent-time">⏳ ${t('sent_at', lang)} ${sentTime}</span>
+    </div>`;
+  }
+
+  // 所有状态通用：发送消息给用户的表单
+  actionsHtml += `<form class="send-form" method="POST" action="/admin/receipts/${r.id}/send-message">
+    <textarea name="message" placeholder="${t('message_placeholder', lang)}" required></textarea>
+    <button type="submit" class="btn btn-send">📤 ${t('send_to_user', lang)}</button>
+  </form>`;
+
+  return actionsHtml;
 }
 
 /** 转义 HTML 特殊字符，防止消息内容中含有尖括号等引发 XSS */
@@ -1477,7 +1511,7 @@ function receiptsPage(receipts, lang = "zh") {
     return htmlLayout(t('receipt_audit', lang), `<div class="empty">${t('no_receipts', lang)}</div>`, '/admin', lang);
   }
 
-  const VALID_RECEIPT_STATUSES = new Set(['pending_review', 'ai_extracted', 'confirmed', 'rejected']);
+  const VALID_RECEIPT_STATUSES = new Set(['pending_review', 'ai_extracted', 'confirmed', 'rejected', 'waiting_user_reply']);
 
   const stats = receipts.reduce((acc, r) => {
     const s = r.status || 'pending_review';
@@ -1506,6 +1540,10 @@ function receiptsPage(receipts, lang = "zh") {
       <div class="stat-card stat-rejected">
         <div class="stat-label">${t('rejected', lang)}</div>
         <div class="stat-value">${stats.rejected || 0}</div>
+      </div>
+      <div class="stat-card stat-waiting">
+        <div class="stat-label">${t('status_waiting_user_reply', lang)}</div>
+        <div class="stat-value">${stats.waiting_user_reply || 0}</div>
       </div>
     </div>
   `;
@@ -1543,6 +1581,7 @@ function receiptsPage(receipts, lang = "zh") {
         <option value="ai_extracted">${t('status_ai_extracted', lang)}</option>
         <option value="confirmed">${t('status_confirmed', lang)}</option>
         <option value="rejected">${t('status_rejected', lang)}</option>
+        <option value="waiting_user_reply">${t('status_waiting_user_reply', lang)}</option>
       </select>
       <span id="resultCount" style="color:var(--text-muted);font-size:13px">${t('result_count', lang, { count: receipts.length })}</span>
     </div>
@@ -1965,15 +2004,11 @@ function startAdminServer() {
       const record = receiptStore.getById(id);
       if (!record) return res.status(404).send(t('receipt_not_found', lang));
 
-      if (record.status !== "ai_extracted") {
-        logger.warn("拒绝发送：状态不符", { id, status: record.status });
-        return res.status(409).send(t('send_not_allowed', lang, { status: record.status }));
-      }
-
+      // 不再限制状态，任意状态均可发送消息给用户
       const chatId = record.phone.includes("@") ? record.phone : `${record.phone}@c.us`;
 
-      receiptStore.saveSentMessage(id, message);
-      logger.info("收据状态已更新为 confirmed，准备发送 WhatsApp", { id, chatId });
+      receiptStore.sendMessageToUser(id, message);
+      logger.info("收据状态已更新为 waiting_user_reply，准备发送 WhatsApp", { id, chatId, previousStatus: record.status });
 
       await _client.sendMessage(chatId, message);
       logger.info("WhatsApp 消息已发送", { id, chatId, messageLength: message.length });
