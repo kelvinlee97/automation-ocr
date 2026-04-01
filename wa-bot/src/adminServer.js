@@ -1234,6 +1234,8 @@ const TRANSLATIONS = {
 
     // 操作按钮和提示
     ai_extract: "AI 提取",
+    ai_amount: "金额",
+    ai_summary: "摘要",
     extracting: "识别中…",
     ai_extract_failed: "AI 提取失败：",
     network_error_retry: "网络错误，请重试",
@@ -1255,6 +1257,8 @@ const TRANSLATIONS = {
     receipt_not_found: "收据记录不存在",
     invalid_status: "当前状态 {status} 不可触发 AI 提取",
     attempt_limit: "尝试次数过多，请 15 分钟后重试",
+    image_not_found: "图片不存在",
+    ai_recognition_fail: "AI 识别失败：",
   },
   en: {
     // Common
@@ -1359,6 +1363,8 @@ const TRANSLATIONS = {
 
     // Actions & prompts
     ai_extract: "AI Extract",
+    ai_amount: "Amount",
+    ai_summary: "Summary",
     extracting: "Processing…",
     ai_extract_failed: "AI extraction failed: ",
     network_error_retry: "Network error, please retry",
@@ -1380,6 +1386,8 @@ const TRANSLATIONS = {
     receipt_not_found: "Receipt record not found",
     invalid_status: "Current status {status} cannot trigger AI extraction",
     attempt_limit: "Too many attempts, please retry in 15 minutes",
+    image_not_found: "Image not found",
+    ai_recognition_fail: "AI recognition failed: ",
   },
 };
 
@@ -1407,8 +1415,8 @@ function t(key, lang = "zh", params = {}) {
 function renderAiResult(aiResult, lang = "zh") {
   if (!aiResult) return '<span style="color:#aaa;font-size:12px">—</span>';
   return `<div class="ai-result">
-    <strong>${lang === 'zh' ? '金额' : 'Amount'}：</strong>RM ${aiResult.amount ?? "—"}<br>
-    <strong>${lang === 'zh' ? '摘要' : 'Summary'}：</strong>${aiResult.summary || "—"}
+    <strong>${t('ai_amount', lang)}：</strong>RM ${escapeHtml(aiResult.amount ?? "—")}<br>
+    <strong>${t('ai_summary', lang)}：</strong>${escapeHtml(aiResult.summary || "—")}
   </div>`;
 }
 
@@ -1890,12 +1898,12 @@ function startAdminServer() {
 
   // 静态图片服务：将 data/images/ 中的图片暴露给前端缩略图和灯箱
   app.get("/admin/images/:filename", requireAuth, (req, res) => {
-    // 防止路径穿越攻击：只取 basename，不允许 ../ 等
     const filename = path.basename(req.params.filename);
     const imagePath = receiptStore.getImagePath(filename);
+    const lang = getLang(req);
 
     if (!fs.existsSync(imagePath)) {
-      return res.status(404).send("图片不存在");
+      return res.status(404).send(t('image_not_found', lang));
     }
     res.sendFile(imagePath);
   });
@@ -1924,7 +1932,7 @@ function startAdminServer() {
       const aiResult = await processReceipt(base64Image, imageMime);
 
       if (!aiResult.success) {
-        return res.status(502).json({ error: `AI 识别失败：${aiResult.message}` });
+        return res.status(502).json({ error: t('ai_recognition_fail', lang) + aiResult.message });
       }
 
       receiptStore.saveAiResult(id, aiResult);
@@ -1986,24 +1994,26 @@ function startAdminServer() {
   app.post("/admin/receipts/:id/reject", requireAuth, (req, res) => {
     const { id } = req.params;
     const note = (req.body.note || "").trim();
+    const lang = getLang(req);
     try {
       receiptStore.rejectReceipt(id, note);
       logger.info("收据已拒绝", { id, note });
       res.redirect("/admin");
     } catch (err) {
       logger.error("拒绝收据失败", { id, error: err.message });
-      res.status(500).send("操作失败：" + err.message);
+      res.status(500).send(t('download_fail', lang) + err.message);
     }
   });
 
   // ── 下载 Excel ────────────────────────────────────────────────────────────
 
   app.get("/admin/export", requireAuth, (req, res) => {
+    const lang = getLang(req);
     const excelPath = getExcelPath();
     res.download(excelPath, "records.xlsx", (err) => {
       if (err) {
         logger.error("Excel 下载失败", { error: err.message });
-        res.status(500).send("下载失败：" + err.message);
+        res.status(500).send(t('download_fail', lang) + err.message);
       }
     });
   });
