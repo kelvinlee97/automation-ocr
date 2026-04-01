@@ -28,7 +28,7 @@ const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, "../../data");
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 分钟
   max: 20, // 每个 IP 最多 20 次尝试
-  message: "尝试次数过多，请 15 分钟后重试",
+  message: { error: "尝试次数过多，请 15 分钟后重试" },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -124,18 +124,18 @@ function requireSetup(req, res, next) {
 
 // ─── HTML 骨架 ─────────────────────────────────────────────────────────────────
 
-function htmlLayout(title, content, currentPath = '') {
+function htmlLayout(title, content, currentPath = '', lang = 'zh') {
   // 根据当前连接状态动态渲染导航栏徽标
   const statusBadge = _waConnected
-    ? '<span style="color:#86efac;font-size:12px">🟢 已连接</span>'
-    : '<a href="/admin/qr" style="color:#fca5a5;font-size:12px;text-decoration:none">🔴 未连接</a>';
+    ? `<span style="color:#86efac;font-size:12px">🟢 ${t('connected', lang)}</span>`
+    : `<a href="/admin/qr" style="color:#fca5a5;font-size:12px;text-decoration:none">🔴 ${t('disconnected', lang)}</a>`;
 
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${title} — 管理后台</title>
+  <title>${title} — ${t('admin_panel', lang)}</title>
   <style>
     /* ── 字体引入（Google Fonts CDN） ── */
     @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -203,6 +203,23 @@ function htmlLayout(title, content, currentPath = '') {
       background: var(--bg-surface-2);
       border-color: var(--text-muted);
       transform: rotate(20deg);
+    }
+
+    /* ── 语言切换按钮 ── */
+    .lang-toggle {
+      min-width: 40px; height: 32px; border-radius: 8px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 600; padding: 0 8px;
+      transition: background .15s, border-color .15s, transform .1s !important;
+      letter-spacing: .5px;
+    }
+    .lang-toggle:hover {
+      background: var(--bg-surface-2);
+      border-color: var(--text-muted);
+      transform: scale(1.05);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -468,15 +485,16 @@ function htmlLayout(title, content, currentPath = '') {
 </head>
 <body>
   <nav>
-    <a href="/admin" class="brand">⚙ 管理后台</a>
+    <a href="/admin" class="brand">⚙ ${t('admin_panel', lang)}</a>
     <div class="nav-right">
       ${statusBadge}
-      <a href="/admin" class="${currentPath === '/admin' ? 'nav-active' : ''}">📋 收据审核</a>
-      <a href="/admin/export">⬇ 下载 Excel</a>
-      <a href="/admin/users" class="${currentPath === '/admin/users' ? 'nav-active' : ''}">👥 用户管理</a>
-      <button class="theme-toggle" id="themeToggle" title="切换主题" aria-label="切换明暗主题">🌙</button>
+      <a href="/admin" class="${currentPath === '/admin' ? 'nav-active' : ''}">📋 ${t('receipt_review', lang)}</a>
+      <a href="/admin/export">⬇ ${t('download_excel', lang)}</a>
+      <a href="/admin/users" class="${currentPath === '/admin/users' ? 'nav-active' : ''}">👥 ${t('user_management', lang)}</a>
+      <button class="lang-toggle" id="langToggle" title="${t('switch_language', lang)}" aria-label="${t('switch_language', lang)}">${lang === 'zh' ? t('lang_en', lang) : t('lang_zh', lang)}</button>
+      <button class="theme-toggle" id="themeToggle" title="${lang === 'zh' ? t('switch_to_dark', lang) : t('switch_to_light', lang)}" aria-label="${lang === 'zh' ? t('switch_to_dark', lang) : t('switch_to_light', lang)}">🌙</button>
       <form class="inline" method="POST" action="/admin/logout">
-        <button class="btn btn-logout" style="margin-left:4px">退出</button>
+        <button class="btn btn-logout" style="margin-left:4px">${t('logout', lang)}</button>
       </form>
     </div>
   </nav>
@@ -487,7 +505,7 @@ function htmlLayout(title, content, currentPath = '') {
   <!-- 图片灯箱 -->
   <div id="lightbox">
     <span id="lightbox-close" onclick="closeLightbox()">✕</span>
-    <img id="lightbox-img" src="" alt="收据大图" />
+    <img id="lightbox-img" src="" alt="${t('receipt_large', lang)}" />
   </div>
   <script>
     function openLightbox(src) {
@@ -502,6 +520,32 @@ function htmlLayout(title, content, currentPath = '') {
       if (e.target === this) closeLightbox();
     });
 
+    // ── 语言切换逻辑 ──────────────────────────────────────────────
+    (function() {
+      var LANG_KEY = 'admin-lang';
+      var langBtn = document.getElementById('langToggle');
+      if (!langBtn) return;
+
+      function applyLang(lang) {
+        document.documentElement.lang = lang;
+        langBtn.textContent = lang === 'zh' ? 'EN' : '中文';
+        localStorage.setItem(LANG_KEY, lang);
+      }
+
+      var saved = localStorage.getItem(LANG_KEY) || '${lang}';
+      applyLang(saved);
+
+      langBtn.addEventListener('click', function() {
+        var current = localStorage.getItem(LANG_KEY) || '${lang}';
+        var next = current === 'zh' ? 'en' : 'zh';
+        applyLang(next);
+        // 重载页面以应用新语言
+        var url = window.location.pathname;
+        var sep = url.indexOf('?') === -1 ? '?' : '&';
+        window.location.href = url + sep + 'lang=' + next;
+      });
+    })();
+
     // ── 主题切换逻辑 ──────────────────────────────────────────────
     (function() {
       const STORAGE_KEY = 'admin-theme';
@@ -511,7 +555,7 @@ function htmlLayout(title, content, currentPath = '') {
       function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
         btn.textContent = theme === 'light' ? '🌙' : '☀️';
-        btn.title = theme === 'light' ? '切换到深色模式' : '切换到浅色模式';
+        btn.title = theme === 'light' ? '${t('switch_to_dark', lang)}' : '${t('switch_to_light', lang)}';
         localStorage.setItem(STORAGE_KEY, theme);
       }
 
@@ -531,13 +575,13 @@ function htmlLayout(title, content, currentPath = '') {
 
 // ─── 登录页 ────────────────────────────────────────────────────────────────────
 
-function loginPage(errorMsg = "") {
+function loginPage(errorMsg = "", lang = "zh") {
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>登录 — 管理后台</title>
+  <title>${t('admin_login', lang)} — ${t('admin_panel', lang)}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Outfit:wght@400;500;600&display=swap');
 
@@ -593,14 +637,14 @@ function loginPage(errorMsg = "") {
 </head>
 <body>
   <div class="card">
-    <h1>🔐 管理后台登录</h1>
+    <h1>🔐 ${t('admin_login', lang)}</h1>
     ${errorMsg ? `<div class="error">${errorMsg}</div>` : ""}
     <form method="POST" action="/admin/login">
-      <label>用户名</label>
-      <input type="text" name="username" required autofocus />
-      <label>密码</label>
-      <input type="password" name="password" required />
-      <button type="submit">登 录</button>
+      <label>${t('username', lang)}</label>
+      <input type="text" name="username" required autofocus placeholder="${t('username', lang)}" />
+      <label>${t('password', lang)}</label>
+      <input type="password" name="password" required placeholder="${t('password', lang)}" />
+      <button type="submit">${t('login_btn', lang)}</button>
     </form>
   </div>
 </body>
@@ -609,13 +653,13 @@ function loginPage(errorMsg = "") {
 
 // ─── 首次设置页（无任何账户时展示） ────────────────────────────────────────────
 
-function setupPage(errorMsg = "") {
+function setupPage(errorMsg = "", lang = "zh") {
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>初始化设置 — 管理后台</title>
+  <title>${t('init_admin', lang)} — ${t('admin_panel', lang)}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Outfit:wght@400;500;600&display=swap');
 
@@ -671,19 +715,19 @@ function setupPage(errorMsg = "") {
 </head>
 <body>
   <div class="card">
-    <h1>🚀 初始化管理后台</h1>
-    <div class="sub">首次使用，请创建管理员账号</div>
+    <h1>🚀 ${t('init_admin', lang)}</h1>
+    <div class="sub">${t('first_time_setup', lang)}</div>
     ${errorMsg ? `<div class="error">${errorMsg}</div>` : ""}
     <form method="POST" action="/admin/setup">
-      <label>用户名（至少 3 位，字母/数字/下划线）</label>
-      <input type="text" name="username" required autofocus minlength="3" pattern="[\\w-]+" />
-      <label>密码（至少 8 位）</label>
-      <input type="password" name="password" required minlength="8" />
-      <label>确认密码</label>
-      <input type="password" name="confirm" required minlength="8" />
-      <button type="submit">创建管理员账号</button>
+      <label>${t('username_hint', lang)}</label>
+      <input type="text" name="username" required autofocus minlength="3" pattern="[\\w-]+" placeholder="${t('username', lang)}" />
+      <label>${t('password_hint', lang)}</label>
+      <input type="password" name="password" required minlength="8" placeholder="${t('password', lang)}" />
+      <label>${t('confirm_password', lang)}</label>
+      <input type="password" name="confirm" required minlength="8" placeholder="${t('confirm_password', lang)}" />
+      <button type="submit">${t('create_admin', lang)}</button>
     </form>
-    <div class="hint">此页面只在尚无账户时出现，创建后自动消失</div>
+    <div class="hint">${t('setup_hint', lang)}</div>
   </div>
 </body>
 </html>`;
@@ -691,25 +735,24 @@ function setupPage(errorMsg = "") {
 
 // ─── 用户管理页 ────────────────────────────────────────────────────────────────
 
-function usersPage(users, currentUser, flash = "") {
+function usersPage(users, currentUser, flash = "", lang = "zh") {
   const rows = users.map(u => {
-    // 禁止删除当前登录账户（防止自锁），按钮置灰
     const isSelf = u.username === currentUser;
     const deleteBtn = isSelf
-      ? `<button class="btn" disabled title="不能删除当前登录账户">🚫 删除</button>`
+      ? `<button class="btn" disabled title="${t('cannot_delete_self', lang)}">🚫 ${t('delete', lang)}</button>`
       : `<form class="inline" method="POST" action="/admin/users/${encodeURIComponent(u.username)}/delete"
-              onsubmit="return confirm('确认删除用户 ${u.username}？')">
-           <button class="btn btn-reject">删除</button>
+              onsubmit="return confirm('${t('confirm_delete', lang, { username: u.username })}')">
+           <button class="btn btn-reject">${t('delete', lang)}</button>
          </form>`;
 
     return `<tr>
-      <td>${u.username}${isSelf ? ' <span style="color:#888;font-size:11px">(当前)</span>' : ""}</td>
-      <td>${u.createdAt ? new Date(u.createdAt).toLocaleString("zh-CN") : "—"}</td>
+      <td>${u.username}${isSelf ? ` <span style="color:#888;font-size:11px">(${t('current', lang)})</span>` : ""}</td>
+      <td>${u.createdAt ? new Date(u.createdAt).toLocaleString(lang === 'zh' ? "zh-CN" : "en-US") : "—"}</td>
       <td>
         <form class="inline" method="POST" action="/admin/users/${encodeURIComponent(u.username)}/reset-password"
               onsubmit="return promptReset(this, '${u.username}')">
           <input type="hidden" name="newPassword" id="rp-${u.username}" />
-          <button type="submit" class="btn btn-primary">重置密码</button>
+          <button type="submit" class="btn btn-primary">${t('reset_password', lang)}</button>
         </form>
         ${deleteBtn}
       </td>
@@ -719,56 +762,56 @@ function usersPage(users, currentUser, flash = "") {
   const content = `
     ${flash ? `<div style="background:#e6f9f0;border-left:4px solid #10b981;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">${flash}</div>` : ""}
     <div class="toolbar">
-      <a href="/admin/users/new" class="btn btn-primary">＋ 新建用户</a>
+      <a href="/admin/users/new" class="btn btn-primary">＋ ${t('new_user', lang)}</a>
     </div>
     <table>
-      <thead><tr><th>用户名</th><th>创建时间</th><th>操作</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="3" style="text-align:center;color:#aaa">暂无用户</td></tr>'}</tbody>
+      <thead><tr><th>${t('username', lang)}</th><th>${t('created_at', lang)}</th><th>${t('actions', lang)}</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="3" style="text-align:center;color:#aaa">${t('no_users', lang)}</td></tr>`}</tbody>
     </table>
     <script>
       function promptReset(form, username) {
-        const pwd = prompt('请输入 ' + username + ' 的新密码（至少 8 位）：');
-        if (!pwd || pwd.length < 8) { alert('密码至少 8 位'); return false; }
+        const pwd = prompt('${t('prompt_new_password', lang, { username: "' + username + '" })}');
+        if (!pwd || pwd.length < 8) { alert('${t('password_min_8', lang)}'); return false; }
         form.querySelector('#rp-' + username).value = pwd;
         return true;
       }
     </script>`;
 
-  return htmlLayout("用户管理", content, '/admin/users');
+  return htmlLayout(t('manage_users', lang), content, '/admin/users', lang);
 }
 
 // ─── 新建用户页 ────────────────────────────────────────────────────────────────
 
-function newUserPage(errorMsg = "") {
+function newUserPage(errorMsg = "", lang = "zh") {
   const content = `
     ${errorMsg ? `<div style="background:#fff0f0;border-left:4px solid #c0392b;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">${errorMsg}</div>` : ""}
     <form method="POST" action="/admin/users/new" style="max-width:400px;background:#fff;padding:32px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
       <div style="margin-bottom:16px">
-        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">用户名（至少 3 位）</label>
+        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">${t('username_hint', lang)}</label>
         <input type="text" name="username" required minlength="3" pattern="[\\w-]+"
-               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" />
+               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" placeholder="${t('username', lang)}" />
       </div>
       <div style="margin-bottom:16px">
-        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">密码（至少 8 位）</label>
+        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">${t('password_hint', lang)}</label>
         <input type="password" name="password" required minlength="8"
-               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" />
+               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" placeholder="${t('password', lang)}" />
       </div>
       <div style="margin-bottom:24px">
-        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">确认密码</label>
+        <label style="display:block;font-size:13px;color:#555;margin-bottom:6px">${t('confirm_password', lang)}</label>
         <input type="password" name="confirm" required minlength="8"
-               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" />
+               style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px" placeholder="${t('confirm_password', lang)}" />
       </div>
       <div style="display:flex;gap:12px">
-        <button type="submit" class="btn btn-primary" style="padding:10px 24px">创建用户</button>
-        <a href="/admin/users" class="btn btn-logout" style="padding:10px 24px">取消</a>
+        <button type="submit" class="btn btn-primary" style="padding:10px 24px">${t('create_user_btn', lang)}</button>
+        <a href="/admin/users" class="btn btn-logout" style="padding:10px 24px">${t('cancel', lang)}</a>
       </div>
     </form>`;
-  return htmlLayout("新建用户", content, '/admin/users');
+  return htmlLayout(t('create_user_title', lang), content, '/admin/users', lang);
 }
 
 // ─── QR 码页（无需登录，供初始化时扫码用） ────────────────────────────────────
 
-function qrPage() {
+function qrPage(lang = "zh") {
   // 已连接则直接跳转，无需渲染页面
   if (_waConnected) {
     return null; // 调用方 302 跳转
@@ -780,15 +823,15 @@ function qrPage() {
     : `<div style="width:220px;height:220px;background:#f0f4ff;border-radius:8px;
                    display:flex;align-items:center;justify-content:center;
                    color:#888;font-size:14px;text-align:center;padding:20px">
-         正在初始化，请稍候…
+         ${t('initializing', lang)}
        </div>`;
 
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>扫码登录 — 管理后台</title>
+  <title>${t('scan_login', lang)} — ${t('admin_panel', lang)}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Outfit:wght@400;500;600&display=swap');
 
@@ -932,17 +975,17 @@ function qrPage() {
 </head>
 <body>
   <nav>
-    <span class="brand">⚙ 管理后台</span>
-    <span style="color:#fca5a5;font-size:12px"><span class="status-dot"></span>未连接</span>
+    <span class="brand">⚙ ${t('admin_panel', lang)}</span>
+    <span style="color:#fca5a5;font-size:12px"><span class="status-dot"></span>${t('disconnected', lang)}</span>
   </nav>
   <div class="container">
     <div class="card">
-      <h2>📱 连接 WhatsApp</h2>
+      <h2>📱 ${t('connect_whatsapp', lang)}</h2>
 
       <!-- Tab 切换按钮 -->
       <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('qr', this)">扫描二维码</button>
-        <button class="tab-btn" onclick="switchTab('pairing', this)">配对码登录</button>
+        <button class="tab-btn active" onclick="switchTab('qr', this)">${t('scan_qr', lang)}</button>
+        <button class="tab-btn" onclick="switchTab('pairing', this)">${t('pairing_code', lang)}</button>
       </div>
 
       <!-- Tab A：QR 码 -->
@@ -951,8 +994,8 @@ function qrPage() {
           ${qrContent}
         </div>
         <div class="hint">
-          用 WhatsApp 扫码后页面自动跳转<br>
-          <small>二维码约每 20 秒刷新一次</small>
+          ${t('qr_hint', lang)}<br>
+          <small>${t('qr_refresh', lang)}</small>
         </div>
       </div>
 
@@ -961,32 +1004,42 @@ function qrPage() {
         <div class="phone-input-group">
           <input
             type="text" id="phone-input" class="phone-input"
-            placeholder="601234567890（含区号，纯数字）"
+            placeholder="${t('phone_placeholder', lang)}"
             maxlength="15" inputmode="numeric"
           />
-          <button class="btn-pairing" id="get-code-btn" onclick="requestCode()">获取配对码</button>
+          <button class="btn-pairing" id="get-code-btn" onclick="requestCode()">${t('get_code', lang)}</button>
         </div>
 
         <div class="code-display" id="code-display">
-          <span class="code-placeholder" id="code-placeholder">点击上方按钮获取配对码</span>
+          <span class="code-placeholder" id="code-placeholder">${t('code_placeholder', lang)}</span>
           <span class="code-value" id="code-value" style="display:none"></span>
         </div>
 
         <div class="error-msg" id="error-msg"></div>
 
         <div class="steps">
-          <p>📌 如何使用配对码</p>
+          <p>📌 ${t('how_to_use', lang)}</p>
           <ol>
-            <li>打开手机 WhatsApp</li>
-            <li>进入「设置」→「已连接的设备」</li>
-            <li>点击「用手机号码连接」</li>
-            <li>输入上方显示的 8 位配对码</li>
+            <li>${t('step1', lang)}</li>
+            <li>${t('step2', lang)}</li>
+            <li>${t('step3', lang)}</li>
+            <li>${t('step4', lang)}</li>
           </ol>
         </div>
       </div>
     </div>
   </div>
   <script>
+    // ─── i18n 变量注入 ─────────────────────────────────
+    var L = '${lang}';
+    var T = {
+      requesting: '${t('requesting', lang)}',
+      fetching: '${t('fetching', lang)}',
+      refetch: '${t('refetch', lang)}',
+      network_error: '${t('network_error', lang)}',
+      code_placeholder: '${t('code_placeholder', lang)}',
+    };
+
     // ─── Tab 切换 ────────────────────────────────────────
     function switchTab(name, btn) {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -1007,10 +1060,10 @@ function qrPage() {
       errEl.style.display = 'none';
       codeVal.style.display = 'none';
       codePlaceholder.style.display = 'block';
-      codePlaceholder.textContent = '正在请求配对码…';
+      codePlaceholder.textContent = T.requesting;
 
       btn.disabled = true;
-      btn.textContent = '请求中…';
+      btn.textContent = T.fetching;
 
       try {
         const res = await fetch('/admin/request-pairing-code', {
@@ -1021,9 +1074,9 @@ function qrPage() {
         const data = await res.json();
 
         if (!res.ok) {
-          errEl.textContent = data.error || '请求失败，请稍后重试';
+          errEl.textContent = data.error || '${t('network_error', lang)}';
           errEl.style.display = 'block';
-          codePlaceholder.textContent = '点击上方按钮获取配对码';
+          codePlaceholder.textContent = T.code_placeholder;
         } else {
           // 展示配对码
           codeVal.textContent = data.code;
@@ -1031,12 +1084,12 @@ function qrPage() {
           codePlaceholder.style.display = 'none';
         }
       } catch (e) {
-        errEl.textContent = '网络错误，请检查连接后重试';
+        errEl.textContent = T.network_error;
         errEl.style.display = 'block';
-        codePlaceholder.textContent = '点击上方按钮获取配对码';
+        codePlaceholder.textContent = T.code_placeholder;
       } finally {
         btn.disabled = false;
-        btn.textContent = '重新获取';
+        btn.textContent = T.refetch;
       }
     }
 
@@ -1075,24 +1128,287 @@ function qrPage() {
 </html>`;
 }
 
-// ─── 收据状态标签映射 ──────────────────────────────────────────────────────────
+// ─── i18n 翻译字典 ─────────────────────────────────────────────────────────────
 
-const STATUS_LABEL = {
-  pending_review: "待 AI 提取",
-  ai_extracted:   "待发消息",
-  confirmed:      "已发送",
-  rejected:       "已拒绝",
+const TRANSLATIONS = {
+  zh: {
+    // 通用
+    admin_panel: "管理后台",
+    connected: "已连接",
+    disconnected: "未连接",
+    receipt_review: "收据审核",
+    download_excel: "下载 Excel",
+    user_management: "用户管理",
+    switch_to_light: "切换到浅色模式",
+    switch_to_dark: "切换到深色模式",
+    logout: "退出",
+    switch_language: "切换语言",
+    lang_zh: "中文",
+    lang_en: "EN",
+
+    // 登录页
+    admin_login: "管理后台登录",
+    username: "用户名",
+    password: "密码",
+    login_btn: "登 录",
+
+    // 设置页
+    init_admin: "初始化管理后台",
+    first_time_setup: "首次使用，请创建管理员账号",
+    username_hint: "用户名（至少 3 位，字母/数字/下划线）",
+    password_hint: "密码（至少 8 位）",
+    confirm_password: "确认密码",
+    create_admin: "创建管理员账号",
+    setup_hint: "此页面只在尚无账户时出现，创建后自动消失",
+
+    // 用户管理
+    manage_users: "用户管理",
+    new_user: "新建用户",
+    created_at: "创建时间",
+    actions: "操作",
+    no_users: "暂无用户",
+    current: "当前",
+    cannot_delete_self: "不能删除当前登录账户",
+    delete: "删除",
+    reset_password: "重置密码",
+    confirm_delete: "确认删除用户 {username}？",
+    prompt_new_password: "请输入 {username} 的新密码（至少 8 位）：",
+    password_min_8: "密码至少 8 位",
+    create_user_title: "新建用户",
+    create_user_btn: "创建用户",
+    cancel: "取消",
+    user_created: "用户创建成功",
+    password_reset_ok: "密码重置成功",
+    user_deleted: "用户已删除",
+
+    // 收据页
+    receipt_audit: "收据审核",
+    no_receipts: "暂无收据记录",
+    total: "总计",
+    pending: "待审核",
+    ai_extracted: "AI已提取",
+    approved: "已通过",
+    rejected: "已拒绝",
+    search_placeholder: "搜索手机号/IC号...",
+    all_statuses: "全部状态",
+    result_count: "共 {count} 条",
+    col_num: "#",
+    col_submit_time: "提交时间",
+    col_phone: "手机号",
+    col_ic: "身份证号",
+    col_receipt_img: "收据图片",
+    col_status: "状态",
+    col_ai_result: "AI 提取结果",
+    col_actions: "操作 / 记录",
+    receipt_large: "收据大图",
+
+    // QR 页面
+    scan_login: "扫码登录",
+    connect_whatsapp: "连接 WhatsApp",
+    scan_qr: "扫描二维码",
+    pairing_code: "配对码登录",
+    qr_hint: "用 WhatsApp 扫码后页面自动跳转",
+    qr_refresh: "二维码约每 20 秒刷新一次",
+    phone_placeholder: "601234567890（含区号，纯数字）",
+    get_code: "获取配对码",
+    code_placeholder: "点击上方按钮获取配对码",
+    requesting: "正在请求配对码…",
+    fetching: "请求中…",
+    refetch: "重新获取",
+    network_error: "网络错误，请检查连接后重试",
+    how_to_use: "如何使用配对码",
+    step1: "打开手机 WhatsApp",
+    step2: "进入「设置」→「已连接的设备」",
+    step3: "点击「用手机号码连接」",
+    step4: "输入上方显示的 8 位配对码",
+    initializing: "正在初始化，请稍候…",
+    phone_error: "手机号格式错误，请输入含区号的纯数字（如 601234567890）",
+    already_connected: "WhatsApp 已连接，无需配对",
+    not_ready: "WhatsApp 客户端尚未就绪，请等待初始化完成后重试（通常需要 10-20 秒）",
+
+    // 状态标签
+    status_pending_review: "待 AI 提取",
+    status_ai_extracted: "待发消息",
+    status_confirmed: "已发送",
+    status_rejected: "已拒绝",
+
+    // 操作按钮和提示
+    ai_extract: "AI 提取",
+    extracting: "识别中…",
+    ai_extract_failed: "AI 提取失败：",
+    network_error_retry: "网络错误，请重试",
+    message_placeholder: "输入要发给用户的消息…",
+    send_to_user: "发送给用户",
+    reject: "拒绝",
+    reject_note: "拒绝原因（可选）",
+    confirm_reject: "确认拒绝此收据？",
+    sent_at: "发送于",
+    rejected_at: "拒绝于",
+    cant_send: "WhatsApp 尚未连接，请先扫码",
+    message_required: "消息内容不能为空",
+    send_not_allowed: "操作不允许：当前状态为 {status}，只有 ai_extracted 状态可发送",
+    download_fail: "下载失败：",
+    load_fail: "加载失败：",
+    password_mismatch: "两次密码输入不一致",
+    login_error: "用户名或密码错误，请重试",
+    login_fail: "登录失败，请重试",
+    receipt_not_found: "收据记录不存在",
+    invalid_status: "当前状态 {status} 不可触发 AI 提取",
+    attempt_limit: "尝试次数过多，请 15 分钟后重试",
+  },
+  en: {
+    // Common
+    admin_panel: "Admin Panel",
+    connected: "Connected",
+    disconnected: "Disconnected",
+    receipt_review: "Receipt Review",
+    download_excel: "Download Excel",
+    user_management: "User Management",
+    switch_to_light: "Switch to Light Mode",
+    switch_to_dark: "Switch to Dark Mode",
+    logout: "Logout",
+    switch_language: "Switch Language",
+    lang_zh: "中文",
+    lang_en: "EN",
+
+    // Login
+    admin_login: "Admin Login",
+    username: "Username",
+    password: "Password",
+    login_btn: "LOG IN",
+
+    // Setup
+    init_admin: "Initialize Admin Panel",
+    first_time_setup: "First time setup — create an admin account",
+    username_hint: "Username (min 3 chars, letters/numbers/underscores)",
+    password_hint: "Password (min 8 characters)",
+    confirm_password: "Confirm Password",
+    create_admin: "Create Admin Account",
+    setup_hint: "This page only appears when no accounts exist. It disappears after setup.",
+
+    // User Management
+    manage_users: "User Management",
+    new_user: "New User",
+    created_at: "Created At",
+    actions: "Actions",
+    no_users: "No users yet",
+    current: "current",
+    cannot_delete_self: "Cannot delete currently logged-in account",
+    delete: "Delete",
+    reset_password: "Reset Password",
+    confirm_delete: "Confirm delete user {username}?",
+    prompt_new_password: "Enter new password for {username} (min 8 chars):",
+    password_min_8: "Password must be at least 8 characters",
+    create_user_title: "Create User",
+    create_user_btn: "Create User",
+    cancel: "Cancel",
+    user_created: "User created successfully",
+    password_reset_ok: "Password reset successfully",
+    user_deleted: "User deleted",
+
+    // Receipts
+    receipt_audit: "Receipt Audit",
+    no_receipts: "No receipt records yet",
+    total: "Total",
+    pending: "Pending",
+    ai_extracted: "AI Extracted",
+    approved: "Approved",
+    rejected: "Rejected",
+    search_placeholder: "Search phone/IC number...",
+    all_statuses: "All Statuses",
+    result_count: "{count} results",
+    col_num: "#",
+    col_submit_time: "Submitted",
+    col_phone: "Phone",
+    col_ic: "IC Number",
+    col_receipt_img: "Receipt",
+    col_status: "Status",
+    col_ai_result: "AI Result",
+    col_actions: "Actions / Record",
+    receipt_large: "Receipt image",
+
+    // QR Page
+    scan_login: "Scan to Login",
+    connect_whatsapp: "Connect WhatsApp",
+    scan_qr: "Scan QR Code",
+    pairing_code: "Pairing Code",
+    qr_hint: "Scan with WhatsApp — page will redirect automatically",
+    qr_refresh: "QR code refreshes every ~20 seconds",
+    phone_placeholder: "601234567890 (with country code, digits only)",
+    get_code: "Get Code",
+    code_placeholder: "Click above to get pairing code",
+    requesting: "Requesting pairing code…",
+    fetching: "Requesting…",
+    refetch: "Refetch",
+    network_error: "Network error, check connection and retry",
+    how_to_use: "How to Use Pairing Code",
+    step1: "Open WhatsApp on your phone",
+    step2: "Go to Settings → Linked Devices",
+    step3: "Tap \"Link with phone number\"",
+    step4: "Enter the 8-digit code shown above",
+    initializing: "Initializing, please wait…",
+    phone_error: "Invalid phone number. Enter digits with country code (e.g. 601234567890)",
+    already_connected: "WhatsApp already connected, no pairing needed",
+    not_ready: "WhatsApp client not ready yet. Wait for initialization (usually 10-20s)",
+
+    // Status labels
+    status_pending_review: "Pending AI",
+    status_ai_extracted: "Pending Send",
+    status_confirmed: "Sent",
+    status_rejected: "Rejected",
+
+    // Actions & prompts
+    ai_extract: "AI Extract",
+    extracting: "Processing…",
+    ai_extract_failed: "AI extraction failed: ",
+    network_error_retry: "Network error, please retry",
+    message_placeholder: "Type message to send to user…",
+    send_to_user: "Send to User",
+    reject: "Reject",
+    reject_note: "Reject reason (optional)",
+    confirm_reject: "Confirm reject this receipt?",
+    sent_at: "Sent at",
+    rejected_at: "Rejected at",
+    cant_send: "WhatsApp not connected — scan QR first",
+    message_required: "Message content cannot be empty",
+    send_not_allowed: "Operation not allowed: current status is {status}, only ai_extracted can send",
+    download_fail: "Download failed: ",
+    load_fail: "Load failed: ",
+    password_mismatch: "Passwords do not match",
+    login_error: "Invalid username or password",
+    login_fail: "Login failed, please retry",
+    receipt_not_found: "Receipt record not found",
+    invalid_status: "Current status {status} cannot trigger AI extraction",
+    attempt_limit: "Too many attempts, please retry in 15 minutes",
+  },
 };
+
+/**
+ * 根据 key 和语言获取翻译文本
+ * @param {string} key - 翻译键
+ * @param {string} [lang='zh'] - 语言代码
+ * @param {object} [params] - 模板参数 {username, count, status}
+ * @returns {string} 翻译后的文本
+ */
+function t(key, lang = "zh", params = {}) {
+  const dict = TRANSLATIONS[lang] || TRANSLATIONS.zh;
+  let text = dict[key] || TRANSLATIONS.zh[key] || key;
+  // 替换模板参数 {xxx}
+  for (const [k, v] of Object.entries(params)) {
+    text = text.replace(`{${k}}`, String(v));
+  }
+  return text;
+}
 
 /**
  * 渲染单条收据的 AI 结果摘要（ai_extracted / confirmed 时显示）
  * 只显示金额和图片摘要，不显示合格/不合格判定（由人工决定）
  */
-function renderAiResult(aiResult) {
+function renderAiResult(aiResult, lang = "zh") {
   if (!aiResult) return '<span style="color:#aaa;font-size:12px">—</span>';
   return `<div class="ai-result">
-    <strong>金额：</strong>RM ${aiResult.amount ?? "—"}<br>
-    <strong>摘要：</strong>${aiResult.summary || "—"}
+    <strong>${lang === 'zh' ? '金额' : 'Amount'}：</strong>RM ${aiResult.amount ?? "—"}<br>
+    <strong>${lang === 'zh' ? '摘要' : 'Summary'}：</strong>${aiResult.summary || "—"}
   </div>`;
 }
 
@@ -1103,42 +1419,42 @@ function renderAiResult(aiResult) {
  * - confirmed       → 显示已发送的消息内容和时间（只读）
  * - rejected        → 仅显示时间（历史状态，保持兼容）
  */
-function renderActions(r) {
+function renderActions(r, lang = "zh") {
+  const locale = lang === 'zh' ? "zh-CN" : "en-US";
   if (r.status === "pending_review") {
-    return `<button class="btn btn-ai" onclick="aiExtract('${r.id}', this)">🤖 AI 提取</button>`;
+    return `<button class="btn btn-ai" onclick="aiExtract('${r.id}', this)">🤖 ${t('ai_extract', lang)}</button>`;
   }
 
   if (r.status === "ai_extracted") {
-    // 发送给用户 + 拒绝 两个操作并列，拒绝不发 WhatsApp，仅更新状态
     return `<form class="send-form" method="POST" action="/admin/receipts/${r.id}/send-message">
-      <textarea name="message" placeholder="输入要发给用户的消息…" required></textarea>
-      <button type="submit" class="btn btn-send">📤 发送给用户</button>
+      <textarea name="message" placeholder="${t('message_placeholder', lang)}" required></textarea>
+      <button type="submit" class="btn btn-send">📤 ${t('send_to_user', lang)}</button>
     </form>
     <form class="reject-form" method="POST" action="/admin/receipts/${r.id}/reject"
-          onsubmit="return confirm('确认拒绝此收据？')">
-      <input name="note" placeholder="拒绝原因（可选）" />
-      <button type="submit" class="btn btn-reject">❌ 拒绝</button>
+          onsubmit="return confirm('${t('confirm_reject', lang)}')">
+      <input name="note" placeholder="${t('reject_note', lang)}"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.requestSubmit();}" />
+      <button type="submit" class="btn btn-reject">❌ ${t('reject', lang)}</button>
     </form>`;
   }
 
   if (r.status === "confirmed") {
-    // 已发送：展示消息内容和时间（只读审计）
-    const sentTime = r.sentAt ? new Date(r.sentAt).toLocaleString("zh-CN") : "—";
+    const sentTime = r.sentAt ? new Date(r.sentAt).toLocaleString(locale) : "—";
     const sentMsg  = r.sentMessage
       ? `<div class="sent-msg">${escapeHtml(r.sentMessage)}</div>`
       : "";
     return `<div class="sent-record">
       ${sentMsg}
-      <span class="sent-time">发送于 ${sentTime}</span>
+      <span class="sent-time">${t('sent_at', lang)} ${sentTime}</span>
     </div>`;
   }
 
-  // rejected：显示拒绝原因（若有）和拒绝时间
-  const rejectTime = r.reviewedAt ? new Date(r.reviewedAt).toLocaleString("zh-CN") : "—";
+  // rejected
+  const rejectTime = r.reviewedAt ? new Date(r.reviewedAt).toLocaleString(locale) : "—";
   const rejectNote = r.reviewNote
     ? `<div class="reject-note">${escapeHtml(r.reviewNote)}</div>`
     : "";
-  return `<div>${rejectNote}<span style="color:#aaa;font-size:12px">拒绝于 ${rejectTime}</span></div>`;
+  return `<div>${rejectNote}<span style="color:#aaa;font-size:12px">${t('rejected_at', lang)} ${rejectTime}</span></div>`;
 }
 
 /** 转义 HTML 特殊字符，防止消息内容中含有尖括号等引发 XSS */
@@ -1152,15 +1468,13 @@ function escapeHtml(str) {
 
 // ─── 收据列表页 ────────────────────────────────────────────────────────────────
 
-function receiptsPage(receipts) {
+function receiptsPage(receipts, lang = "zh") {
   if (receipts.length === 0) {
-    return htmlLayout("收据审核", '<div class="empty">暂无收据记录</div>', '/admin');
+    return htmlLayout(t('receipt_audit', lang), `<div class="empty">${t('no_receipts', lang)}</div>`, '/admin', lang);
   }
 
-  // 收据状态枚举——用于白名单校验，防止非法值混入 HTML 属性
   const VALID_RECEIPT_STATUSES = new Set(['pending_review', 'ai_extracted', 'confirmed', 'rejected']);
 
-  // 统计各状态数量
   const stats = receipts.reduce((acc, r) => {
     const s = r.status || 'pending_review';
     acc[s] = (acc[s] || 0) + 1;
@@ -1170,45 +1484,46 @@ function receiptsPage(receipts) {
   const statsCards = `
     <div class="stats-cards">
       <div class="stat-card">
-        <div class="stat-label">总计</div>
+        <div class="stat-label">${t('total', lang)}</div>
         <div class="stat-value">${receipts.length}</div>
       </div>
       <div class="stat-card stat-pending">
-        <div class="stat-label">待审核</div>
+        <div class="stat-label">${t('pending', lang)}</div>
         <div class="stat-value">${stats.pending_review || 0}</div>
       </div>
       <div class="stat-card stat-ai">
-        <div class="stat-label">AI已提取</div>
+        <div class="stat-label">${t('ai_extracted', lang)}</div>
         <div class="stat-value">${stats.ai_extracted || 0}</div>
       </div>
       <div class="stat-card stat-confirmed">
-        <div class="stat-label">已通过</div>
+        <div class="stat-label">${t('approved', lang)}</div>
         <div class="stat-value">${stats.confirmed || 0}</div>
       </div>
       <div class="stat-card stat-rejected">
-        <div class="stat-label">已拒绝</div>
+        <div class="stat-label">${t('rejected', lang)}</div>
         <div class="stat-value">${stats.rejected || 0}</div>
       </div>
     </div>
   `;
 
+  const locale = lang === 'zh' ? "zh-CN" : "en-US";
+
   const rows = receipts
     .map((r, idx) => {
-      const statusBadge = `<span class="badge badge-${r.status}">${STATUS_LABEL[r.status] || r.status}</span>`;
+      const statusBadge = `<span class="badge badge-${r.status}">${t('status_' + r.status, lang) || r.status}</span>`;
       const thumbSrc = `/admin/images/${r.imageFilename}`;
-      const thumb = `<img class="thumb" src="${thumbSrc}" alt="收据" onclick="openLightbox('${thumbSrc}')" />`;
+      const thumb = `<img class="thumb" src="${thumbSrc}" alt="${t('receipt_large', lang)}" onclick="openLightbox('${thumbSrc}')" />`;
 
-      // 白名单校验 status，防止非法值注入 HTML 属性
       const safeStatus = VALID_RECEIPT_STATUSES.has(r.status) ? r.status : '';
       return `<tr data-status="${safeStatus}" id="row-${r.id}">
       <td>${receipts.length - idx}</td>
-      <td>${r.submittedAt ? new Date(r.submittedAt).toLocaleString("zh-CN") : "—"}</td>
+      <td>${r.submittedAt ? new Date(r.submittedAt).toLocaleString(locale) : "—"}</td>
       <td style="font-size:12px">${(r.phone || "—").replace(/@c\.us$/, "")}</td>
       <td style="font-size:12px">${r.ic || "—"}</td>
       <td>${thumb}</td>
       <td>${statusBadge}</td>
-      <td>${renderAiResult(r.aiResult)}</td>
-      <td style="max-width:220px">${renderActions(r)}</td>
+      <td>${renderAiResult(r.aiResult, lang)}</td>
+      <td style="max-width:220px">${renderActions(r, lang)}</td>
     </tr>`;
     })
     .join("");
@@ -1216,23 +1531,23 @@ function receiptsPage(receipts) {
   const content = `
     ${statsCards}
     <div class="toolbar">
-      <input type="text" id="searchInput" placeholder="搜索手机号/IC号..." 
+      <input type="text" id="searchInput" placeholder="${t('search_placeholder', lang)}" 
         style="padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);flex:1;min-width:200px;max-width:300px">
       <select id="statusFilter" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary)">
-        <option value="">全部状态</option>
-        <option value="pending_review">待审核</option>
-        <option value="ai_extracted">AI已提取</option>
-        <option value="confirmed">已通过</option>
-        <option value="rejected">已拒绝</option>
+        <option value="">${t('all_statuses', lang)}</option>
+        <option value="pending_review">${t('status_pending_review', lang)}</option>
+        <option value="ai_extracted">${t('status_ai_extracted', lang)}</option>
+        <option value="confirmed">${t('status_confirmed', lang)}</option>
+        <option value="rejected">${t('status_rejected', lang)}</option>
       </select>
-      <span id="resultCount" style="color:var(--text-muted);font-size:13px">共 ${receipts.length} 条</span>
+      <span id="resultCount" style="color:var(--text-muted);font-size:13px">${t('result_count', lang, { count: receipts.length })}</span>
     </div>
     <div class="table-wrapper">
     <table>
       <thead>
         <tr>
-          <th>#</th><th>提交时间</th><th>手机号</th><th>身份证号</th><th>收据图片</th>
-          <th>状态</th><th>AI 提取结果</th><th>操作 / 记录</th>
+          <th>${t('col_num', lang)}</th><th>${t('col_submit_time', lang)}</th><th>${t('col_phone', lang)}</th><th>${t('col_ic', lang)}</th><th>${t('col_receipt_img', lang)}</th>
+          <th>${t('col_status', lang)}</th><th>${t('col_ai_result', lang)}</th><th>${t('col_actions', lang)}</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -1257,46 +1572,66 @@ function receiptsPage(receipts) {
             row.style.display = matchText && matchStatus ? '' : 'none';
             if (matchText && matchStatus) visible++;
           });
-          resultCount.textContent = '共 ' + visible + ' 条';
+          resultCount.textContent = '${t('result_count', lang, { count: "' + visible + '" })}';
         }
 
-        // 元素不存在时静默退出，防止 DOM 缺失时 TypeError 崩溃
         if (!searchInput || !statusFilter || !resultCount) return;
 
         searchInput.addEventListener('input', filter);
         statusFilter.addEventListener('change', filter);
       })();
 
-      /**
-       * AJAX 触发 AI 提取，不刷整页
-       * 提取成功后重载页面以显示最新状态和发送表单
-       */
+      // Ctrl+Enter 快捷提交发送表单
+      (function() {
+        var textareas = document.querySelectorAll('.send-form textarea');
+        textareas.forEach(function(ta) {
+          ta.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              var form = ta.closest('form');
+              if (form && form.checkValidity()) {
+                form.requestSubmit();
+              }
+            }
+          });
+        });
+      })();
+
       async function aiExtract(id, btn) {
         btn.disabled = true;
-        btn.textContent = '⏳ 识别中…';
+        btn.textContent = '⏳ ${t('extracting', lang)}';
 
         try {
           const res = await fetch('/admin/receipts/' + id + '/ai-extract', { method: 'POST' });
           const data = await res.json();
 
           if (!res.ok) {
-            alert('AI 提取失败：' + (data.error || res.statusText));
+            alert('${t('ai_extract_failed', lang)}' + (data.error || res.statusText));
             btn.disabled = false;
-            btn.textContent = '🤖 AI 提取';
+            btn.textContent = '🤖 ${t('ai_extract', lang)}';
             return;
           }
 
-          // 提取成功，重载整页以显示发送表单
           window.location.reload();
         } catch (e) {
-          alert('网络错误，请重试');
+          alert('${t('network_error_retry', lang)}');
           btn.disabled = false;
-          btn.textContent = '🤖 AI 提取';
+          btn.textContent = '🤖 ${t('ai_extract', lang)}';
         }
       }
     </script>`;
 
-  return htmlLayout("收据审核", content, '/admin');
+  return htmlLayout(t('receipt_audit', lang), content, '/admin', lang);
+}
+
+/**
+ * 从请求中提取语言偏好，优先级：query > cookie > 默认中文
+ */
+function getLang(req) {
+  const validLangs = new Set(['zh', 'en']);
+  const fromQuery = req.query && req.query.lang;
+  if (fromQuery && validLangs.has(fromQuery)) return fromQuery;
+  return 'zh';
 }
 
 // ─── 主函数：启动 Express 服务器 ───────────────────────────────────────────────
@@ -1379,11 +1714,13 @@ function startAdminServer() {
       return res.redirect("/admin/login");
     }
     try {
+      const lang = getLang(req);
       const receipts = receiptStore.getAll();
-      res.send(receiptsPage(receipts));
+      res.send(receiptsPage(receipts, lang));
     } catch (err) {
+      const lang = getLang(req);
       logger.error("加载收据列表失败", { error: err.message });
-      res.status(500).send("加载失败：" + err.message);
+      res.status(500).send(t('load_fail', lang) + err.message);
     }
   });
 
@@ -1395,18 +1732,19 @@ function startAdminServer() {
   // ── 首次设置（无账户时的引导页）────────────────────────────────────────────
 
   app.get("/admin/setup", (req, res) => {
-    // 已有账户，直接跳登录（防止已初始化后重访）
     if (!adminUserService.isEmpty()) return res.redirect("/admin/login");
-    res.send(setupPage());
+    const lang = getLang(req);
+    res.send(setupPage("", lang));
   });
 
   app.post("/admin/setup", (req, res) => {
     if (!adminUserService.isEmpty()) return res.redirect("/admin/login");
     const { username, password, confirm } = req.body;
+    const lang = getLang(req);
 
-    if (password !== confirm) return res.send(setupPage("两次密码输入不一致"));
+    if (password !== confirm) return res.send(setupPage(t('password_mismatch', lang), lang));
     const result = adminUserService.createUser(username, password);
-    if (!result.ok) return res.send(setupPage(result.error));
+    if (!result.ok) return res.send(setupPage(result.error, lang));
 
     logger.info("首次设置完成，管理员账号已创建", { username });
     res.redirect("/admin/login");
@@ -1415,14 +1753,13 @@ function startAdminServer() {
   // QR 码扫码页（无需登录，Bot 未就绪时供非技术用户扫码）
   app.get("/admin/qr", (req, res) => {
     if (_waConnected) {
-      // WhatsApp 已连接；根据管理员登录状态决定跳转目标，避免盲重定向造成 UX 断裂：
-      // 用户以为扫 WhatsApp 码 = 登入后台，实际上需要单独完成管理员账号登录
       if (req.session && req.session.authenticated) {
         return res.redirect("/admin");
       }
       return res.redirect("/admin/login");
     }
-    res.send(qrPage());
+    const lang = getLang(req);
+    res.send(qrPage(lang));
   });
 
   // 配对码登录 API（无需登录）
@@ -1438,14 +1775,14 @@ function startAdminServer() {
     }
 
     if (_waConnected) {
-      return res.status(400).json({ error: "WhatsApp 已连接，无需配对" });
+      return res.status(400).json({ error: "WhatsApp already connected, no pairing needed" });
     }
 
     // _pairingCodeReady 由 qr 事件触发后置为 true
     // 若尚未进入认证窗口期，拒绝调用，防止 client 抛 "Already authenticated"
     if (!_pairingCodeReady) {
       return res.status(503).json({
-        error: "WhatsApp 客户端尚未就绪，请等待初始化完成后重试（通常需要 10-20 秒）",
+        error: "WhatsApp client not ready yet. Wait for initialization (usually 10-20s)",
       });
     }
 
@@ -1471,25 +1808,26 @@ function startAdminServer() {
 
   app.get("/admin/login", requireSetup, (req, res) => {
     if (req.session.authenticated) return res.redirect("/admin");
-    res.send(loginPage());
+    const lang = getLang(req);
+    res.send(loginPage("", lang));
   });
 
   app.post("/admin/login", requireSetup, authLimiter, (req, res) => {
     const { username, password } = req.body;
+    const lang = getLang(req);
     if (adminUserService.authenticate(username, password)) {
       req.session.authenticated = true;
       req.session.username = username;
-      // 等 session 写入 store 完成再跳转，避免 redirect 先到达时认证状态尚未提交
       req.session.save((err) => {
         if (err) {
           logger.error("session 写入失败", { error: String(err) });
-          return res.send(loginPage("登录失败，请重试"));
+          return res.send(loginPage(t('login_fail', lang), lang));
         }
         res.redirect("/admin");
       });
       return;
     }
-    res.send(loginPage("用户名或密码错误，请重试"));
+    res.send(loginPage(t('login_error', lang), lang));
   });
 
   // 登出
@@ -1506,41 +1844,46 @@ function startAdminServer() {
   // ── 用户管理 ───────────────────────────────────────────────────────────────
 
   app.get("/admin/users", requireAuth, (req, res) => {
+    const lang = getLang(req);
     const users = adminUserService.listUsers();
     const flash = req.query.flash || "";
-    res.send(usersPage(users, req.session.username, flash));
+    res.send(usersPage(users, req.session.username, flash, lang));
   });
 
   app.get("/admin/users/new", requireAuth, (req, res) => {
-    res.send(newUserPage());
+    const lang = getLang(req);
+    res.send(newUserPage("", lang));
   });
 
   app.post("/admin/users/new", requireAuth, (req, res) => {
     const { username, password, confirm } = req.body;
-    if (password !== confirm) return res.send(newUserPage("两次密码输入不一致"));
+    const lang = getLang(req);
+    if (password !== confirm) return res.send(newUserPage(t('password_mismatch', lang), lang));
     const result = adminUserService.createUser(username, password);
-    if (!result.ok) return res.send(newUserPage(result.error));
+    if (!result.ok) return res.send(newUserPage(result.error, lang));
     logger.info("新管理员账号已创建", { by: req.session.username, newUser: username });
-    res.redirect("/admin/users?flash=用户创建成功");
+    res.redirect("/admin/users?flash=" + encodeURIComponent(t('user_created', lang)));
   });
 
   // 重置指定用户密码（管理员操作，无需旧密码）
   app.post("/admin/users/:username/reset-password", requireAuth, (req, res) => {
     const { username } = req.params;
     const { newPassword } = req.body;
+    const lang = getLang(req);
     const result = adminUserService.resetPassword(username, newPassword);
-    if (!result.ok) return res.redirect(`/admin/users?flash=错误：${result.error}`);
+    if (!result.ok) return res.redirect(`/admin/users?flash=${encodeURIComponent(t('download_fail', lang) + result.error)}`);
     logger.info("密码已重置", { by: req.session.username, target: username });
-    res.redirect("/admin/users?flash=密码重置成功");
+    res.redirect("/admin/users?flash=" + encodeURIComponent(t('password_reset_ok', lang)));
   });
 
   // 删除用户
   app.post("/admin/users/:username/delete", requireAuth, (req, res) => {
     const { username } = req.params;
+    const lang = getLang(req);
     const result = adminUserService.deleteUser(username, req.session.username);
-    if (!result.ok) return res.redirect(`/admin/users?flash=错误：${result.error}`);
+    if (!result.ok) return res.redirect(`/admin/users?flash=${encodeURIComponent(t('download_fail', lang) + result.error)}`);
     logger.info("管理员账号已删除", { by: req.session.username, deleted: username });
-    res.redirect("/admin/users?flash=用户已删除");
+    res.redirect("/admin/users?flash=" + encodeURIComponent(t('user_deleted', lang)));
   });
 
   // ── 收据相关路由 ──────────────────────────────────────────────────────────
@@ -1560,13 +1903,14 @@ function startAdminServer() {
   // AI 提取：读取图片 → 调用 Gemini → 保存结果（JSON API，前端 AJAX 调用）
   app.post("/admin/receipts/:id/ai-extract", requireAuth, apiLimiter, async (req, res) => {
     const { id } = req.params;
+    const lang = getLang(req);
 
     const record = receiptStore.getById(id);
     if (!record) {
-      return res.status(404).json({ error: "收据记录不存在" });
+      return res.status(404).json({ error: t('receipt_not_found', lang) });
     }
     if (record.status !== "pending_review") {
-      return res.status(400).json({ error: `当前状态 ${record.status} 不可触发 AI 提取` });
+      return res.status(400).json({ error: t('invalid_status', lang, { status: record.status }) });
     }
 
     try {
@@ -1574,7 +1918,6 @@ function startAdminServer() {
       const imageBuffer = fs.readFileSync(imagePath);
       const base64Image = imageBuffer.toString("base64");
 
-      // 根据文件名后缀推断实际 MIME 类型
       const imageMime = record.imageFilename.endsWith(".png")  ? "image/png"
                       : record.imageFilename.endsWith(".webp") ? "image/webp"
                       : "image/jpeg";
@@ -1604,42 +1947,37 @@ function startAdminServer() {
   app.post("/admin/receipts/:id/send-message", requireAuth, async (req, res) => {
     const { id } = req.params;
     const message = (req.body.message || "").trim();
+    const lang = getLang(req);
 
     if (!message) {
-      return res.status(400).send("消息内容不能为空");
+      return res.status(400).send(t('message_required', lang));
     }
 
-    // WhatsApp client 未就绪时提前退出，不浪费后续状态变更
     if (!_client || typeof _client.sendMessage !== "function") {
-      return res.status(503).send("WhatsApp 尚未连接，请先扫码");
+      return res.status(503).send(t('cant_send', lang));
     }
 
     try {
       const record = receiptStore.getById(id);
-      if (!record) return res.status(404).send("收据不存在");
+      if (!record) return res.status(404).send(t('receipt_not_found', lang));
 
-      // 服务端状态守卫：只有 ai_extracted 允许发送
-      // 防止 UI 绕过（双击、直接 POST）导致对 confirmed / pending_review / rejected 记录重复发送
       if (record.status !== "ai_extracted") {
         logger.warn("拒绝发送：状态不符", { id, status: record.status });
-        return res.status(409).send(`操作不允许：当前状态为 ${record.status}，只有 ai_extracted 状态可发送`);
+        return res.status(409).send(t('send_not_allowed', lang, { status: record.status }));
       }
 
-      // 补全 chatId 格式（whatsapp-web.js 存储时已含 @c.us，此处兼容万一缺失的情况）
       const chatId = record.phone.includes("@") ? record.phone : `${record.phone}@c.us`;
 
-      // 先落状态为 confirmed，避免 sendMessage 成功但状态未更新时被重复发送
       receiptStore.saveSentMessage(id, message);
       logger.info("收据状态已更新为 confirmed，准备发送 WhatsApp", { id, chatId });
 
-      // 状态已持久化后再发消息：即使此处失败，状态也不会回滚到 ai_extracted
       await _client.sendMessage(chatId, message);
       logger.info("WhatsApp 消息已发送", { id, chatId, messageLength: message.length });
 
       res.redirect("/admin");
     } catch (err) {
       logger.error("发送消息失败", { id, error: err.message });
-      res.status(500).send("发送失败：" + err.message);
+      res.status(500).send(t('download_fail', lang) + err.message);
     }
   });
 
