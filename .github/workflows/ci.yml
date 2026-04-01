@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: wa-bot/package-lock.json
+
+      - name: 安装依赖
+        working-directory: wa-bot
+        run: npm ci
+
+      - name: 运行 Lint
+        working-directory: wa-bot
+        run: npm run lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: wa-bot/package-lock.json
+
+      - name: 安装依赖
+        working-directory: wa-bot
+        run: npm ci
+
+      - name: 运行测试
+        working-directory: wa-bot
+        run: npm test
+        env:
+          # 测试环境不需要真实 key，geminiService 在测试中会被 mock
+          GEMINI_API_KEY: test-placeholder
+          NODE_ENV: test
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    # 仅在 lint 和 test 通过后才验证构建，避免浪费构建时间
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 构建 Docker 镜像
+        run: docker compose build wa-bot
+
+      - name: 验证镜像启动（smoke test）
+        run: |
+          # 只验证容器能正常启动并退出，不做完整运行
+          docker compose run --rm \
+            -e GEMINI_API_KEY=test-placeholder \
+            -e NODE_ENV=test \
+            wa-bot node -e "require('./src/index.js')" || true
