@@ -7,6 +7,11 @@
  * 在 WhatsApp 收图（保存）和管理后台 AI 提取（触发）之间解耦。
  *
  * 状态流转：
+ *   pending_review  ─┐
+ *   ai_extracted    ─┼──[发消息]──→ waiting_user_reply
+ *   confirmed       ─┤
+ *   rejected        ─┘
+ *
  *   pending_review → ai_extracted → confirmed
  *                                 → rejected
  */
@@ -178,6 +183,7 @@ function rejectReceipt(id, note = "") {
  * 记录人工发送给用户的消息内容，状态流转为 confirmed
  * 用于「发送给用户」操作后保存已发内容，方便审计
  *
+ * @deprecated 使用 sendMessageToUser() 代替，该函数状态流转更语义化
  * @param {string} id
  * @param {string} message  发送的消息文本
  */
@@ -189,6 +195,27 @@ function saveSentMessage(id, message) {
   records[idx].status      = "confirmed";
   records[idx].sentMessage = message;
   records[idx].sentAt      = new Date().toISOString();
+  writeStore(records);
+}
+
+/**
+ * 人工主动向用户发消息，状态流转为 waiting_user_reply
+ * 适用于任意状态（pending_review / ai_extracted / confirmed / rejected），不限于 ai_extracted
+ * 发送后进入过渡态，等待用户回复后再由 Bot 侧触发后续流程
+ *
+ * @param {string} id
+ * @param {string} message  发送的消息文本
+ */
+function sendMessageToUser(id, message) {
+  const records = readStore();
+  const idx     = records.findIndex(r => r.id === id);
+  if (idx === -1) throw new Error(`Receipt not found: ${id}`);
+
+  // 记录来源状态，方便审计操作链路（如 rejected → waiting_user_reply）
+  records[idx].previousStatus = records[idx].status;
+  records[idx].status         = "waiting_user_reply";
+  records[idx].sentMessage    = message;
+  records[idx].sentAt         = new Date().toISOString();
   writeStore(records);
 }
 
@@ -209,5 +236,6 @@ module.exports = {
   confirmReceipt,
   rejectReceipt,
   saveSentMessage,
+  sendMessageToUser,
   getImagePath,
 };
