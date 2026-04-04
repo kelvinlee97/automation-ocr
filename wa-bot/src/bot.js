@@ -135,14 +135,40 @@ async function createBot({ onQR, onReady, onPairingCodeReady, onDisconnected } =
 			if (!message.timestamp || message.timestamp < readyTimestamp) return;
 
 			// 通过 Contact 对象获取真实手机号，避免 LID（@lid）导致号码不可读
+			// 多层 fallback 策略，逐层尝试获取真实手机号
 			let realPhone = message.from;
 			try {
 				const contact = await message.getContact();
+
+				// Layer 1: 直接使用 contact.number（最可靠）
 				if (contact?.number) {
 					realPhone = contact.number;
 				}
+				// Layer 2: contact.id._serialized 为 @c.us 格式（真实手机号）
+				else if (contact?.id?._serialized && contact.id._serialized.endsWith('@c.us')) {
+					realPhone = contact.id._serialized.replace('@c.us', '');
+					logger.debug('从 contact.id 解析到真实手机号', { from: message.from, resolved: realPhone });
+				}
+				// Layer 3: 尝试通过 client.getContactById 再次查询
+				else if (client && typeof client.getContactById === 'function') {
+					const contactById = await client.getContactById(message.from);
+					if (contactById?.number) {
+						realPhone = contactById.number;
+						logger.debug('从 getContactById 解析到真实手机号', { from: message.from, resolved: realPhone });
+					} else if (contactById?.id?._serialized && contactById.id._serialized.endsWith('@c.us')) {
+						realPhone = contactById.id._serialized.replace('@c.us', '');
+						logger.debug('从 getContactById.id 解析到真实手机号', { from: message.from, resolved: realPhone });
+					}
+				}
 			} catch (err) {
 				logger.warn('获取真实手机号失败，回退到 message.from', { error: err.message });
+			}
+
+			// 最终检查：如果仍是 @lid 格式，保留完整后缀以便后台识别
+			// 不裁剪 @lid，让 adminServer 能区分 LID 和真实手机号
+			if (!realPhone.includes('@')) {
+				// 纯数字（已解析到真实手机号），补充 @c.us 后缀保持统一格式
+				realPhone = `${realPhone}@c.us`;
 			}
 
 			await handleMessage(message, realPhone);
