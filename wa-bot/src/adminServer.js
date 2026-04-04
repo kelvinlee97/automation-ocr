@@ -1188,6 +1188,9 @@ const TRANSLATIONS = {
 
     // 收据页
     receipt_audit: "收据审核",
+    group_receipts: "张收据",
+    collapse: "折叠",
+    expand: "展开",
     no_receipts: "暂无收据记录",
     total: "总计",
     pending: "待审核",
@@ -1318,6 +1321,9 @@ const TRANSLATIONS = {
 
     // Receipts
     receipt_audit: "Receipt Audit",
+    group_receipts: "receipts",
+    collapse: "Collapse",
+    expand: "Expand",
     no_receipts: "No receipt records yet",
     total: "Total",
     pending: "Pending",
@@ -1550,25 +1556,74 @@ function receiptsPage(receipts, lang = "zh") {
 
   const locale = lang === 'zh' ? "zh-CN" : "en-US";
 
-  const rows = receipts
-    .map((r, idx) => {
+  // Group receipts by phone number
+  const groups = {};
+  receipts.forEach((r, idx) => {
+    const phone = (r.phone || "—").replace(/@[^@]+$/, "");
+    if (!groups[phone]) groups[phone] = [];
+    // Keep original index for display
+    groups[phone].push({ r, idx });
+  });
+
+  const badgeMap = {
+    'pending_review': { emoji: '🟡', class: 'badge-pending_review' },
+    'ai_extracted': { emoji: '🔵', class: 'badge-ai_extracted' },
+    'confirmed': { emoji: '🟢', class: 'badge-confirmed' },
+    'rejected': { emoji: '🔴', class: 'badge-rejected' },
+    'waiting_user_reply': { emoji: '⏳', class: 'badge-waiting_user_reply' }
+  };
+
+  let rows = "";
+  for (const [phone, groupReceipts] of Object.entries(groups)) {
+    // Generate group summary badges
+    const counts = {};
+    groupReceipts.forEach(({ r }) => {
+      const s = r.status || 'pending_review';
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    
+    let badgesHtml = "";
+    for (const [status, count] of Object.entries(counts)) {
+      if (badgeMap[status]) {
+        badgesHtml += `<span class="badge ${badgeMap[status].class}" style="margin-right:4px;">${badgeMap[status].emoji} ${count}</span>`;
+      }
+    }
+
+    // Group header row
+    rows += `<tr class="group-header" data-phone="${escapeHtml(phone)}" data-collapsed="false" onclick="toggleGroup('${escapeHtml(phone)}')" style="cursor:pointer; background:var(--bg-surface); border-top: 2px solid var(--border);">
+      <td colspan="8">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <strong style="font-family:monospace; font-size:14px;">${escapeHtml(phone)}</strong>
+            <span style="margin-left:10px; color:var(--text-muted); font-size:13px;">${groupReceipts.length} ${t('group_receipts', lang)}</span>
+          </div>
+          <div>
+            ${badgesHtml}
+            <span class="toggle-icon" id="toggle-icon-${escapeHtml(phone)}" style="margin-left:10px; display:inline-block; width:16px; text-align:center;" title="${t('collapse', lang)} / ${t('expand', lang)}">▼</span>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+
+    // Individual rows
+    rows += groupReceipts.map(({ r, idx }) => {
       const statusBadge = `<span class="badge badge-${r.status}">${t('status_' + r.status, lang) || r.status}</span>`;
       const thumbSrc = `/admin/images/${r.imageFilename}`;
       const thumb = `<img class="thumb" src="${thumbSrc}" alt="${t('receipt_large', lang)}" onclick="openLightbox('${thumbSrc}')" />`;
 
       const safeStatus = VALID_RECEIPT_STATUSES.has(r.status) ? r.status : '';
-      return `<tr data-status="${safeStatus}" id="row-${r.id}">
+      return `<tr class="group-row group-row-${escapeHtml(phone)}" data-phone="${escapeHtml(phone)}" data-status="${safeStatus}" id="row-${r.id}">
       <td>${receipts.length - idx}</td>
       <td>${r.submittedAt ? new Date(r.submittedAt).toLocaleString(locale) : "—"}</td>
-      <td style="font-size:12px">${(r.phone || "—").replace(/@[^@]+$/, "")}</td>
+      <td style="font-size:12px">${escapeHtml(phone)}</td>
       <td style="font-size:12px">${r.ic || "—"}</td>
       <td>${thumb}</td>
       <td>${statusBadge}</td>
       <td>${renderAiResult(r.aiResult, lang)}</td>
       <td style="max-width:220px">${renderActions(r, lang)}</td>
     </tr>`;
-    })
-    .join("");
+    }).join("");
+  }
 
   const content = `
     ${statsCards}
@@ -1598,30 +1653,65 @@ function receiptsPage(receipts, lang = "zh") {
     </div>
     <script>
       (function() {
-        var rows = document.querySelectorAll('table tbody tr');
         var searchInput = document.getElementById('searchInput');
         var statusFilter = document.getElementById('statusFilter');
         var resultCount = document.getElementById('resultCount');
 
-        function filter() {
+        window.filter = function() {
           var query = (searchInput.value || '').toLowerCase();
           var status = statusFilter.value;
           var visible = 0;
-          rows.forEach(function(row) {
+          var groupVisibleCount = {};
+          
+          document.querySelectorAll('tr.group-row').forEach(function(row) {
             var text = row.textContent.toLowerCase();
             var rowStatus = row.dataset.status || '';
             var matchText = !query || text.includes(query);
             var matchStatus = !status || rowStatus === status;
-            row.style.display = matchText && matchStatus ? '' : 'none';
-            if (matchText && matchStatus) visible++;
+            var isMatch = matchText && matchStatus;
+            
+            if (isMatch) {
+              visible++;
+              var phone = row.dataset.phone;
+              groupVisibleCount[phone] = (groupVisibleCount[phone] || 0) + 1;
+            }
           });
+          
+          document.querySelectorAll('tr.group-header').forEach(function(header) {
+            var phone = header.dataset.phone;
+            var hasVisibleRows = !!groupVisibleCount[phone];
+            header.style.display = hasVisibleRows ? '' : 'none';
+            
+            var isCollapsed = header.dataset.collapsed === 'true';
+            
+            document.querySelectorAll('.group-row-' + CSS.escape(phone)).forEach(function(row) {
+              var text = row.textContent.toLowerCase();
+              var rowStatus = row.dataset.status || '';
+              var matchText = !query || text.includes(query);
+              var matchStatus = !status || rowStatus === status;
+              var isMatch = matchText && matchStatus;
+              
+              row.style.display = (isMatch && !isCollapsed) ? '' : 'none';
+            });
+          });
+          
           resultCount.textContent = '${t('result_count', lang, { count: "' + visible + '" })}';
-        }
+        };
+
+        window.toggleGroup = function(phone) {
+          var header = document.querySelector('tr.group-header[data-phone="' + CSS.escape(phone) + '"]');
+          if (!header) return;
+          var isCollapsed = header.dataset.collapsed === 'true';
+          header.dataset.collapsed = isCollapsed ? 'false' : 'true';
+          var icon = document.getElementById('toggle-icon-' + CSS.escape(phone));
+          if (icon) icon.textContent = isCollapsed ? '▼' : '▶';
+          window.filter();
+        };
 
         if (!searchInput || !statusFilter || !resultCount) return;
 
-        searchInput.addEventListener('input', filter);
-        statusFilter.addEventListener('change', filter);
+        searchInput.addEventListener('input', window.filter);
+        statusFilter.addEventListener('change', window.filter);
       })();
 
       // Ctrl+Enter 快捷提交发送表单
