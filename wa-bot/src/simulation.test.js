@@ -139,7 +139,7 @@ describe('用户流程模拟', () => {
       const excelService      = require('./services/excelService');
 
       const msg = createTextMessage({ body: VALID_IC });
-      await handleMessage(msg);
+      await handleMessage(msg, TEST_PHONE);
 
       // session 应记录 IC 并等待收据
       const session = sessionManager.getOrCreateSession(TEST_PHONE);
@@ -156,11 +156,11 @@ describe('用户流程模拟', () => {
 
       // 先发 IC
       const icMsg = createTextMessage({ body: VALID_IC });
-      await handleMessage(icMsg);
+      await handleMessage(icMsg, TEST_PHONE);
 
       // 再发收据图片
       const imgMsg = createImageMessage();
-      await handleMessage(imgMsg);
+      await handleMessage(imgMsg, TEST_PHONE);
 
       // 收据应带上已注册的 IC
       expect(receiptStore.addPendingReceipt).toHaveBeenCalledWith(
@@ -180,7 +180,7 @@ describe('用户流程模拟', () => {
       const receiptStore      = require('./services/receiptStore');
 
       const imgMsg = createImageMessage();
-      await handleMessage(imgMsg);
+      await handleMessage(imgMsg, TEST_PHONE);
 
       expect(receiptStore.addPendingReceipt).toHaveBeenCalledWith(
         TEST_PHONE,
@@ -200,7 +200,7 @@ describe('用户流程模拟', () => {
       const excelService      = require('./services/excelService');
 
       const msg = createTextMessage({ body: '不是身份证号码 hello' });
-      await handleMessage(msg);
+      await handleMessage(msg, TEST_PHONE);
 
       const session = sessionManager.getOrCreateSession(TEST_PHONE);
       expect(session.state).toBe('WAITING_IC');  // 状态不变
@@ -212,7 +212,7 @@ describe('用户流程模拟', () => {
       const excelService      = require('./services/excelService');
 
       const msg = createTextMessage({ body: '12345678' });  // 只有 8 位，不是 12 位
-      await handleMessage(msg);
+      await handleMessage(msg, TEST_PHONE);
 
       expect(excelService.addRegistration).not.toHaveBeenCalled();
     });
@@ -230,7 +230,7 @@ describe('用户流程模拟', () => {
       excelService.addRegistration.mockResolvedValue({ duplicate: true });
 
       const msg = createTextMessage({ body: VALID_IC });
-      await handleMessage(msg);
+      await handleMessage(msg, TEST_PHONE);
 
       const session = sessionManager.getOrCreateSession(TEST_PHONE);
       // 重复注册也应更新 session，允许继续提交收据
@@ -285,8 +285,8 @@ describe('用户流程模拟', () => {
       const msgB = createTextMessage({ from: PHONE_B, body: IC_B });
       msgB.getChat = jest.fn().mockResolvedValue({ isGroup: false, id: { _serialized: PHONE_B } });
 
-      await handleMessage(msgA);
-      await handleMessage(msgB);
+      await handleMessage(msgA, PHONE_A);
+      await handleMessage(msgB, PHONE_B);
 
       const sessionA = sessionManager.getOrCreateSession(PHONE_A);
       const sessionB = sessionManager.getOrCreateSession(PHONE_B);

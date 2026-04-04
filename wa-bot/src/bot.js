@@ -133,7 +133,19 @@ async function createBot({ onQR, onReady, onPairingCodeReady, onDisconnected } =
 		client.on('message', async (message) => {
 			if (message.fromMe) return;
 			if (!message.timestamp || message.timestamp < readyTimestamp) return;
-			await handleMessage(message);
+
+			// 通过 Contact 对象获取真实手机号，避免 LID（@lid）导致号码不可读
+			let realPhone = message.from;
+			try {
+				const contact = await message.getContact();
+				if (contact?.number) {
+					realPhone = contact.number;
+				}
+			} catch (err) {
+				logger.warn('获取真实手机号失败，回退到 message.from', { error: err.message });
+			}
+
+			await handleMessage(message, realPhone);
 		});
 
 		// 通知外部（adminServer）client 已就绪
