@@ -1566,11 +1566,11 @@ function receiptsPage(receipts, lang = "zh") {
   });
 
   const badgeMap = {
-    'pending_review': { emoji: '🟡', class: 'badge-pending_review' },
-    'ai_extracted': { emoji: '🔵', class: 'badge-ai_extracted' },
-    'confirmed': { emoji: '🟢', class: 'badge-confirmed' },
-    'rejected': { emoji: '🔴', class: 'badge-rejected' },
-    'waiting_user_reply': { emoji: '⏳', class: 'badge-waiting_user_reply' }
+    pending_review: { emoji: '🟡', class: 'badge-pending_review' },
+    ai_extracted: { emoji: '🔵', class: 'badge-ai_extracted' },
+    confirmed: { emoji: '🟢', class: 'badge-confirmed' },
+    rejected: { emoji: '🔴', class: 'badge-rejected' },
+    waiting_user_reply: { emoji: '⏳', class: 'badge-waiting_user_reply' }
   };
 
   let rows = "";

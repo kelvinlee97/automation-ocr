@@ -24,7 +24,7 @@ jest.mock('fs', () => ({
 
 // ─── 测试准备 ─────────────────────────────────────────────────────────────────
 
-const receiptStore = require('../receiptStore');
+const _receiptStore = require('../receiptStore');
 
 // 每个测试前重置内存文件系统，保证测试隔离
 beforeEach(() => {
@@ -36,7 +36,7 @@ beforeEach(() => {
 });
 
 // 工厂函数：快速创建一条带指定状态的收据
-function createReceipt(status = 'pending_review') {
+function _createReceipt(status = 'pending_review') {
   const store = require('../receiptStore');
   // 直接操作 store 的内部写入来模拟已存在记录
   // 使用 addPendingReceipt 创建 pending_review，再用 store 函数流转
