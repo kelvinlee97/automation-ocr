@@ -1,8 +1,61 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { z } = require("zod");
 
 // 初始化 Gemini（通过环境变量获取 API KEY）
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+
+/**
+ * Gemini 响应校验 Schema
+ *
+ * 为什么需要校验：
+ * - Gemini 可能返回非 JSON 内容（图片无法识别时输出自然语言）
+ * - amount 有时被返回为字符串（"1269.23" 而非 1269.23）
+ * - confidence 可能超出 0-1 范围
+ * - 字段可能缺失
+ *
+ * 校验失败 = 非重试型错误（retryable: false），因为重试不会改变结果
+ */
+const aiResponseSchema = z.object({
+  amount: z
+    .union([z.number(), z.string(), z.null()])
+    .transform((v) => {
+      if (v === null || v === undefined) return null;
+      if (typeof v === "number") return Number.isFinite(v) ? v : null;
+      const parsed = parseFloat(v);
+      return Number.isFinite(parsed) ? parsed : null;
+    }),
+  summary: z.string().min(1, "summary 不能为空字符串"),
+  confidence: z
+    .number()
+    .min(0)
+    .max(1)
+    .default(0.5),
+});
+
+/**
+ * 判断错误是否值得重试
+ *
+ * 重试型：网络超时、服务端 5xx、限流 429
+ * 非重试型：JSON 解析失败、Schema 校验失败、业务逻辑错误
+ */
+function isRetryableError(error) {
+  if (error.code === "ETIMEDOUT" || error.code === "ECONNRESET" || error.code === "ENOTFOUND") {
+    return true;
+  }
+
+  const message = error.message || "";
+
+  if (message.includes("429") || message.includes("500") || message.includes("503") || message.includes("502")) {
+    return true;
+  }
+
+  if (/network|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|socket hang up/i.test(message)) {
+    return true;
+  }
+
+  return false;
+}
 
 /**
  * 调用 Gemini 识别收据/订单截图
@@ -49,21 +102,35 @@ async function processReceipt(base64Image, mimeType = "image/jpeg") {
     ]);
 
     const text = result.response.text().replace(/```json|```/g, "").trim();
-    const data = JSON.parse(text);
 
-    return { success: true, ...data };
+    let raw;
+    try {
+      raw = JSON.parse(text);
+    } catch (parseError) {
+      return {
+        success: false,
+        retryable: false,
+        message: `AI 返回内容无法解析为 JSON: ${text.slice(0, 100)}`,
+      };
+    }
+
+    const validated = aiResponseSchema.safeParse(raw);
+    if (!validated.success) {
+      // 校验失败 = 字段缺失或类型错误，重试同样不会改变结果
+      return {
+        success: false,
+        retryable: false,
+        message: `AI 响应格式异常: ${validated.error.issues.map((e) => e.message).join(", ")}`,
+      };
+    }
+
+    return { success: true, ...validated.data };
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    const isRetryable = error.message?.includes('429') || 
-                          error.message?.includes('500') || 
-                          error.message?.includes('503') ||
-                          error.message?.includes('network') ||
-                          error.message?.includes('ETIMEDOUT') ||
-                          error.code === 'ETIMEDOUT';
-    return { 
-      success: false, 
-      retryable: isRetryable,
-      message: error.message || "AI 识别服务暂时不可用" 
+    const retryable = isRetryableError(error);
+    return {
+      success: false,
+      retryable,
+      message: retryable ? "AI 识别服务暂时不可用，请稍后重试" : error.message || "AI 识别失败",
     };
   }
 }
