@@ -479,6 +479,93 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh') {
 
     /* ── 等宽数据字段（手机号、IC 号） ── */
     .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .5px; }
+
+    /* ── Toast 通知系统 ── */
+    #toast-container {
+      position: fixed; top: 64px; right: 24px; z-index: 10000;
+      display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+    }
+    .toast {
+      pointer-events: auto;
+      padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 500;
+      color: #fff; box-shadow: 0 4px 20px rgba(0,0,0,.3);
+      transform: translateX(120%); opacity: 0;
+      animation: toast-in .3s ease forwards;
+      max-width: 360px; word-break: break-word;
+    }
+    .toast.toast-out { animation: toast-out .25s ease forwards; }
+    .toast-success { background: #059669; border-left: 4px solid #34d399; }
+    .toast-error   { background: #dc2626; border-left: 4px solid #f87171; }
+    .toast-info     { background: #2563eb; border-left: 4px solid #60a5fa; }
+    @keyframes toast-in  { to { transform: translateX(0); opacity: 1; } }
+    @keyframes toast-out { to { transform: translateX(120%); opacity: 0; } }
+
+    /* ── 行展开面板 ── */
+    .expand-row { display: none; }
+    .expand-row.visible { display: table-row; }
+    .expand-panel {
+      background: var(--bg-surface);
+      border-left: 3px solid var(--accent-primary);
+      padding: 16px 20px;
+    }
+    .expand-section { margin-bottom: 14px; }
+    .expand-section:last-child { margin-bottom: 0; }
+    .expand-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .8px;
+      color: var(--text-muted); font-weight: 600; margin-bottom: 6px;
+    }
+    .expand-chevron {
+      display: inline-block; transition: transform .2s ease;
+      font-size: 10px; color: var(--text-muted); margin-right: 6px;
+    }
+    .expand-chevron.rotated { transform: rotate(90deg); }
+    tr.group-row.expandable { cursor: pointer; }
+    tr.group-row.expandable:hover td { background: var(--bg-surface-2); }
+
+    /* ── 分页按钮 ── */
+    .btn-page {
+      padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;
+      border: 1px solid var(--border); background: var(--bg-surface);
+      color: var(--text-secondary); text-decoration: none; cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-page:hover:not(:disabled) { background: var(--bg-surface-2); color: var(--text-primary); }
+    .btn-page:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-page.active { background: var(--accent-primary); color: #fff; border-color: var(--accent-primary); }
+
+    /* ── Toast 通知 ── */
+    #toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .toast {
+      min-width: 250px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transform: translateX(120%);
+      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .toast.show {
+      transform: translateX(0);
+    }
+    .toast-success {
+      background: var(--accent-emerald);
+    }
+    .toast-error {
+      background: var(--accent-rose);
+    }
   </style>
   <!-- 防止主题闪烁（FOUC）：在 DOM 渲染前同步读取 localStorage 并设置 data-theme -->
   <script>
@@ -507,6 +594,8 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh') {
     <h1>${title}</h1>
     ${content}
   </main>
+  <!-- Toast 通知容器 -->
+  <div id="toast-container"></div>
   <!-- 图片灯箱 -->
   <div id="lightbox">
     <span id="lightbox-close" onclick="closeLightbox()">✕</span>
@@ -524,6 +613,20 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh') {
     document.getElementById('lightbox').addEventListener('click', function(e) {
       if (e.target === this) closeLightbox();
     });
+
+    // ── Toast 通知系统 ──────────────────────────────────────────────
+    window.showToast = function(message, type = 'info') {
+      var container = document.getElementById('toast-container');
+      if (!container) return;
+      var toast = document.createElement('div');
+      toast.className = 'toast toast-' + type;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(function() {
+        toast.classList.add('toast-out');
+        setTimeout(function() { toast.remove(); }, 250);
+      }, 3000);
+    };
 
     // ── 语言切换逻辑 ──────────────────────────────────────────────
     (function() {
@@ -1150,6 +1253,9 @@ const TRANSLATIONS = {
     switch_language: "切换语言",
     lang_zh: "中文",
     lang_en: "EN",
+    page_previous: "上一页",
+    page_next: "下一页",
+    page_info: "第 {current} 页，共 {total} 页",
 
     // 登录页
     admin_login: "管理后台登录",
@@ -1268,6 +1374,10 @@ const TRANSLATIONS = {
     attempt_limit: "尝试次数过多，请 15 分钟后重试",
     image_not_found: "图片不存在",
     ai_recognition_fail: "AI 识别失败：",
+    toast_send_success: "消息已发送",
+    toast_reject_success: "收据已拒绝",
+    toast_ai_success: "AI 提取成功",
+    toast_error: "操作失败",
   },
   en: {
     // Common
@@ -1283,6 +1393,9 @@ const TRANSLATIONS = {
     switch_language: "Switch Language",
     lang_zh: "中文",
     lang_en: "EN",
+    page_previous: "Previous",
+    page_next: "Next",
+    page_info: "Page {current} of {total}",
 
     // Login
     admin_login: "Admin Login",
@@ -1401,6 +1514,10 @@ const TRANSLATIONS = {
     attempt_limit: "Too many attempts, please retry in 15 minutes",
     image_not_found: "Image not found",
     ai_recognition_fail: "AI recognition failed: ",
+    toast_send_success: "Message sent successfully",
+    toast_reject_success: "Receipt rejected",
+    toast_ai_success: "AI extraction successful",
+    toast_error: "Operation failed",
   },
 };
 
@@ -1425,7 +1542,7 @@ function t(key, lang = "zh", params = {}) {
  * 渲染单条收据的 AI 结果摘要（ai_extracted / confirmed 时显示）
  * 只显示金额和图片摘要，不显示合格/不合格判定（由人工决定）
  */
-function renderAiResult(aiResult, lang = "zh") {
+function _renderAiResult(aiResult, lang = "zh") {
   if (!aiResult) return '<span style="color:#aaa;font-size:12px">—</span>';
   return `<div class="ai-result">
     <strong>${t('ai_amount', lang)}：</strong>RM ${escapeHtml(aiResult.amount ?? "—")}<br>
@@ -1434,13 +1551,79 @@ function renderAiResult(aiResult, lang = "zh") {
 }
 
 /**
- * 渲染单行操作区
- * - pending_review  → [AI 提取] 按钮（AJAX）
- * - ai_extracted    → 自由文本输入框 + [发送给用户] 按钮
- * - confirmed       → 显示已发送的消息内容和时间（只读）
- * - rejected        → 仅显示时间（历史状态，保持兼容）
+ * 构建展开面板内容（AI 结果 + 操作区）
  */
-function renderActions(r, lang = "zh") {
+function buildExpandPanel(r, lang = "zh") {
+  const locale = lang === 'zh' ? "zh-CN" : "en-US";
+  let html = "";
+
+  // AI 结果区
+  if (r.aiResult) {
+    html += `<div class="expand-section">
+      <div class="expand-label">🤖 ${t('ai_summary', lang)}</div>
+      <div class="ai-result">
+        <strong>${t('ai_amount', lang)}</strong> RM ${escapeHtml(r.aiResult.amount ?? "—")}<br>
+        ${escapeHtml(r.aiResult.summary || "—")}
+      </div>
+    </div>`;
+  }
+
+  // 状态相关操作区
+  if (r.status === "ai_extracted") {
+    html += `<div class="expand-section">
+      <div class="expand-label">❌ ${t('reject', lang)}</div>
+      <form class="reject-form" method="POST" action="/admin/receipts/${r.id}/reject"
+            onsubmit="return handleReject(event, '${r.id}')">
+        <input name="note" placeholder="${t('reject_note', lang)}"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.requestSubmit();}" />
+        <button type="submit" class="btn btn-reject" id="reject-btn-${r.id}">❌ ${t('reject', lang)}</button>
+      </form>
+    </div>`;
+  }
+
+  if (r.status === "confirmed") {
+    const sentTime = r.sentAt ? new Date(r.sentAt).toLocaleString(locale) : "—";
+    const sentMsg  = r.sentMessage ? `<div class="sent-msg">${escapeHtml(r.sentMessage)}</div>` : "";
+    html += `<div class="expand-section">
+      <div class="expand-label">✓ ${t('sent_at', lang)}</div>
+      <div class="sent-record">${sentMsg}<span class="sent-time">${sentTime}</span></div>
+    </div>`;
+  }
+
+  if (r.status === "rejected") {
+    const rejectTime = r.reviewedAt ? new Date(r.reviewedAt).toLocaleString(locale) : "—";
+    const rejectNote = r.reviewNote ? `<div class="reject-note">${escapeHtml(r.reviewNote)}</div>` : "";
+    html += `<div class="expand-section">
+      <div class="expand-label">❌ ${t('rejected_at', lang)}</div>
+      ${rejectNote}<span style="color:#aaa;font-size:12px">${rejectTime}</span>
+    </div>`;
+  }
+
+  if (r.status === "waiting_user_reply") {
+    const sentTime = r.sentAt ? new Date(r.sentAt).toLocaleString(locale) : "—";
+    const sentMsg  = r.sentMessage ? `<div class="sent-msg">${escapeHtml(r.sentMessage)}</div>` : "";
+    html += `<div class="expand-section">
+      <div class="expand-label">⏳ ${t('sent_at', lang)}</div>
+      <div class="sent-record">${sentMsg}<span class="sent-time">${sentTime}</span></div>
+    </div>`;
+  }
+
+  // 发送消息表单（所有状态通用）
+  html += `<div class="expand-section">
+    <div class="expand-label">📤 ${t('send_to_user', lang)}</div>
+    <form class="send-form" id="send-form-${r.id}" onsubmit="return handleSend(event, '${r.id}')">
+      <textarea name="message" id="send-msg-${r.id}" placeholder="${t('message_placeholder', lang)}" required></textarea>
+      <button type="submit" class="btn btn-send" id="send-btn-${r.id}">📤 ${t('send_to_user', lang)}</button>
+    </form>
+  </div>`;
+
+  return html;
+}
+
+/**
+ * 渲染单行操作区（保留向后兼容，但不再在表格中使用）
+ */
+function _renderActions(r, lang = "zh") {
   const locale = lang === 'zh' ? "zh-CN" : "en-US";
   let actionsHtml = "";
 
@@ -1512,14 +1695,80 @@ function escapeHtml(str) {
 
 // ─── 收据列表页 ────────────────────────────────────────────────────────────────
 
-function receiptsPage(receipts, lang = "zh") {
+function buildPagination(currentPage, totalPages, q, status, lang) {
+  if (totalPages <= 1) return '';
+
+  const getUrl = (p) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (status) params.set('status', status);
+    params.set('page', p);
+    return '/admin?' + params.toString();
+  };
+
+  let html = '<div class="pagination-container" style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; padding:10px 0;">';
+  
+  html += '<div class="page-info" style="color:var(--text-muted); font-size:13px;">' + t('page_info', lang, { current: currentPage, total: totalPages }) + '</div>';
+  
+  html += '<div class="page-buttons" style="display:flex; gap:6px;">';
+  
+  if (currentPage > 1) {
+    html += '<a href="' + getUrl(currentPage - 1) + '" class="btn btn-page">' + t('page_previous', lang) + '</a>';
+  } else {
+    html += '<button class="btn btn-page" disabled>' + t('page_previous', lang) + '</button>';
+  }
+
+  let startPage = Math.max(1, currentPage - 2);
+  let endPage = Math.min(totalPages, currentPage + 2);
+  
+  if (currentPage <= 3) {
+    endPage = Math.min(totalPages, 5);
+  }
+  if (currentPage >= totalPages - 2) {
+    startPage = Math.max(1, totalPages - 4);
+  }
+
+  if (startPage > 1) {
+    html += '<a href="' + getUrl(1) + '" class="btn btn-page">1</a>';
+    if (startPage > 2) {
+      html += '<span style="color:var(--text-muted); padding:5px;">...</span>';
+    }
+  }
+
+  for (let i = startPage; i <= endPage; i++) {
+    if (i === currentPage) {
+      html += '<button class="btn btn-page active" style="background:var(--accent-primary); color:#fff; border-color:var(--accent-primary);">' + i + '</button>';
+    } else {
+      html += '<a href="' + getUrl(i) + '" class="btn btn-page">' + i + '</a>';
+    }
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) {
+      html += '<span style="color:var(--text-muted); padding:5px;">...</span>';
+    }
+    html += '<a href="' + getUrl(totalPages) + '" class="btn btn-page">' + totalPages + '</a>';
+  }
+
+  if (currentPage < totalPages) {
+    html += '<a href="' + getUrl(currentPage + 1) + '" class="btn btn-page">' + t('page_next', lang) + '</a>';
+  } else {
+    html += '<button class="btn btn-page" disabled>' + t('page_next', lang) + '</button>';
+  }
+
+  html += '</div></div>';
+  return html;
+}
+
+function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, searchQuery = "", statusFilter = "", allReceipts = null) {
   if (receipts.length === 0) {
     return htmlLayout(t('receipt_audit', lang), `<div class="empty">${t('no_receipts', lang)}</div>`, '/admin', lang);
   }
 
   const VALID_RECEIPT_STATUSES = new Set(['pending_review', 'ai_extracted', 'confirmed', 'rejected', 'waiting_user_reply']);
 
-  const stats = receipts.reduce((acc, r) => {
+  const statsSource = allReceipts || receipts;
+  const stats = statsSource.reduce((acc, r) => {
     const s = r.status || 'pending_review';
     acc[s] = (acc[s] || 0) + 1;
     return acc;
@@ -1529,7 +1778,7 @@ function receiptsPage(receipts, lang = "zh") {
     <div class="stats-cards">
       <div class="stat-card">
         <div class="stat-label">${t('total', lang)}</div>
-        <div class="stat-value">${receipts.length}</div>
+        <div class="stat-value">${statsSource.length}</div>
       </div>
       <div class="stat-card stat-pending">
         <div class="stat-label">${t('pending', lang)}</div>
@@ -1579,8 +1828,24 @@ function receiptsPage(receipts, lang = "zh") {
     waiting_user_reply: { emoji: '⏳', class: 'badge-waiting_user_reply' }
   };
 
+  const groupEntries = Object.entries(groups);
+  const paginatedGroups = {};
+  let currentReceiptCount = 0;
+  let pageCounter = 1;
+  
+  for (const [phone, groupReceipts] of groupEntries) {
+    if (pageCounter === currentPage) {
+      paginatedGroups[phone] = groupReceipts;
+    }
+    currentReceiptCount += groupReceipts.length;
+    if (currentReceiptCount >= 20) {
+      pageCounter++;
+      currentReceiptCount = 0;
+    }
+  }
+
   let rows = "";
-  for (const [phone, groupReceipts] of Object.entries(groups)) {
+  for (const [phone, groupReceipts] of Object.entries(paginatedGroups)) {
     // Generate group summary badges
     const counts = {};
     groupReceipts.forEach(({ r }) => {
@@ -1619,21 +1884,28 @@ function receiptsPage(receipts, lang = "zh") {
     rows += groupReceipts.map(({ r, idx }) => {
       const statusBadge = `<span class="badge badge-${r.status}">${t('status_' + r.status, lang) || r.status}</span>`;
       const thumbSrc = `/admin/images/${r.imageFilename}`;
-      const thumb = `<img class="thumb" src="${thumbSrc}" alt="${t('receipt_large', lang)}" onclick="openLightbox('${thumbSrc}')" />`;
+      const thumb = `<img class="thumb" src="${thumbSrc}" alt="${t('receipt_large', lang)}" onclick="event.stopPropagation();openLightbox('${thumbSrc}')" />`;
 
       const safeStatus = VALID_RECEIPT_STATUSES.has(r.status) ? r.status : '';
       const phoneDisplay = phoneIsLid[phone]
         ? `${escapeHtml(phone)} <span style="color:#c084fc;font-size:10px">LID</span>`
         : escapeHtml(phone);
-      return `<tr class="group-row group-row-${escapeHtml(phone)}" data-phone="${escapeHtml(phone)}" data-status="${safeStatus}" id="row-${r.id}">
-      <td>${receipts.length - idx}</td>
+
+      // Expand panel content (AI result + actions)
+      const panelContent = buildExpandPanel(r, lang);
+
+      return `<tr class="group-row group-row-${escapeHtml(phone)} expandable" data-phone="${escapeHtml(phone)}" data-status="${safeStatus}" id="row-${r.id}" onclick="toggleRow('${r.id}')">
+      <td><span class="expand-chevron">▶</span>${receipts.length - idx}</td>
       <td>${r.submittedAt ? new Date(r.submittedAt).toLocaleString(locale) : "—"}</td>
       <td style="font-size:12px">${phoneDisplay}</td>
       <td style="font-size:12px">${r.ic || "—"}</td>
       <td>${thumb}</td>
       <td>${statusBadge}</td>
-      <td>${renderAiResult(r.aiResult, lang)}</td>
-      <td style="max-width:220px">${renderActions(r, lang)}</td>
+    </tr>
+    <tr class="expand-row" id="expand-${r.id}">
+      <td colspan="6">
+        <div class="expand-panel">${panelContent}</div>
+      </td>
     </tr>`;
     }).join("");
   }
@@ -1641,15 +1913,15 @@ function receiptsPage(receipts, lang = "zh") {
   const content = `
     ${statsCards}
     <div class="toolbar">
-      <input type="text" id="searchInput" placeholder="${t('search_placeholder', lang)}" 
+      <input type="text" id="searchInput" placeholder="${t('search_placeholder', lang)}" value="${escapeHtml(searchQuery)}"
         style="padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);flex:1;min-width:200px;max-width:300px">
       <select id="statusFilter" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary)">
-        <option value="">${t('all_statuses', lang)}</option>
-        <option value="pending_review">${t('status_pending_review', lang)}</option>
-        <option value="ai_extracted">${t('status_ai_extracted', lang)}</option>
-        <option value="confirmed">${t('status_confirmed', lang)}</option>
-        <option value="rejected">${t('status_rejected', lang)}</option>
-        <option value="waiting_user_reply">${t('status_waiting_user_reply', lang)}</option>
+        <option value="" ${statusFilter === '' ? 'selected' : ''}>${t('all_statuses', lang)}</option>
+        <option value="pending_review" ${statusFilter === 'pending_review' ? 'selected' : ''}>${t('status_pending_review', lang)}</option>
+        <option value="ai_extracted" ${statusFilter === 'ai_extracted' ? 'selected' : ''}>${t('status_ai_extracted', lang)}</option>
+        <option value="confirmed" ${statusFilter === 'confirmed' ? 'selected' : ''}>${t('status_confirmed', lang)}</option>
+        <option value="rejected" ${statusFilter === 'rejected' ? 'selected' : ''}>${t('status_rejected', lang)}</option>
+        <option value="waiting_user_reply" ${statusFilter === 'waiting_user_reply' ? 'selected' : ''}>${t('status_waiting_user_reply', lang)}</option>
       </select>
       <span id="resultCount" style="color:var(--text-muted);font-size:13px">${t('result_count', lang, { count: receipts.length })}</span>
     </div>
@@ -1658,76 +1930,153 @@ function receiptsPage(receipts, lang = "zh") {
       <thead>
         <tr>
           <th>${t('col_num', lang)}</th><th>${t('col_submit_time', lang)}</th><th>${t('col_phone', lang)}</th><th>${t('col_ic', lang)}</th><th>${t('col_receipt_img', lang)}</th>
-          <th>${t('col_status', lang)}</th><th>${t('col_ai_result', lang)}</th><th>${t('col_actions', lang)}</th>
+          <th>${t('col_status', lang)}</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
     </div>
+    ${buildPagination(currentPage, totalPages, searchQuery, statusFilter, lang)}
     <script>
       (function() {
         var searchInput = document.getElementById('searchInput');
         var statusFilter = document.getElementById('statusFilter');
         var resultCount = document.getElementById('resultCount');
 
-        window.filter = function() {
-          var query = (searchInput.value || '').toLowerCase();
+        function applyFilter() {
+          var q = searchInput.value;
           var status = statusFilter.value;
-          var visible = 0;
-          var groupVisibleCount = {};
-          
-          document.querySelectorAll('tr.group-row').forEach(function(row) {
-            var text = row.textContent.toLowerCase();
-            var rowStatus = row.dataset.status || '';
-            var matchText = !query || text.includes(query);
-            var matchStatus = !status || rowStatus === status;
-            var isMatch = matchText && matchStatus;
-            
-            if (isMatch) {
-              visible++;
-              var phone = row.dataset.phone;
-              groupVisibleCount[phone] = (groupVisibleCount[phone] || 0) + 1;
-            }
+          var url = new URL(window.location.href);
+          if (q) url.searchParams.set('q', q); else url.searchParams.delete('q');
+          if (status) url.searchParams.set('status', status); else url.searchParams.delete('status');
+          url.searchParams.set('page', '1');
+          window.location.href = url.toString();
+        }
+
+        if (searchInput) {
+          searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') applyFilter();
           });
-          
-          document.querySelectorAll('tr.group-header').forEach(function(header) {
-            var phone = header.dataset.phone;
-            var hasVisibleRows = !!groupVisibleCount[phone];
-            header.style.display = hasVisibleRows ? '' : 'none';
-            
-            var isCollapsed = header.dataset.collapsed === 'true';
-            
-            document.querySelectorAll('.group-row-' + CSS.escape(phone)).forEach(function(row) {
-              var text = row.textContent.toLowerCase();
-              var rowStatus = row.dataset.status || '';
-              var matchText = !query || text.includes(query);
-              var matchStatus = !status || rowStatus === status;
-              var isMatch = matchText && matchStatus;
-              
-              row.style.display = (isMatch && !isCollapsed) ? '' : 'none';
-            });
+        }
+        if (statusFilter) {
+          statusFilter.addEventListener('change', applyFilter);
+        }
+
+      // ── 行展开/折叠 ────────────────────────────────────────────
+      window.toggleRow = function(id) {
+        var panel = document.getElementById('expand-' + id);
+        var row = document.getElementById('row-' + id);
+        if (!panel || !row) return;
+        var isVisible = panel.classList.contains('visible');
+        panel.classList.toggle('visible');
+        var chevron = row.querySelector('.expand-chevron');
+        if (chevron) chevron.classList.toggle('rotated');
+      };
+
+      // ── 组折叠 ─────────────────────────────────────────────────
+      window.toggleGroup = function(phone) {
+        var header = document.querySelector('tr.group-header[data-phone="' + CSS.escape(phone) + '"]');
+        if (!header) return;
+        var isCollapsed = header.dataset.collapsed === 'true';
+        header.dataset.collapsed = isCollapsed ? 'false' : 'true';
+        var icon = document.getElementById('toggle-icon-' + CSS.escape(phone));
+        if (icon) icon.textContent = isCollapsed ? '▼' : '▶';
+        
+        document.querySelectorAll('.group-row-' + CSS.escape(phone)).forEach(function(row) {
+          row.style.display = isCollapsed ? '' : 'none';
+          // 同时隐藏对应的展开面板
+          var expandId = 'expand-' + row.id.replace('row-', '');
+          var expandRow = document.getElementById(expandId);
+          if (expandRow && !isCollapsed) expandRow.classList.remove('visible');
+        });
+      };
+
+      // ── AJAX 发送消息 ──────────────────────────────────────────
+      window.handleSend = async function(e, id) {
+        e.preventDefault();
+        var form = document.getElementById('send-form-' + id);
+        var msgInput = document.getElementById('send-msg-' + id);
+        var btn = document.getElementById('send-btn-' + id);
+        var message = msgInput.value.trim();
+        if (!message) { showToast('${t('message_required', lang)}', 'error'); return false; }
+        btn.disabled = true;
+        btn.textContent = '⏳ ${t('extracting', lang)}';
+        try {
+          const res = await fetch('/admin/receipts/' + id + '/send-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'message=' + encodeURIComponent(message),
           });
-          
-          resultCount.textContent = '${t('result_count', lang, { count: "' + visible + '" })}';
-        };
+          if (!res.ok) {
+            const text = await res.text();
+            showToast('${t('download_fail', lang)}' + text, 'error');
+            btn.disabled = false;
+            btn.textContent = '📤 ${t('send_to_user', lang)}';
+            return false;
+          }
+          showToast('${t('toast_send_success', lang)}', 'success');
+          setTimeout(function() { window.location.reload(); }, 800);
+        } catch (err) {
+          showToast('${t('network_error_retry', lang)}', 'error');
+          btn.disabled = false;
+          btn.textContent = '📤 ${t('send_to_user', lang)}';
+        }
+        return false;
+      };
 
-        window.toggleGroup = function(phone) {
-          var header = document.querySelector('tr.group-header[data-phone="' + CSS.escape(phone) + '"]');
-          if (!header) return;
-          var isCollapsed = header.dataset.collapsed === 'true';
-          header.dataset.collapsed = isCollapsed ? 'false' : 'true';
-          var icon = document.getElementById('toggle-icon-' + CSS.escape(phone));
-          if (icon) icon.textContent = isCollapsed ? '▼' : '▶';
-          window.filter();
-        };
+      // ── AJAX 拒绝收据 ──────────────────────────────────────────
+      window.handleReject = async function(e, id) {
+        e.preventDefault();
+        var form = e.target;
+        var btn = document.getElementById('reject-btn-' + id);
+        btn.disabled = true;
+        btn.textContent = '⏳';
+        try {
+          const formData = new FormData(form);
+          const res = await fetch('/admin/receipts/' + id + '/reject', {
+            method: 'POST',
+            body: new URLSearchParams(formData),
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            showToast('${t('download_fail', lang)}' + text, 'error');
+            btn.disabled = false;
+            btn.textContent = '❌ ${t('reject', lang)}';
+            return false;
+          }
+          showToast('${t('toast_reject_success', lang)}', 'success');
+          setTimeout(function() { window.location.reload(); }, 800);
+        } catch (err) {
+          showToast('${t('network_error_retry', lang)}', 'error');
+          btn.disabled = false;
+          btn.textContent = '❌ ${t('reject', lang)}';
+        }
+        return false;
+      };
 
-        if (!searchInput || !statusFilter || !resultCount) return;
+      // ── AI 提取（改用 toast 替代 alert） ───────────────────────
+      async function aiExtract(id, btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ ${t('extracting', lang)}';
+        try {
+          const res = await fetch('/admin/receipts/' + id + '/ai-extract', { method: 'POST' });
+          const data = await res.json();
+          if (!res.ok) {
+            showToast('${t('ai_extract_failed', lang)}' + (data.error || res.statusText), 'error');
+            btn.disabled = false;
+            btn.textContent = '🤖 ${t('ai_extract', lang)}';
+            return;
+          }
+          showToast('${t('toast_ai_success', lang)}', 'success');
+          setTimeout(function() { window.location.reload(); }, 800);
+        } catch (e) {
+          showToast('${t('network_error_retry', lang)}', 'error');
+          btn.disabled = false;
+          btn.textContent = '🤖 ${t('ai_extract', lang)}';
+        }
+      }
 
-        searchInput.addEventListener('input', window.filter);
-        statusFilter.addEventListener('change', window.filter);
-      })();
-
-      // Ctrl+Enter 快捷提交发送表单
+      // ── Ctrl+Enter 快捷提交 ────────────────────────────────────
       (function() {
         var textareas = document.querySelectorAll('.send-form textarea');
         textareas.forEach(function(ta) {
@@ -1735,36 +2084,11 @@ function receiptsPage(receipts, lang = "zh") {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
               var form = ta.closest('form');
-              if (form && form.checkValidity()) {
-                form.requestSubmit();
-              }
+              if (form && form.checkValidity()) form.requestSubmit();
             }
           });
         });
       })();
-
-      async function aiExtract(id, btn) {
-        btn.disabled = true;
-        btn.textContent = '⏳ ${t('extracting', lang)}';
-
-        try {
-          const res = await fetch('/admin/receipts/' + id + '/ai-extract', { method: 'POST' });
-          const data = await res.json();
-
-          if (!res.ok) {
-            alert('${t('ai_extract_failed', lang)}' + (data.error || res.statusText));
-            btn.disabled = false;
-            btn.textContent = '🤖 ${t('ai_extract', lang)}';
-            return;
-          }
-
-          window.location.reload();
-        } catch (e) {
-          alert('${t('network_error_retry', lang)}');
-          btn.disabled = false;
-          btn.textContent = '🤖 ${t('ai_extract', lang)}';
-        }
-      }
     </script>`;
 
   return htmlLayout(t('receipt_audit', lang), content, '/admin', lang);
@@ -1861,8 +2185,25 @@ function startAdminServer() {
     }
     try {
       const lang = getLang(req);
-      const receipts = receiptStore.getAll();
-      res.send(receiptsPage(receipts, lang));
+      const searchQuery = (req.query.q || "").toLowerCase();
+      const statusFilter = req.query.status || "";
+      const page = parseInt(req.query.page) || 1;
+      
+      const allReceipts = receiptStore.getAll();
+      let receipts = allReceipts;
+      
+      if (searchQuery || statusFilter) {
+        receipts = allReceipts.filter(r => {
+          const text = ((r.phone || '') + ' ' + (r.ic || '')).toLowerCase();
+          const matchQ = !searchQuery || text.includes(searchQuery);
+          const matchStatus = !statusFilter || r.status === statusFilter;
+          return matchQ && matchStatus;
+        });
+      }
+      
+      const totalPages = Math.max(1, Math.ceil(receipts.length / 20));
+      
+      res.send(receiptsPage(receipts, lang, page, totalPages, searchQuery, statusFilter, allReceipts));
     } catch (err) {
       const lang = getLang(req);
       logger.error("加载收据列表失败", { error: err.message });
