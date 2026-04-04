@@ -11,7 +11,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: 设置 Node.js
         uses: actions/setup-node@v4
@@ -32,7 +32,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: 设置 Node.js
         uses: actions/setup-node@v4
@@ -59,7 +59,7 @@ jobs:
     # 仅在 lint 和 test 通过后才验证构建，避免浪费构建时间
     needs: [lint, test]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: 构建 Docker 镜像
         run: docker compose build wa-bot
