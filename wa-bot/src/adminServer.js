@@ -1558,9 +1558,15 @@ function receiptsPage(receipts, lang = "zh") {
 
   // Group receipts by phone number
   const groups = {};
+  const phoneIsLid = {};
   receipts.forEach((r, idx) => {
-    const phone = (r.phone || "—").replace(/@[^@]+$/, "");
-    if (!groups[phone]) groups[phone] = [];
+    const rawPhone = r.phone || "—";
+    const isLid = rawPhone.includes("@lid");
+    const phone = rawPhone.replace(/@[^@]+$/, "");
+    if (!groups[phone]) {
+      groups[phone] = [];
+      phoneIsLid[phone] = isLid;
+    }
     // Keep original index for display
     groups[phone].push({ r, idx });
   });
@@ -1589,12 +1595,16 @@ function receiptsPage(receipts, lang = "zh") {
       }
     }
 
+    const lidBadge = phoneIsLid[phone]
+      ? `<span class="badge" style="margin-left:8px;background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.3);font-size:10px">LID</span>`
+      : "";
+
     // Group header row
     rows += `<tr class="group-header" data-phone="${escapeHtml(phone)}" data-collapsed="false" onclick="toggleGroup('${escapeHtml(phone)}')" style="cursor:pointer; background:var(--bg-surface); border-top: 2px solid var(--border);">
       <td colspan="8">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <strong style="font-family:monospace; font-size:14px;">${escapeHtml(phone)}</strong>
+            <strong style="font-family:monospace; font-size:14px;">${escapeHtml(phone)}</strong>${lidBadge}
             <span style="margin-left:10px; color:var(--text-muted); font-size:13px;">${groupReceipts.length} ${t('group_receipts', lang)}</span>
           </div>
           <div>
@@ -1612,10 +1622,13 @@ function receiptsPage(receipts, lang = "zh") {
       const thumb = `<img class="thumb" src="${thumbSrc}" alt="${t('receipt_large', lang)}" onclick="openLightbox('${thumbSrc}')" />`;
 
       const safeStatus = VALID_RECEIPT_STATUSES.has(r.status) ? r.status : '';
+      const phoneDisplay = phoneIsLid[phone]
+        ? `${escapeHtml(phone)} <span style="color:#c084fc;font-size:10px">LID</span>`
+        : escapeHtml(phone);
       return `<tr class="group-row group-row-${escapeHtml(phone)}" data-phone="${escapeHtml(phone)}" data-status="${safeStatus}" id="row-${r.id}">
       <td>${receipts.length - idx}</td>
       <td>${r.submittedAt ? new Date(r.submittedAt).toLocaleString(locale) : "—"}</td>
-      <td style="font-size:12px">${escapeHtml(phone)}</td>
+      <td style="font-size:12px">${phoneDisplay}</td>
       <td style="font-size:12px">${r.ic || "—"}</td>
       <td>${thumb}</td>
       <td>${statusBadge}</td>
