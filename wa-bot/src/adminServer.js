@@ -426,6 +426,18 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh') {
       .toolbar input, .toolbar select { max-width: 100% !important; }
     }
 
+    /* ── 行内发送表单 ── */
+    td .send-form { display: flex; flex-direction: column; gap: 4px; }
+    td .send-form textarea {
+      width: 100%; min-height: 48px; max-height: 80px; resize: vertical;
+      padding: 6px 8px; border-radius: 6px; font-size: 12px;
+      border: 1px solid var(--border); background: var(--bg-surface-2);
+      color: var(--text-primary); font-family: inherit; outline: none;
+      transition: border-color .15s;
+    }
+    td .send-form textarea:focus { border-color: var(--accent-primary); }
+    td .send-form .btn-send { align-self: flex-start; padding: 5px 12px; font-size: 12px; }
+
     /* ── 图片缩略图 ── */
     .thumb {
       width: 56px; height: 56px; object-fit: cover; border-radius: 6px;
@@ -1551,7 +1563,20 @@ function _renderAiResult(aiResult, lang = "zh") {
 }
 
 /**
- * 构建展开面板内容（AI 结果 + 操作区）
+ * 渲染行内操作区（发送表单 + AI 提取按钮）— 直接在表格行内可见
+ */
+function renderInlineActions(r, lang = "zh") {
+  if (r.status === "pending_review") {
+    return `<button class="btn btn-ai" onclick="aiExtract('${r.id}', this)">🤖 ${t('ai_extract', lang)}</button>`;
+  }
+  return `<form class="send-form" id="send-form-${r.id}" onsubmit="return handleSend(event, '${r.id}')">
+    <textarea name="message" id="send-msg-${r.id}" placeholder="${t('message_placeholder', lang)}" required rows="2"></textarea>
+    <button type="submit" class="btn btn-send" id="send-btn-${r.id}">📤 ${t('send_to_user', lang)}</button>
+  </form>`;
+}
+
+/**
+ * 构建展开面板内容（仅 AI 结果 + 状态历史，不含发送表单）
  */
 function buildExpandPanel(r, lang = "zh") {
   const locale = lang === 'zh' ? "zh-CN" : "en-US";
@@ -1607,15 +1632,6 @@ function buildExpandPanel(r, lang = "zh") {
       <div class="sent-record">${sentMsg}<span class="sent-time">${sentTime}</span></div>
     </div>`;
   }
-
-  // 发送消息表单（所有状态通用）
-  html += `<div class="expand-section">
-    <div class="expand-label">📤 ${t('send_to_user', lang)}</div>
-    <form class="send-form" id="send-form-${r.id}" onsubmit="return handleSend(event, '${r.id}')">
-      <textarea name="message" id="send-msg-${r.id}" placeholder="${t('message_placeholder', lang)}" required></textarea>
-      <button type="submit" class="btn btn-send" id="send-btn-${r.id}">📤 ${t('send_to_user', lang)}</button>
-    </form>
-  </div>`;
 
   return html;
 }
@@ -1901,9 +1917,10 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
       <td style="font-size:12px">${r.ic || "—"}</td>
       <td>${thumb}</td>
       <td>${statusBadge}</td>
+      <td style="max-width:260px" onclick="event.stopPropagation()">${renderInlineActions(r, lang)}</td>
     </tr>
     <tr class="expand-row" id="expand-${r.id}">
-      <td colspan="6">
+      <td colspan="7">
         <div class="expand-panel">${panelContent}</div>
       </td>
     </tr>`;
@@ -1930,7 +1947,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
       <thead>
         <tr>
           <th>${t('col_num', lang)}</th><th>${t('col_submit_time', lang)}</th><th>${t('col_phone', lang)}</th><th>${t('col_ic', lang)}</th><th>${t('col_receipt_img', lang)}</th>
-          <th>${t('col_status', lang)}</th>
+          <th>${t('col_status', lang)}</th><th>${t('col_actions', lang)}</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
