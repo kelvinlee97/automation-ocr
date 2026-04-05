@@ -2072,7 +2072,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
       };
 
       // ── AI 提取（改用 toast 替代 alert） ───────────────────────
-      async function aiExtract(id, btn) {
+      window.aiExtract = async function(id, btn) {
         btn.disabled = true;
         btn.textContent = '⏳ ${t('extracting', lang)}';
         try {
