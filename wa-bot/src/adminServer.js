@@ -1978,6 +1978,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         if (statusFilter) {
           statusFilter.addEventListener('change', applyFilter);
         }
+      })();
 
       // ── 行展开/折叠 ────────────────────────────────────────────
       window.toggleRow = function(id) {
