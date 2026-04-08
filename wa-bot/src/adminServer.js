@@ -2016,9 +2016,9 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         var msgInput = document.getElementById('send-msg-' + id);
         var btn = document.getElementById('send-btn-' + id);
         var message = msgInput.value.trim();
-        if (!message) { showToast('${t('message_required', lang)}', 'error'); return false; }
+        if (!message) { showToast(${JSON.stringify(t('message_required', lang))}, 'error'); return false; }
         btn.disabled = true;
-        btn.textContent = '⏳ ${t('extracting', lang)}';
+        btn.textContent = '⏳ ' + ${JSON.stringify(t('extracting', lang))};
         try {
           const res = await fetch('/admin/receipts/' + id + '/send-message', {
             method: 'POST',
@@ -2027,17 +2027,17 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
           });
           if (!res.ok) {
             const text = await res.text();
-            showToast('${t('download_fail', lang)}' + text, 'error');
+            showToast(${JSON.stringify(t('download_fail', lang))} + text, 'error');
             btn.disabled = false;
-            btn.textContent = '📤 ${t('send_to_user', lang)}';
+            btn.textContent = '📤 ' + ${JSON.stringify(t('send_to_user', lang))};
             return false;
           }
-          showToast('${t('toast_send_success', lang)}', 'success');
+          showToast(${JSON.stringify(t('toast_send_success', lang))}, 'success');
           setTimeout(function() { window.location.reload(); }, 800);
         } catch (err) {
-          showToast('${t('network_error_retry', lang)}', 'error');
+          showToast(${JSON.stringify(t('network_error_retry', lang))}, 'error');
           btn.disabled = false;
-          btn.textContent = '📤 ${t('send_to_user', lang)}';
+          btn.textContent = '📤 ' + ${JSON.stringify(t('send_to_user', lang))};
         }
         return false;
       };
@@ -2057,17 +2057,17 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
           });
           if (!res.ok) {
             const text = await res.text();
-            showToast('${t('download_fail', lang)}' + text, 'error');
+            showToast(${JSON.stringify(t('download_fail', lang))} + text, 'error');
             btn.disabled = false;
-            btn.textContent = '❌ ${t('reject', lang)}';
+            btn.textContent = '❌ ' + ${JSON.stringify(t('reject', lang))};
             return false;
           }
-          showToast('${t('toast_reject_success', lang)}', 'success');
+          showToast(${JSON.stringify(t('toast_reject_success', lang))}, 'success');
           setTimeout(function() { window.location.reload(); }, 800);
         } catch (err) {
-          showToast('${t('network_error_retry', lang)}', 'error');
+          showToast(${JSON.stringify(t('network_error_retry', lang))}, 'error');
           btn.disabled = false;
-          btn.textContent = '❌ ${t('reject', lang)}';
+          btn.textContent = '❌ ' + ${JSON.stringify(t('reject', lang))};
         }
         return false;
       };
@@ -2075,24 +2075,24 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
       // ── AI 提取（改用 toast 替代 alert） ───────────────────────
       window.aiExtract = async function(id, btn) {
         btn.disabled = true;
-        btn.textContent = '⏳ ${t('extracting', lang)}';
+        btn.textContent = '⏳ ' + ${JSON.stringify(t('extracting', lang))};
         try {
           const res = await fetch('/admin/receipts/' + id + '/ai-extract', { method: 'POST' });
           const data = await res.json();
           if (!res.ok) {
-            showToast('${t('ai_extract_failed', lang)}' + (data.error || res.statusText), 'error');
+            showToast(${JSON.stringify(t('ai_extract_failed', lang))} + (data.error || res.statusText), 'error');
             btn.disabled = false;
-            btn.textContent = '🤖 ${t('ai_extract', lang)}';
+            btn.textContent = '🤖 ' + ${JSON.stringify(t('ai_extract', lang))};
             return;
           }
-          showToast('${t('toast_ai_success', lang)}', 'success');
+          showToast(${JSON.stringify(t('toast_ai_success', lang))}, 'success');
           setTimeout(function() { window.location.reload(); }, 800);
         } catch (e) {
-          showToast('${t('network_error_retry', lang)}', 'error');
+          showToast(${JSON.stringify(t('network_error_retry', lang))}, 'error');
           btn.disabled = false;
-          btn.textContent = '🤖 ${t('ai_extract', lang)}';
+          btn.textContent = '🤖 ' + ${JSON.stringify(t('ai_extract', lang))};
         }
-      }
+      };
 
       // ── Ctrl+Enter 快捷提交 ────────────────────────────────────
       (function() {
