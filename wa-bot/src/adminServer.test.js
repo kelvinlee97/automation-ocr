@@ -16,10 +16,15 @@ function assertScriptSyntax(html, label) {
   while ((match = scriptRegex.exec(html)) !== null) {
     count++;
     const src = match[1];
-    expect(() => new vm.Script(src)).not.toThrow(
-      // 失败时显示脚本前 200 字符，便于定位问题
-      `${label} 第 ${count} 个 <script> 块 JS 语法错误，开头：\n${src.slice(0, 200)}`
-    );
+    // 用 try/catch 替代 .not.toThrow(string)——后者的 string 参数是匹配抛出错误 message 的模式，
+    // 不是自定义失败描述。若 SyntaxError message 不含该字符串，测试可能假通过，失去回归防护价值。
+    try {
+      new vm.Script(src);
+    } catch (e) {
+      throw new Error(
+        `${label} 第 ${count} 个 <script> 块 JS 语法错误：${e.message}\n开头：\n${src.slice(0, 200)}`
+      );
+    }
   }
   // 确保实际找到了 script 块（防止 regex 写错导致空跑）
   expect(count).toBeGreaterThan(0);
@@ -59,14 +64,14 @@ describe('HTML 内嵌 script 块语法合法性（回归防御）', () => {
     assertScriptSyntax(html, 'usersPage(en)');
   });
 
-  test('setupPage - 中文界面 script 块无语法错误', () => {
-    const html = mod._setupPage('', 'zh');
-    assertScriptSyntax(html, 'setupPage(zh)');
+  test('qrPage - 中文界面 script 块无语法错误', () => {
+    const html = mod._qrPage('zh');
+    assertScriptSyntax(html, 'qrPage(zh)');
   });
 
-  test('setupPage - 英文界面 script 块无语法错误', () => {
-    const html = mod._setupPage('', 'en');
-    assertScriptSyntax(html, 'setupPage(en)');
+  test('qrPage - 英文界面 script 块无语法错误', () => {
+    const html = mod._qrPage('en');
+    assertScriptSyntax(html, 'qrPage(en)');
   });
 });
 

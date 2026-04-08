@@ -861,7 +861,7 @@ function usersPage(users, currentUser, flash = "", lang = "zh") {
     const deleteBtn = isSelf
       ? `<button class="btn" disabled title="${t('cannot_delete_self', lang)}">🚫 ${t('delete', lang)}</button>`
       : `<form class="inline" method="POST" action="/admin/users/${encodeURIComponent(u.username)}/delete"
-              onsubmit="return confirm('${t('confirm_delete', lang, { username: u.username })}')">
+              onsubmit="return confirm(${JSON.stringify(t('confirm_delete', lang, { username: u.username }))})">
            <button class="btn btn-reject">${t('delete', lang)}</button>
          </form>`;
 
@@ -1659,7 +1659,7 @@ function _renderActions(r, lang = "zh") {
   // ai_extracted：显示拒绝按钮（发消息已通用化，在下方统一渲染）
   if (r.status === "ai_extracted") {
     actionsHtml += `<form class="reject-form" method="POST" action="/admin/receipts/${r.id}/reject"
-          onsubmit="return confirm('${t('confirm_reject', lang)}')">
+          onsubmit="return confirm(${JSON.stringify(t('confirm_reject', lang))})">
       <input name="note" placeholder="${t('reject_note', lang)}"
              onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.requestSubmit();}" />
       <button type="submit" class="btn btn-reject">❌ ${t('reject', lang)}</button>
@@ -2544,5 +2544,7 @@ function startAdminServer() {
 module.exports = {
   startAdminServer, setClient, setQR, setPairingCodeReady, setDisconnected,
   // 仅在测试环境暴露内部页面函数，用于语法验证测试
-  ...(process.env.NODE_ENV === 'test' && { _receiptsPage: receiptsPage, _usersPage: usersPage, _setupPage: setupPage }),
+  // test 模式导出内部渲染函数，供 vm.Script 语法检测测试使用
+  // qrPage 而非 setupPage：setupPage 是无 script 的初始化表单，qrPage 才包含内嵌脚本块
+  ...(process.env.NODE_ENV === 'test' && { _receiptsPage: receiptsPage, _usersPage: usersPage, _qrPage: qrPage }),
 };
