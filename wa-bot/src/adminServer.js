@@ -675,7 +675,7 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh') {
       function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
         btn.textContent = theme === 'light' ? '🌙' : '☀️';
-        btn.title = theme === 'light' ? '${t('switch_to_dark', lang)}' : '${t('switch_to_light', lang)}';
+        btn.title = theme === 'light' ? ${JSON.stringify(t('switch_to_dark', lang))} : ${JSON.stringify(t('switch_to_light', lang))};
         localStorage.setItem(STORAGE_KEY, theme);
       }
 
@@ -890,8 +890,10 @@ function usersPage(users, currentUser, flash = "", lang = "zh") {
     </table>
     <script>
       function promptReset(form, username) {
-        const pwd = prompt('${t('prompt_new_password', lang, { username: "' + username + '" })}');
-        if (!pwd || pwd.length < 8) { alert('${t('password_min_8', lang)}'); return false; }
+        // 翻译模板在服务端注入，{username} 在客户端运行时替换，避免 XSS 且保持动态插值
+        var tpl = ${JSON.stringify(t('prompt_new_password', lang))};
+        var pwd = prompt(tpl.replace('{username}', username));
+        if (!pwd || pwd.length < 8) { alert(${JSON.stringify(t('password_min_8', lang))}); return false; }
         form.querySelector('#rp-' + username).value = pwd;
         return true;
       }
@@ -1153,11 +1155,11 @@ function qrPage(lang = "zh") {
     // ─── i18n 变量注入 ─────────────────────────────────
     var L = '${lang}';
     var T = {
-      requesting: '${t('requesting', lang)}',
-      fetching: '${t('fetching', lang)}',
-      refetch: '${t('refetch', lang)}',
-      network_error: '${t('network_error', lang)}',
-      code_placeholder: '${t('code_placeholder', lang)}',
+      requesting: ${JSON.stringify(t('requesting', lang))},
+      fetching: ${JSON.stringify(t('fetching', lang))},
+      refetch: ${JSON.stringify(t('refetch', lang))},
+      network_error: ${JSON.stringify(t('network_error', lang))},
+      code_placeholder: ${JSON.stringify(t('code_placeholder', lang))},
     };
 
     // ─── Tab 切换 ────────────────────────────────────────
@@ -1194,7 +1196,7 @@ function qrPage(lang = "zh") {
         const data = await res.json();
 
         if (!res.ok) {
-          errEl.textContent = data.error || '${t('network_error', lang)}';
+          errEl.textContent = data.error || ${JSON.stringify(t('network_error', lang))};
           errEl.style.display = 'block';
           codePlaceholder.textContent = T.code_placeholder;
         } else {
@@ -1390,6 +1392,9 @@ const TRANSLATIONS = {
     toast_reject_success: "收据已拒绝",
     toast_ai_success: "AI 提取成功",
     toast_error: "操作失败",
+    sending: "发送中…",
+    send_fail: "发送失败：",
+    reject_fail: "拒绝失败：",
   },
   en: {
     // Common
@@ -1530,6 +1535,9 @@ const TRANSLATIONS = {
     toast_reject_success: "Receipt rejected",
     toast_ai_success: "AI extraction successful",
     toast_error: "Operation failed",
+    sending: "Sending…",
+    send_fail: "Send failed: ",
+    reject_fail: "Reject failed: ",
   },
 };
 
@@ -2018,7 +2026,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         var message = msgInput.value.trim();
         if (!message) { showToast(${JSON.stringify(t('message_required', lang))}, 'error'); return false; }
         btn.disabled = true;
-        btn.textContent = '⏳ ' + ${JSON.stringify(t('extracting', lang))};
+        btn.textContent = '⏳ ' + ${JSON.stringify(t('sending', lang))};
         try {
           const res = await fetch('/admin/receipts/' + id + '/send-message', {
             method: 'POST',
@@ -2027,7 +2035,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
           });
           if (!res.ok) {
             const text = await res.text();
-            showToast(${JSON.stringify(t('download_fail', lang))} + text, 'error');
+            showToast(${JSON.stringify(t('send_fail', lang))} + text, 'error');
             btn.disabled = false;
             btn.textContent = '📤 ' + ${JSON.stringify(t('send_to_user', lang))};
             return false;
@@ -2057,7 +2065,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
           });
           if (!res.ok) {
             const text = await res.text();
-            showToast(${JSON.stringify(t('download_fail', lang))} + text, 'error');
+            showToast(${JSON.stringify(t('reject_fail', lang))} + text, 'error');
             btn.disabled = false;
             btn.textContent = '❌ ' + ${JSON.stringify(t('reject', lang))};
             return false;
@@ -2078,13 +2086,16 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         btn.textContent = '⏳ ' + ${JSON.stringify(t('extracting', lang))};
         try {
           const res = await fetch('/admin/receipts/' + id + '/ai-extract', { method: 'POST' });
-          const data = await res.json();
+          // 先检查 HTTP 状态，再解析 body——5xx 响应体可能是 HTML，直接 res.json() 会抛 SyntaxError
           if (!res.ok) {
-            showToast(${JSON.stringify(t('ai_extract_failed', lang))} + (data.error || res.statusText), 'error');
+            let errMsg = res.statusText;
+            try { const d = await res.json(); errMsg = d.error || errMsg; } catch (_) {}
+            showToast(${JSON.stringify(t('ai_extract_failed', lang))} + errMsg, 'error');
             btn.disabled = false;
             btn.textContent = '🤖 ' + ${JSON.stringify(t('ai_extract', lang))};
             return;
           }
+          const data = await res.json();
           showToast(${JSON.stringify(t('toast_ai_success', lang))}, 'success');
           setTimeout(function() { window.location.reload(); }, 800);
         } catch (e) {
@@ -2530,4 +2541,8 @@ function startAdminServer() {
   });
 }
 
-module.exports = { startAdminServer, setClient, setQR, setPairingCodeReady, setDisconnected };
+module.exports = {
+  startAdminServer, setClient, setQR, setPairingCodeReady, setDisconnected,
+  // 仅在测试环境暴露内部页面函数，用于语法验证测试
+  ...(process.env.NODE_ENV === 'test' && { _receiptsPage: receiptsPage, _usersPage: usersPage, _setupPage: setupPage }),
+};
