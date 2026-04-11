@@ -47,3 +47,7 @@ opencode.json
 package-lock.json
 root package.json
 !wa-bot/package.json
+AGENTS.md
+CLAUDE.md
+opencode.json
+
