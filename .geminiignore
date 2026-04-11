@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+wa-bot/node_modules/
+
+# Data and Secrets
+data/
+wa-bot/.wwebjs_auth/
+wa-bot/.wwebjs_cache/
+wa-bot/.env
+*.env
+*.xlsx
+*.json
+!wa-bot/package.json
+!wa-bot/config/config.yaml
+
+# Logs
+logs/
+*.log
+
+# Git stuff
+.git/
+.worktrees/
+.github/
+
+# IDEs
+.idea/
+.vscode/
+.obsidian/
+
+# Build artifacts
+dist/
+build/
