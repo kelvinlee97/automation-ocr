@@ -7,6 +7,7 @@ __pycache__/
 venv/
 .playwright-mcp
 .serena/
+.obsidian
 
 # WhatsApp session 数据（含登录凭证，不入版本控制）
 wa-bot/.wwebjs_auth/
