@@ -1,53 +1,49 @@
-# 依赖和运行时文件
+# ── 依赖和运行时 ──────────────────────────────
 node_modules/
 __pycache__/
 *.pyc
 *.pyo
 .venv/
 venv/
-.playwright-mcp
-.serena/
-.obsidian
 
-# WhatsApp session 数据（含登录凭证，不入版本控制）
+# ── Playwright MCP ─────────────────────────────
+.playwright-mcp/
+
+# ── WhatsApp session（含登录凭证）────────────────
 wa-bot/.wwebjs_auth/
 wa-bot/.wwebjs_cache/
 
-# 业务数据文件（按需备份，不入版本控制）
+# ── 业务数据（运行时产生，不入版本控制）─────────
 data/excel/*.xlsx
+data/receipts/
 data/uploads/
 data/images/
 data/pending_receipts.json
 data/sessions.json
 
-# 日志文件
+# ── 日志 ──────────────────────────────────────
 logs/*.log
 
-# 系统文件
+# ── 系统 / 环境 ────────────────────────────────
 .DS_Store
 *.env
 
+# ── CI/CD 临时文件 ─────────────────────────────
 .gemini/
 gha-creds-*.json
 
-# Git worktrees（隔离开发目录，不入版本控制）
+# ── Git worktrees ──────────────────────────────
 .worktrees/
 
-# IDE 和工具
+# ── IDE / 编辑器 ───────────────────────────────
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# 本地测试文件
-.playwright-mcp/
-opencode.json
-
-# 根目录 package.json（仅供本地测试）
-package-lock.json
-root package.json
+# ── 根目录开发文件（仅本地测试用）───────────────
+/package.json
+/package-lock.json
 !wa-bot/package.json
-AGENTS.md
-CLAUDE.md
-opencode.json
+!wa-bot/package-lock.json
 
