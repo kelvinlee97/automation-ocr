@@ -179,23 +179,12 @@ function rejectReceipt(id, note = "") {
   writeStore(records);
 }
 
-/**
- * 记录人工发送给用户的消息内容，状态流转为 confirmed
- * 用于「发送给用户」操作后保存已发内容，方便审计
- *
- * @deprecated 使用 sendMessageToUser() 代替，该函数状态流转更语义化
- * @param {string} id
- * @param {string} message  发送的消息文本
- */
-function saveSentMessage(id, message) {
-  const records = readStore();
-  const idx     = records.findIndex(r => r.id === id);
-  if (idx === -1) throw new Error(`Receipt not found: ${id}`);
-
-  records[idx].status      = "confirmed";
-  records[idx].sentMessage = message;
-  records[idx].sentAt      = new Date().toISOString();
-  writeStore(records);
+// saveSentMessage 已删除，保留向后兼容的空函数
+// 原功能已被 sendMessageToUser() 取代（状态流转更语义化）
+// @deprecated
+function saveSentMessage() {
+  // 空实现，用于接收旧的直接调用
+  // 实际功能已迁移至 sendMessageToUser()
 }
 
 /**

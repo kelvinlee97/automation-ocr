@@ -2,7 +2,12 @@ const ExcelJS = require("exceljs");
 const fs = require("fs");
 const path = require("path");
 
-const EXCEL_PATH = path.join(__dirname, "../../../data/excel/records.xlsx");
+// 优先使用环境变量 DATA_DIR（生产容器通过 docker-compose 注入）
+// 回退到相对路径供本地开发：__dirname(/app/src/services) 向上四级 = 项目根目录/data
+// 与 receiptStore.js 保持路径策略一致，确保写入挂载卷路径
+const DATA_DIR   = process.env.DATA_DIR || path.resolve(__dirname, "../../../../data");
+const EXCEL_DIR  = path.join(DATA_DIR, "excel");
+const EXCEL_PATH = path.join(EXCEL_DIR, "records.xlsx");
 
 // 马来西亚时区（UTC+8），Excel 时间列对业务人员可读
 const MY_TIMEZONE = "Asia/Kuala_Lumpur";
@@ -35,8 +40,8 @@ function withExcelLock(fn) {
 
 // 确保 Excel 文件存在并初始化表头（含审核列）
 async function initExcel() {
-  if (!fs.existsSync(path.dirname(EXCEL_PATH))) {
-    fs.mkdirSync(path.dirname(EXCEL_PATH), { recursive: true });
+  if (!fs.existsSync(EXCEL_DIR)) {
+    fs.mkdirSync(EXCEL_DIR, { recursive: true });
   }
 
   const workbook = new ExcelJS.Workbook();

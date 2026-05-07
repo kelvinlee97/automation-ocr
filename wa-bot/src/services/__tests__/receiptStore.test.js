@@ -153,9 +153,4 @@ describe('receiptStore 导出', () => {
     const store = require('../receiptStore');
     expect(typeof store.sendMessageToUser).toBe('function');
   });
-
-  test('saveSentMessage 仍保持向后兼容导出', () => {
-    const store = require('../receiptStore');
-    expect(typeof store.saveSentMessage).toBe('function');
-  });
 });

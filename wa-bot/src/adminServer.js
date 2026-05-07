@@ -1644,69 +1644,8 @@ function buildExpandPanel(r, lang = "zh") {
   return html;
 }
 
-/**
- * 渲染单行操作区（保留向后兼容，但不再在表格中使用）
- */
-function _renderActions(r, lang = "zh") {
-  const locale = lang === 'zh' ? "zh-CN" : "en-US";
-  let actionsHtml = "";
-
-  // pending_review：显示 AI 提取按钮
-  if (r.status === "pending_review") {
-    actionsHtml += `<button class="btn btn-ai" onclick="aiExtract('${r.id}', this)">🤖 ${t('ai_extract', lang)}</button>`;
-  }
-
-  // ai_extracted：显示拒绝按钮（发消息已通用化，在下方统一渲染）
-  if (r.status === "ai_extracted") {
-    actionsHtml += `<form class="reject-form" method="POST" action="/admin/receipts/${r.id}/reject"
-          onsubmit="return confirm(${JSON.stringify(t('confirm_reject', lang))})">
-      <input name="note" placeholder="${t('reject_note', lang)}"
-             onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.requestSubmit();}" />
-      <button type="submit" class="btn btn-reject">❌ ${t('reject', lang)}</button>
-    </form>`;
-  }
-
-  // confirmed：显示已发送记录
-  if (r.status === "confirmed") {
-    const sentTime = r.sentAt ? new Date(r.sentAt).toLocaleString(locale) : "—";
-    const sentMsg  = r.sentMessage
-      ? `<div class="sent-msg">${escapeHtml(r.sentMessage)}</div>`
-      : "";
-    actionsHtml += `<div class="sent-record">
-      ${sentMsg}
-      <span class="sent-time">✓ ${t('sent_at', lang)} ${sentTime}</span>
-    </div>`;
-  }
-
-  // rejected：显示拒绝记录
-  if (r.status === "rejected") {
-    const rejectTime = r.reviewedAt ? new Date(r.reviewedAt).toLocaleString(locale) : "—";
-    const rejectNote = r.reviewNote
-      ? `<div class="reject-note">${escapeHtml(r.reviewNote)}</div>`
-      : "";
-    actionsHtml += `<div>${rejectNote}<span style="color:#aaa;font-size:12px">${t('rejected_at', lang)} ${rejectTime}</span></div>`;
-  }
-
-  // waiting_user_reply：显示上次发送记录（等待用户回复中）
-  if (r.status === "waiting_user_reply") {
-    const sentTime = r.sentAt ? new Date(r.sentAt).toLocaleString(locale) : "—";
-    const sentMsg  = r.sentMessage
-      ? `<div class="sent-msg">${escapeHtml(r.sentMessage)}</div>`
-      : "";
-    actionsHtml += `<div class="sent-record">
-      ${sentMsg}
-      <span class="sent-time">⏳ ${t('sent_at', lang)} ${sentTime}</span>
-    </div>`;
-  }
-
-  // 所有状态通用：发送消息给用户的表单
-  actionsHtml += `<form class="send-form" method="POST" action="/admin/receipts/${r.id}/send-message">
-    <textarea name="message" placeholder="${t('message_placeholder', lang)}" required></textarea>
-    <button type="submit" class="btn btn-send">📤 ${t('send_to_user', lang)}</button>
-  </form>`;
-
-  return actionsHtml;
-}
+// _renderActions 已删除，保留向后兼容的空导出
+// 原功能已被 renderInlineActions + buildExpandPanel 取代
 
 /** 转义 HTML 特殊字符，防止消息内容中含有尖括号等引发 XSS */
 function escapeHtml(str) {

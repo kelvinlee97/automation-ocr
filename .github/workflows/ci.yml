@@ -66,8 +66,7 @@ jobs:
 
       - name: 验证镜像启动（smoke test）
         run: |
-          # 只验证容器能正常启动并退出，不做完整运行
           docker compose run --rm \
             -e GEMINI_API_KEY=test-placeholder \
             -e NODE_ENV=test \
-            wa-bot node -e "require('./src/index.js')" || true
+            wa-bot node -e "require('./src/index.js')"
