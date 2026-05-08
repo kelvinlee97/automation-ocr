@@ -15,7 +15,7 @@
 | Phase | 标题 | 状态 | 依赖 |
 |-------|------|------|------|
 | Phase 1 | 关键 Bug 修复 + 死代码清理 | ✅ done | 无 |
-| Phase 2 | SQLite 数据层迁移 | ⏳ pending | Phase 1 |
+| Phase 2 | SQLite 数据层迁移 | ✅ done | Phase 1 |
 | Phase 3 | 路由集成测试补全 | ⏳ pending | Phase 2 |
 | Phase 4 | adminServer.js 拆分 | ⏳ pending | Phase 3 |
 | Phase 5 | 安全加固 + 可观测性 | ⏳ pending | Phase 4 |
@@ -37,9 +37,11 @@
 - [x] **死代码清理**：删除 `receiptStore.js` 中的 `saveSentMessage` 函数（已标记 `@deprecated`）
 - [x] **死代码清理**：删除根 `package.json` 中的 `playwright` devDependency（无任何使用点）
 - [x] **死代码清理**：删除空文件 `config/messages.yaml`（注释说明 Bot 已静默化，无内容）
+- [x] **测试基础设施**（计划外补充）：配置 Jest（`wa-bot/jest.config.js`）+ 根 `package.json` test 脚本指向 `wa-bot/`
+- [x] **单元测试**（计划外补充）：新增 `receiptStore.test.js`（20 个用例，覆盖 CRUD + 全部状态流转）与 `excelService.test.js`（9 个用例，覆盖 DATA_DIR 路径策略 + 核心读写）
 
 ### 成功标准
-- `npm test` 全绿
+- ✅ `npm test` 全绿（44 tests passed）
 - `npm run lint` 无警告
 - 本地启动后 Excel 写入路径在挂载卷内（非 `/app/data/`）
 
@@ -52,21 +54,21 @@
 
 ### 任务清单
 
-- [ ] **新增依赖**：在 `wa-bot/package.json` 中添加 `better-sqlite3`，更新 Dockerfile 安装 `build-essential`
-- [ ] **新建数据层**：`wa-bot/src/db/index.js`（SQLite 单例，PRAGMA journal_mode=WAL，PRAGMA foreign_keys=ON）
-- [ ] **新建 Schema**：新建 `wa-bot/src/db/schema.sql`（3 张表 + 索引）
+- [x] **新增依赖**：在 `wa-bot/package.json` 中添加 `better-sqlite3`，更新 Dockerfile 安装 `build-essential`
+- [x] **新建数据层**：`wa-bot/src/db/index.js`（SQLite 单例，PRAGMA journal_mode=WAL，PRAGMA foreign_keys=ON）
+- [x] **新建 Schema**：新建 `wa-bot/src/db/schema.sql`（3 张表 + 索引）
   - `receipts(id TEXT PK, phone, ic, image_filename, status, submitted_at, ai_result_json, reviewed_at, review_note, sent_message, sent_at, previous_status)`
   - `sessions(phone TEXT PK, ic, state, created_at, updated_at, receipt_count, receipt_count_date)`
   - `admin_users(username TEXT PK, password_hash, created_at)`
   - 索引：`receipts(status)`, `receipts(submitted_at DESC)`, `receipts(phone)`
-- [ ] **重写 receiptStore.js**：内部改用 SQLite，对外 API（`init`, `addReceipt`, `updateReceipt`, `getReceipt`, `getAll`, `deleteReceipt`）不变
-- [ ] **重写 sessionManager.js**：内部改用 SQLite，对外 API 不变（修复模块级缓存与磁盘不同步问题）
-- [ ] **重写 adminUserService.js**：内部改用 SQLite，对外 API 不变（scrypt 哈希逻辑保留）
-- [ ] **迁移脚本**：新建 `wa-bot/scripts/migrate-json-to-sqlite.js`，支持 `--dry-run`（仅打印）与 `--apply`（自动备份 + 事务 INSERT）
+- [x] **重写 receiptStore.js**：内部改用 SQLite，对外 API（`init`, `addPendingReceipt`, `getAll`, `getById`, `saveAiResult`, `confirmReceipt`, `rejectReceipt`, `sendMessageToUser`, `getImagePath`）不变
+- [x] **重写 sessionManager.js**：内部改用 SQLite，对外 API 不变（修复模块级缓存与磁盘不同步问题）
+- [x] **重写 adminUserService.js**：内部改用 SQLite，对外 API 不变（scrypt 哈希逻辑保留）
+- [x] **迁移脚本**：新建 `wa-bot/scripts/migrate-json-to-sqlite.js`，支持 `--dry-run`（仅打印）与 `--apply`（自动备份 + 事务 INSERT）
   - 备份目录：`data/backup/<ISO timestamp>/`
   - 幂等设计：启动时若旧 JSON 存在但 DB 中无数据，自动触发迁移
-- [ ] **数据库初始化**：更新 `wa-bot/index.js`，启动时调用 `db.init()` 与 `migrate()`
-- [ ] **并发测试**：新建 `wa-bot/src/db/__tests__/db.test.js`，fork 100 个 worker 同时 INSERT 验证不丢数据
+- [x] **数据库初始化**：更新 `wa-bot/index.js`，启动时调用 `db.init()` 与 `migrate()`
+- [x] **并发测试**：新建 `wa-bot/src/db/__tests__/db.test.js`，fork 100 个 worker 同时 INSERT 验证不丢数据
 
 ### 成功标准
 - 现有 Jest 测试全绿

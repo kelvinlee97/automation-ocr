@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libcairo2 \
     libnss3 \
+    build-essential \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
 
 # 先复制 package.json，利用 layer 缓存

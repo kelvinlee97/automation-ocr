@@ -1,156 +1,197 @@
-'use strict';
+"use strict";
 
-/**
- * receiptStore.test.js — sendMessageToUser 单元测试
- *
- * mock 边界：fs（文件 I/O）
- * 真实跑：receiptStore 全部业务逻辑
- */
+const os   = require("os");
+const fs   = require("fs");
+const path = require("path");
 
-// ─── mock fs，使用内存文件系统 ─────────────────────────────────────────────────
+// DATA_DIR 在模块级设置，require 前必须有效
+const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "test-store-"));
+process.env.DATA_DIR = DATA_DIR;
 
-const mockFiles = {};
-const mockDirs  = new Set();
+// 重置 db 单例，确保使用当前 DATA_DIR
+const dbModule = require("../../db");
+dbModule._reset();
 
-jest.mock('fs', () => ({
-  existsSync:    (p) => mockDirs.has(p) || (p in mockFiles),
-  readFileSync:  (p, _enc) => {
-    if (!(p in mockFiles)) throw new Error(`ENOENT: ${p}`);
-    return mockFiles[p];
-  },
-  writeFileSync: (p, d) => { mockFiles[p] = d; },
-  mkdirSync:     (p)    => { mockDirs.add(p); },
-}));
+const store = require("../receiptStore");
 
-// ─── 测试准备 ─────────────────────────────────────────────────────────────────
+// ─── 测试辅助 ──────────────────────────────────────────────────────────────────
 
-const _receiptStore = require('../receiptStore');
-
-// 每个测试前重置内存文件系统，保证测试隔离
-beforeEach(() => {
-  // 清空内存文件
-  Object.keys(mockFiles).forEach(k => delete mockFiles[k]);
-  mockDirs.clear();
-  // 清除模块缓存，让 receiptStore 重新初始化
-  jest.resetModules();
-});
-
-// 工厂函数：快速创建一条带指定状态的收据
-function _createReceipt(status = 'pending_review') {
-  const store = require('../receiptStore');
-  // 直接操作 store 的内部写入来模拟已存在记录
-  // 使用 addPendingReceipt 创建 pending_review，再用 store 函数流转
-  const { id } = store.addPendingReceipt('6012345678@c.us', 'base64data', 'image/jpeg', 'IC001');
-
-  if (status === 'ai_extracted') {
-    store.saveAiResult(id, { amount: 100, summary: '测试', confidence: 0.9, success: true });
-  } else if (status === 'confirmed') {
-    store.saveAiResult(id, { amount: 100, summary: '测试', confidence: 0.9, success: true });
-    store.confirmReceipt(id, '确认');
-  } else if (status === 'rejected') {
-    store.rejectReceipt(id, '图片不清晰');
-  } else if (status === 'waiting_user_reply') {
-    store.sendMessageToUser(id, '请重新发送收据');
-  }
-
-  return id;
+function addOne(overrides = {}) {
+  return store.addPendingReceipt(
+    overrides.phone      ?? "60123456789@c.us",
+    Buffer.from("fake-image").toString("base64"),
+    overrides.mimeType   ?? "image/jpeg",
+    overrides.ic         ?? "880101-01-1234"
+  );
 }
 
-// ─── sendMessageToUser 测试 ───────────────────────────────────────────────────
+beforeAll(() => {
+  store.init();
+});
 
-describe('sendMessageToUser', () => {
-  // 每个 test 需要重新 require，因为 beforeEach 清了 jest.resetModules()
-  let store;
-  beforeEach(() => {
-    store = require('../receiptStore');
+afterAll(() => {
+  dbModule.close();
+  fs.rmSync(DATA_DIR, { recursive: true, force: true });
+});
+
+// ─── addPendingReceipt ────────────────────────────────────────────────────────
+
+describe("addPendingReceipt", () => {
+  it("返回 id（时间戳格式）和 imageFilename", () => {
+    const { id, imageFilename } = addOne();
+    expect(id).toMatch(/^\d+-\d{4}$/);
+    expect(imageFilename).toBe(`${id}.jpg`);
   });
 
-  test('pending_review 状态下可发消息，状态变为 waiting_user_reply', () => {
-    const { id } = store.addPendingReceipt('60100000001@c.us', 'b64', 'image/jpeg', null);
-
-    store.sendMessageToUser(id, '请提供清晰收据');
-
+  it("记录 status 为 pending_review，字段齐全", () => {
+    const { id } = addOne({ phone: "60198765432@c.us", ic: "900202-02-2345" });
     const record = store.getById(id);
-    expect(record.status).toBe('waiting_user_reply');
-    expect(record.sentMessage).toBe('请提供清晰收据');
-    expect(record.sentAt).toBeDefined();
-    // previousStatus 记录来源状态，方便审计
-    expect(record.previousStatus).toBe('pending_review');
+    expect(record.status).toBe("pending_review");
+    expect(record.phone).toBe("60198765432@c.us");
+    expect(record.ic).toBe("900202-02-2345");
+    expect(record.aiResult).toBeNull();
   });
 
-  test('ai_extracted 状态下可发消息', () => {
-    const { id } = store.addPendingReceipt('60100000002@c.us', 'b64', 'image/jpeg', null);
-    store.saveAiResult(id, { amount: 50, summary: '餐厅', confidence: 0.8, success: true });
-
-    store.sendMessageToUser(id, '金额有误，请确认');
-
-    const record = store.getById(id);
-    expect(record.status).toBe('waiting_user_reply');
-    expect(record.previousStatus).toBe('ai_extracted');
+  it("mimeType=image/png → .png 扩展名", () => {
+    const { imageFilename } = addOne({ mimeType: "image/png" });
+    expect(imageFilename).toMatch(/\.png$/);
   });
 
-  test('confirmed 状态下可再次发消息', () => {
-    const { id } = store.addPendingReceipt('60100000003@c.us', 'b64', 'image/jpeg', null);
-    store.saveAiResult(id, { amount: 80, summary: '超市', confidence: 0.9, success: true });
-    store.confirmReceipt(id);
-
-    store.sendMessageToUser(id, '补充材料通知');
-
-    const record = store.getById(id);
-    expect(record.status).toBe('waiting_user_reply');
-    expect(record.previousStatus).toBe('confirmed');
-    expect(record.sentMessage).toBe('补充材料通知');
+  it("mimeType=image/webp → .webp 扩展名", () => {
+    const { imageFilename } = addOne({ mimeType: "image/webp" });
+    expect(imageFilename).toMatch(/\.webp$/);
   });
 
-  test('rejected 状态下可发消息，通知用户被拒原因', () => {
-    const { id } = store.addPendingReceipt('60100000004@c.us', 'b64', 'image/jpeg', null);
-    store.rejectReceipt(id, '图片模糊');
-
-    store.sendMessageToUser(id, '您的收据因图片模糊被拒绝，请重拍');
-
-    const record = store.getById(id);
-    expect(record.status).toBe('waiting_user_reply');
-    expect(record.previousStatus).toBe('rejected');
-  });
-
-  test('waiting_user_reply 状态下可重复发消息（覆盖上次）', () => {
-    const { id } = store.addPendingReceipt('60100000005@c.us', 'b64', 'image/jpeg', null);
-    store.sendMessageToUser(id, '第一次通知');
-    store.sendMessageToUser(id, '第二次催促');
-
-    const record = store.getById(id);
-    expect(record.status).toBe('waiting_user_reply');
-    // previousStatus 为上一次的来源状态
-    expect(record.previousStatus).toBe('waiting_user_reply');
-    expect(record.sentMessage).toBe('第二次催促');
-  });
-
-  test('ID 不存在时抛出错误', () => {
-    expect(() => {
-      store.sendMessageToUser('non-existent-id', '测试消息');
-    }).toThrow('Receipt not found: non-existent-id');
-  });
-
-  test('sentAt 字段为合法 ISO 时间字符串', () => {
-    const { id } = store.addPendingReceipt('60100000006@c.us', 'b64', 'image/jpeg', null);
-    const before = new Date().toISOString();
-
-    store.sendMessageToUser(id, '时间戳测试');
-
-    const after = new Date().toISOString();
-    const record = store.getById(id);
-
-    // sentAt 应在调用前后时间之间
-    expect(record.sentAt >= before).toBe(true);
-    expect(record.sentAt <= after).toBe(true);
+  it("未知 mimeType 回退为 .jpg", () => {
+    const { imageFilename } = addOne({ mimeType: "image/bmp" });
+    expect(imageFilename).toMatch(/\.jpg$/);
   });
 });
 
-// ─── sendMessageToUser 导出验证 ───────────────────────────────────────────────
+// ─── getAll ───────────────────────────────────────────────────────────────────
 
-describe('receiptStore 导出', () => {
-  test('sendMessageToUser 已导出', () => {
-    const store = require('../receiptStore');
-    expect(typeof store.sendMessageToUser).toBe('function');
+describe("getAll", () => {
+  it("多条记录：按 submitted_at DESC 排列，两条都存在", async () => {
+    const before = store.getAll().length;
+    addOne({ phone: "a@c.us" });
+    // 确保时间戳不同（SQLite 按 submitted_at DESC 排序）
+    await new Promise(r => setTimeout(r, 2));
+    addOne({ phone: "b@c.us" });
+    const all = store.getAll();
+    expect(all.length).toBe(before + 2);
+    const phones = all.map(r => r.phone);
+    expect(phones).toContain("a@c.us");
+    expect(phones).toContain("b@c.us");
+    // 最新的（b@c.us）排在前面
+    expect(phones.indexOf("b@c.us")).toBeLessThan(phones.indexOf("a@c.us"));
+  });
+});
+
+// ─── getById ──────────────────────────────────────────────────────────────────
+
+describe("getById", () => {
+  it("已存在的 id 返回记录对象", () => {
+    const { id } = addOne();
+    expect(store.getById(id)).not.toBeNull();
+  });
+
+  it("不存在的 id 返回 null", () => {
+    expect(store.getById("nonexistent-0000")).toBeNull();
+  });
+});
+
+// ─── saveAiResult ─────────────────────────────────────────────────────────────
+
+describe("saveAiResult", () => {
+  it("status 流转为 ai_extracted，aiResult 保存正确", () => {
+    const { id } = addOne();
+    const aiResult = { qualified: true, amount: "10.00", brand: "TestBrand" };
+    store.saveAiResult(id, aiResult);
+
+    const record = store.getById(id);
+    expect(record.status).toBe("ai_extracted");
+    expect(record.aiResult).toEqual(aiResult);
+  });
+
+  it("id 不存在时抛出 Error", () => {
+    expect(() => store.saveAiResult("bad-id-0000", {})).toThrow("Receipt not found");
+  });
+});
+
+// ─── confirmReceipt ───────────────────────────────────────────────────────────
+
+describe("confirmReceipt", () => {
+  it("status 流转为 confirmed，reviewedAt + reviewNote 写入", () => {
+    const { id } = addOne();
+    store.confirmReceipt(id, "looks good");
+
+    const record = store.getById(id);
+    expect(record.status).toBe("confirmed");
+    expect(record.reviewNote).toBe("looks good");
+    expect(record.reviewedAt).toBeTruthy();
+  });
+
+  it("note 默认为空字符串", () => {
+    const { id } = addOne();
+    store.confirmReceipt(id);
+    expect(store.getById(id).reviewNote).toBe("");
+  });
+
+  it("id 不存在时抛出 Error", () => {
+    expect(() => store.confirmReceipt("bad-id-0000")).toThrow("Receipt not found");
+  });
+});
+
+// ─── rejectReceipt ────────────────────────────────────────────────────────────
+
+describe("rejectReceipt", () => {
+  it("status 流转为 rejected", () => {
+    const { id } = addOne();
+    store.rejectReceipt(id, "duplicate");
+
+    const record = store.getById(id);
+    expect(record.status).toBe("rejected");
+    expect(record.reviewNote).toBe("duplicate");
+  });
+
+  it("id 不存在时抛出 Error", () => {
+    expect(() => store.rejectReceipt("bad-id-0000")).toThrow("Receipt not found");
+  });
+});
+
+// ─── sendMessageToUser ────────────────────────────────────────────────────────
+
+describe("sendMessageToUser", () => {
+  it("status 流转为 waiting_user_reply，保存 previousStatus + sentMessage + sentAt", () => {
+    const { id } = addOne();
+    store.confirmReceipt(id);
+    store.sendMessageToUser(id, "Please reply with IC");
+
+    const record = store.getById(id);
+    expect(record.status).toBe("waiting_user_reply");
+    expect(record.previousStatus).toBe("confirmed");
+    expect(record.sentMessage).toBe("Please reply with IC");
+    expect(record.sentAt).toBeTruthy();
+  });
+
+  it("id 不存在时抛出 Error", () => {
+    expect(() => store.sendMessageToUser("bad-id-0000", "msg")).toThrow("Receipt not found");
+  });
+});
+
+// ─── getImagePath ─────────────────────────────────────────────────────────────
+
+describe("getImagePath", () => {
+  it("返回 IMAGES_DIR 下的绝对路径", () => {
+    const result = store.getImagePath("test.jpg");
+    expect(result).toBe(path.join(DATA_DIR, "images", "test.jpg"));
+  });
+});
+
+// ─── saveSentMessage 已删除验证 ───────────────────────────────────────────────
+
+describe("saveSentMessage removal", () => {
+  it("saveSentMessage 不在 exports 中", () => {
+    expect(store.saveSentMessage).toBeUndefined();
   });
 });

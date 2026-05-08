@@ -1,10 +1,10 @@
 "use strict";
 
 /**
- * receiptStore.js — 收据 JSON 中间层
+ * receiptStore.js — 收据数据层（SQLite 实现）
  *
- * 职责：管理 data/pending_receipts.json 与 data/images/ 的读写。
- * 在 WhatsApp 收图（保存）和管理后台 AI 提取（触发）之间解耦。
+ * 职责：管理 receipts 表与 data/images/ 的读写。
+ * 对外 API 签名与原 JSON 版本完全兼容，调用方零改动。
  *
  * 状态流转：
  *   pending_review  ─┐
@@ -18,45 +18,18 @@
 
 const fs   = require("fs");
 const path = require("path");
+const db   = require("../db");
 
-// 优先使用环境变量 DATA_DIR（生产容器通过 docker-compose 注入）
-// 回退到相对路径供本地开发：__dirname(/app/src/services) 向上四级 = 项目根目录/data
 const DATA_DIR   = process.env.DATA_DIR || path.resolve(__dirname, "../../../../data");
-const STORE_PATH = path.join(DATA_DIR, "pending_receipts.json");
 const IMAGES_DIR = path.join(DATA_DIR, "images");
 
-/**
- * 初始化必要目录和 JSON 文件（幂等，可重复调用）
- */
-function ensureInit() {
-  if (!fs.existsSync(DATA_DIR))   fs.mkdirSync(DATA_DIR,   { recursive: true });
+function ensureImagesDir() {
   if (!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });
-  if (!fs.existsSync(STORE_PATH)) {
-    fs.writeFileSync(STORE_PATH, JSON.stringify([], null, 2), "utf-8");
-  }
-}
-
-/** 读取全量记录 */
-function readStore() {
-  ensureInit();
-  try {
-    return JSON.parse(fs.readFileSync(STORE_PATH, "utf-8"));
-  } catch {
-    // JSON 损坏时返回空数组，不阻断服务
-    return [];
-  }
-}
-
-/** 覆盖写入全量记录 */
-function writeStore(records) {
-  ensureInit();
-  fs.writeFileSync(STORE_PATH, JSON.stringify(records, null, 2), "utf-8");
 }
 
 /**
  * 生成唯一 ID：时间戳 + 4 位随机数
  * 格式：1714000000000-0042
- * 不引入 uuid 依赖，精度足够用于单机场景
  */
 function generateId() {
   const rand = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
@@ -65,7 +38,6 @@ function generateId() {
 
 /**
  * 根据 MIME 类型推断扩展名
- * WhatsApp 图片通常为 image/jpeg 或 image/png
  */
 function extFromMime(mimeType) {
   if (!mimeType) return "jpg";
@@ -74,53 +46,76 @@ function extFromMime(mimeType) {
   return "jpg";
 }
 
+/** 将 DB 行转换为对外对象（snake_case → camelCase，aiResult JSON 反序列化） */
+function rowToRecord(row) {
+  if (!row) return null;
+  return {
+    id:             row.id,
+    phone:          row.phone,
+    ic:             row.ic,
+    imageFilename:  row.image_filename,
+    status:         row.status,
+    submittedAt:    row.submitted_at,
+    aiResult:       row.ai_result_json ? JSON.parse(row.ai_result_json) : null,
+    reviewedAt:     row.reviewed_at,
+    reviewNote:     row.review_note,
+    sentMessage:    row.sent_message,
+    sentAt:         row.sent_at,
+    previousStatus: row.previous_status,
+  };
+}
+
 // ─────────────────────────────────────────────
 // 对外接口
 // ─────────────────────────────────────────────
 
 /**
+ * 初始化数据层（幂等，可重复调用）
+ * 由 index.js 在启动时调用；也可手动调用用于测试。
+ */
+function init() {
+  ensureImagesDir();
+  db.init();
+}
+
+/**
  * 保存 WhatsApp 收到的图片，并写入一条 pending_review 记录
  *
- * @param {string} phone       - 发送方 WhatsApp 号码（e.g. "60123456789@c.us"）
+ * @param {string} phone       - 发送方 WhatsApp 号码
  * @param {string} base64Data  - 图片 Base64 数据（不含 data:image/... 前缀）
  * @param {string} mimeType    - 图片 MIME 类型
  * @param {string} [ic]        - 用户身份证号（来自 session.ic）
  * @returns {{ id: string, imageFilename: string }}
  */
 function addPendingReceipt(phone, base64Data, mimeType, ic = null) {
+  ensureImagesDir();
+
   const id            = generateId();
   const ext           = extFromMime(mimeType);
   const imageFilename = `${id}.${ext}`;
   const imagePath     = path.join(IMAGES_DIR, imageFilename);
+  const submittedAt   = new Date().toISOString();
 
-  // 将 Base64 写入磁盘，避免在 JSON 中存储大型 base64 字符串
   fs.writeFileSync(imagePath, Buffer.from(base64Data, "base64"));
 
-  const record = {
-    id,
-    phone,
-    ic,
-    imageFilename,
-    status:      "pending_review",
-    submittedAt: new Date().toISOString(),
-    aiResult:    null,
-    reviewedAt:  null,
-    reviewNote:  null,
-  };
-
-  const records = readStore();
-  records.unshift(record); // 最新的排在最前
-  writeStore(records);
+  db.db.prepare(`
+    INSERT INTO receipts (id, phone, ic, image_filename, status, submitted_at)
+    VALUES (?, ?, ?, ?, 'pending_review', ?)
+  `).run(id, phone, ic, imageFilename, submittedAt);
 
   return { id, imageFilename };
 }
 
 /**
- * 获取全部记录（已按 submittedAt 倒序排列）
+ * 获取全部记录（按 submittedAt 倒序）
  * @returns {Array}
  */
 function getAll() {
-  return readStore();
+  db.init();
+  const rows = db.db.prepare(
+    "SELECT * FROM receipts ORDER BY submitted_at DESC"
+  ).all();
+  return rows.map(rowToRecord);
 }
 
 /**
@@ -129,102 +124,80 @@ function getAll() {
  * @returns {object|null}
  */
 function getById(id) {
-  return readStore().find(r => r.id === id) ?? null;
+  db.init();
+  const row = db.db.prepare("SELECT * FROM receipts WHERE id = ?").get(id);
+  return rowToRecord(row);
 }
 
 /**
  * 保存 AI 提取结果，状态流转为 ai_extracted
- * @param {string} id
- * @param {object} aiResult  - aiService.processReceipt 的返回值
  */
 function saveAiResult(id, aiResult) {
-  const records = readStore();
-  const idx     = records.findIndex(r => r.id === id);
-  if (idx === -1) throw new Error(`Receipt not found: ${id}`);
-
-  records[idx].aiResult = aiResult;
-  records[idx].status   = "ai_extracted";
-  writeStore(records);
+  db.init();
+  const info = db.db.prepare(`
+    UPDATE receipts SET status = 'ai_extracted', ai_result_json = ?
+    WHERE id = ?
+  `).run(JSON.stringify(aiResult), id);
+  if (info.changes === 0) throw new Error(`Receipt not found: ${id}`);
 }
 
 /**
- * 人工确认收据，状态流转为 confirmed，并写入操作时间和备注
- * @param {string} id
- * @param {string} [note]
+ * 人工确认收据，状态流转为 confirmed
  */
 function confirmReceipt(id, note = "") {
-  const records = readStore();
-  const idx     = records.findIndex(r => r.id === id);
-  if (idx === -1) throw new Error(`Receipt not found: ${id}`);
-
-  records[idx].status     = "confirmed";
-  records[idx].reviewedAt = new Date().toISOString();
-  records[idx].reviewNote = note;
-  writeStore(records);
+  db.init();
+  const info = db.db.prepare(`
+    UPDATE receipts SET status = 'confirmed', reviewed_at = ?, review_note = ?
+    WHERE id = ?
+  `).run(new Date().toISOString(), note, id);
+  if (info.changes === 0) throw new Error(`Receipt not found: ${id}`);
 }
 
 /**
  * 人工拒绝收据，状态流转为 rejected
- * @param {string} id
- * @param {string} [note]
  */
 function rejectReceipt(id, note = "") {
-  const records = readStore();
-  const idx     = records.findIndex(r => r.id === id);
-  if (idx === -1) throw new Error(`Receipt not found: ${id}`);
-
-  records[idx].status     = "rejected";
-  records[idx].reviewedAt = new Date().toISOString();
-  records[idx].reviewNote = note;
-  writeStore(records);
-}
-
-// saveSentMessage 已删除，保留向后兼容的空函数
-// 原功能已被 sendMessageToUser() 取代（状态流转更语义化）
-// @deprecated
-function saveSentMessage() {
-  // 空实现，用于接收旧的直接调用
-  // 实际功能已迁移至 sendMessageToUser()
+  db.init();
+  const info = db.db.prepare(`
+    UPDATE receipts SET status = 'rejected', reviewed_at = ?, review_note = ?
+    WHERE id = ?
+  `).run(new Date().toISOString(), note, id);
+  if (info.changes === 0) throw new Error(`Receipt not found: ${id}`);
 }
 
 /**
  * 人工主动向用户发消息，状态流转为 waiting_user_reply
- * 适用于任意状态（pending_review / ai_extracted / confirmed / rejected），不限于 ai_extracted
- * 发送后进入过渡态，等待用户回复后再由 Bot 侧触发后续流程
- *
- * @param {string} id
- * @param {string} message  发送的消息文本
  */
 function sendMessageToUser(id, message) {
-  const records = readStore();
-  const idx     = records.findIndex(r => r.id === id);
-  if (idx === -1) throw new Error(`Receipt not found: ${id}`);
+  db.init();
+  const row = db.db.prepare("SELECT status FROM receipts WHERE id = ?").get(id);
+  if (!row) throw new Error(`Receipt not found: ${id}`);
 
-  // 记录来源状态，方便审计操作链路（如 rejected → waiting_user_reply）
-  records[idx].previousStatus = records[idx].status;
-  records[idx].status         = "waiting_user_reply";
-  records[idx].sentMessage    = message;
-  records[idx].sentAt         = new Date().toISOString();
-  writeStore(records);
+  db.db.prepare(`
+    UPDATE receipts
+    SET previous_status = status,
+        status          = 'waiting_user_reply',
+        sent_message    = ?,
+        sent_at         = ?
+    WHERE id = ?
+  `).run(message, new Date().toISOString(), id);
 }
 
 /**
  * 返回图片的绝对磁盘路径（供 Express res.sendFile 使用）
- * @param {string} filename
- * @returns {string}
  */
 function getImagePath(filename) {
   return path.join(IMAGES_DIR, filename);
 }
 
 module.exports = {
+  init,
   addPendingReceipt,
   getAll,
   getById,
   saveAiResult,
   confirmReceipt,
   rejectReceipt,
-  saveSentMessage,
   sendMessageToUser,
   getImagePath,
 };
