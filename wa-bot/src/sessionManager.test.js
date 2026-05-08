@@ -12,6 +12,31 @@ jest.mock('./utils/logger', () => ({
   error: jest.fn(),
 }));
 
+// db mock：Phase 2 迁移后 sessionManager 依赖 SQLite，测试中替换为内存 mock
+jest.mock('./db', () => {
+  const sessions = {};
+  const stmt = (sql) => ({
+    get: jest.fn((...args) => {
+      if (sql.includes('SELECT') && sql.includes('sessions')) {
+        const phone = args[0];
+        return sessions[phone] || undefined;
+      }
+      return undefined;
+    }),
+    run: jest.fn((...args) => {
+      if (sql.includes('INSERT') || sql.includes('UPDATE')) {
+        const phone = args[0];
+        sessions[phone] = { phone, ic: args[1], state: args[2], created_at: args[3], updated_at: args[4], receipt_count: args[5] || 0, receipt_count_date: args[6] };
+      }
+    }),
+    all: jest.fn(() => Object.values(sessions)),
+  });
+  return {
+    init: jest.fn(),
+    db: { prepare: jest.fn(stmt), exec: jest.fn() },
+  };
+});
+
 const path = require('path');
 const PROJECT_ROOT = path.resolve(__dirname, '../../');
 
@@ -63,7 +88,8 @@ describe('sessionManager', () => {
       const { getOrCreateSession } = require('./sessionManager');
       const s1 = getOrCreateSession('60123456789');
       const s2 = getOrCreateSession('60123456789');
-      expect(s1).toBe(s2);
+      // SQLite 实现每次从 DB 读取返回新对象，内容相等即可（不要求同一引用）
+      expect(s1).toStrictEqual(s2);
     });
   });
 

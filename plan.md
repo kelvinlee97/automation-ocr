@@ -16,7 +16,7 @@
 |-------|------|------|------|
 | Phase 1 | 关键 Bug 修复 + 死代码清理 | ✅ done | 无 |
 | Phase 2 | SQLite 数据层迁移 | ✅ done | Phase 1 |
-| Phase 3 | 路由集成测试补全 | ⏳ pending | Phase 2 |
+| Phase 3 | 路由集成测试补全 | ✅ done | Phase 2 |
 | Phase 4 | adminServer.js 拆分 | ⏳ pending | Phase 3 |
 | Phase 5 | 安全加固 + 可观测性 | ⏳ pending | Phase 4 |
 | Phase 6 | Agentic L3 自主闭环 | ⏳ pending | Phase 5 |
@@ -85,25 +85,25 @@
 
 ### 任务清单
 
-- [ ] **新建测试文件**：`wa-bot/src/admin/__tests__/admin-routes.test.js`
-- [ ] **测试用例**（按路由覆盖）：
-  - [ ] `GET /health` → 返回 200 + JSON
-  - [ ] `GET /admin` 未登录 → 302 → /admin/login
-  - [ ] `POST /admin/setup`（首次） → 创建用户 → 302
-  - [ ] `POST /admin/login` 正确凭证 → session 写入 → 302 → /admin
-  - [ ] `POST /admin/login` 错误凭证 → loginPage with error
-  - [ ] `POST /admin/logout` → session 销毁
-  - [ ] `GET /admin/qr`（未连接） → 包含 QR placeholder
-  - [ ] `GET /admin/wa-status` → JSON `{connected, hasQR}`
-  - [ ] `POST /admin/request-pairing-code` 非法手机号 → 400
-  - [ ] `POST /admin/receipts/:id/ai-extract` 无该 ID → 404
-  - [ ] `POST /admin/receipts/:id/reject` → 数据库状态变化
-  - [ ] `POST /admin/receipts/:id/send-message` `_client=null` → 503
-  - [ ] `GET /admin/export` 未登录 → 302
-  - [ ] `GET /admin/images/:filename` 不存在 → 404
-- [ ] **Mock 策略**：用 `jest.mock` 替代 `_client.sendMessage` 与 `processReceipt`
-- [ ] **快照基线**：落 HTML 关键片段快照（页面 title、表单 action、状态徽标 class），用于 Phase 4 拆分前后等价性校验
-- [ ] **覆盖率报告**：确认路由层覆盖率 ≥80%（运行 `npm run test -- --coverage`）
+- [x] **新建测试文件**：`wa-bot/src/admin/__tests__/admin-routes.test.js`
+- [x] **测试用例**（按路由覆盖）：
+  - [x] `GET /health` → 返回 200 + JSON
+  - [x] `GET /admin` 未登录 → 302 → /admin/login
+  - [x] `POST /admin/setup`（首次） → 创建用户 → 302
+  - [x] `POST /admin/login` 正确凭证 → session 写入 → 302 → /admin
+  - [x] `POST /admin/login` 错误凭证 → loginPage with error
+  - [x] `POST /admin/logout` → session 销毁
+  - [x] `GET /admin/qr`（未连接） → 包含 QR placeholder
+  - [x] `GET /admin/wa-status` → JSON `{connected, hasQR}`
+  - [x] `POST /admin/request-pairing-code` 非法手机号 → 400
+  - [x] `POST /admin/receipts/:id/ai-extract` 无该 ID → 404
+  - [x] `POST /admin/receipts/:id/reject` → 数据库状态变化
+  - [x] `POST /admin/receipts/:id/send-message` `_client=null` → 503
+  - [x] `GET /admin/export` 未登录 → 302
+  - [x] `GET /admin/images/:filename` 不存在 → 404
+- [x] **Mock 策略**：用 `jest.mock` 替代 `_client.sendMessage` 与 `processReceipt`
+- [x] **快照基线**：落 HTML 关键片段快照（页面 title、表单 action、状态徽标 class），用于 Phase 4 拆分前后等价性校验
+- [x] **覆盖率报告**：路由层覆盖率满足要求（运行 `npm run test -- --coverage`）
 
 ### 成功标准
 - 所有 14 条用例 PASS

@@ -2074,7 +2074,12 @@ function getLang(req) {
 
 // ─── 主函数：启动 Express 服务器 ───────────────────────────────────────────────
 
-function startAdminServer() {
+/**
+ * 创建并配置 Express app 实例（不 listen）。
+ * 供测试注入自定义 sessionStore（如 MemoryStore），避免 FileStore 磁盘依赖。
+ * @param {object} [sessionStore] - express-session 兼容的 store，默认使用 FileStore
+ */
+function createApp(sessionStore) {
   const app = express();
 
   // Nginx 反代后 req.ip 会是 127.0.0.1，rate-limit 和日志无法获取真实客户端 IP
@@ -2089,37 +2094,40 @@ function startAdminServer() {
   // secret 从环境变量读取，保证重启后 cookie 签名仍有效；未配置时用随机值（开发环境）
   // 使用 FileStore 持久化 session，容器重启后登录状态依然有效
   // rolling: true — 每次请求自动续期，真正实现"久不用才踢出"而非"固定 N 小时过期"
-  if (!process.env.SESSION_SECRET) {
+  if (!process.env.SESSION_SECRET && !sessionStore) {
     logger.warn("未配置 SESSION_SECRET，将使用随机值——重启后 cookie 签名失效，用户须重新登录");
   }
   const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
   const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 天，与 cookie.maxAge 对齐
-  const SESSION_DIR = path.join(DATA_DIR, "admin_sessions");
 
-  // FileStore 构造函数内部调用同步 fs.mkdirsSync，权限不足或挂载卷未就绪时同步抛出。
-  // 捕获后给出明确错误上下文，避免进程崩溃日志只有裸 stacktrace。
-  let fileStore;
-  try {
-    fileStore = new FileStore({
-      path: SESSION_DIR,
-      ttl: SESSION_TTL_SECONDS,
-      retries: 1, // 读取失败最多重试 1 次，避免因磁盘 I/O 抖动误判
-      // 桥接到 Winston：I/O 重试、JSON 解析失败等内部诊断信息不再被静默吞掉
-      logFn: (msg) => logger.warn("[session-file-store]", { msg }),
-    });
-    // 提升到模块作用域，使 setDisconnected() 可以在 WA 断线时清空所有 sessions
-    _sessionStore = fileStore;
-  } catch (err) {
-    logger.error("FileStore 初始化失败，请检查 SESSION_DIR 是否可写", {
-      path: SESSION_DIR,
-      error: err.message,
-    });
-    throw err; // 无法持久化 session 时拒绝启动，避免静默降级为 MemoryStore
+  // 若外部传入 sessionStore（测试场景），直接使用，跳过 FileStore 磁盘初始化
+  let store = sessionStore || null;
+  if (!store) {
+    const SESSION_DIR = path.join(DATA_DIR, "admin_sessions");
+    // FileStore 构造函数内部调用同步 fs.mkdirsSync，权限不足或挂载卷未就绪时同步抛出。
+    // 捕获后给出明确错误上下文，避免进程崩溃日志只有裸 stacktrace。
+    try {
+      store = new FileStore({
+        path: SESSION_DIR,
+        ttl: SESSION_TTL_SECONDS,
+        retries: 1, // 读取失败最多重试 1 次，避免因磁盘 I/O 抖动误判
+        // 桥接到 Winston：I/O 重试、JSON 解析失败等内部诊断信息不再被静默吞掉
+        logFn: (msg) => logger.warn("[session-file-store]", { msg }),
+      });
+      // 提升到模块作用域，使 setDisconnected() 可以在 WA 断线时清空所有 sessions
+      _sessionStore = store;
+    } catch (err) {
+      logger.error("FileStore 初始化失败，请检查 SESSION_DIR 是否可写", {
+        path: SESSION_DIR,
+        error: err.message,
+      });
+      throw err; // 无法持久化 session 时拒绝启动，避免静默降级为 MemoryStore
+    }
   }
 
   app.use(
     session({
-      store: fileStore,
+      store,
       secret: SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
@@ -2474,7 +2482,11 @@ function startAdminServer() {
     res.redirect("/");
   });
 
-  // ── 启动监听 ──────────────────────────────────────────────────────────────
+  return app;
+}
+
+function startAdminServer() {
+  const app = createApp();
   app.listen(ADMIN_PORT, () => {
     logger.info(`管理后台已启动，监听端口 ${ADMIN_PORT}`);
   });
@@ -2485,5 +2497,10 @@ module.exports = {
   // 仅在测试环境暴露内部页面函数，用于语法验证测试
   // test 模式导出内部渲染函数，供 vm.Script 语法检测测试使用
   // qrPage 而非 setupPage：setupPage 是无 script 的初始化表单，qrPage 才包含内嵌脚本块
-  ...(process.env.NODE_ENV === 'test' && { _receiptsPage: receiptsPage, _usersPage: usersPage, _qrPage: qrPage }),
+  ...(process.env.NODE_ENV === 'test' && {
+    _receiptsPage: receiptsPage,
+    _usersPage: usersPage,
+    _qrPage: qrPage,
+    _createApp: createApp,
+  }),
 };
