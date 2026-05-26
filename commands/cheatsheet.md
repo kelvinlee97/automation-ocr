@@ -19,7 +19,7 @@ npm install
 npm test
 ```
 
-看到 `Tests: 80 passed` 就代表环境没问题。
+看到 `Tests: 103 passed` 就代表环境没问题。
 
 ---
 
@@ -27,7 +27,7 @@ npm test
 
 | 想做什么 | 命令 | 说明 |
 |---------|------|------|
-| 跑全部测试 | `npm test` | 大约 1 秒跑完，80 个用例 |
+| 跑全部测试 | `npm test` | 大约 1 秒跑完，103 个用例 |
 | 监听文件变更自动重跑 | `npm run test:watch` | 开发时常开一个终端 |
 | 看测试覆盖率 | `npm run test:coverage` | 报告生成在 `coverage/` 目录 |
 | 只跑一个文件 | `npx jest src/sessionManager.test.js` | 调试单个测试时用 |
@@ -116,7 +116,7 @@ cd wa-bot && npm test && npm run lint
 | 项目路线图 | `plan.md` |
 | 项目规范 | `AGENTS.md` |
 | Bot 主入口 | `wa-bot/src/index.js` |
-| 管理后台代码 | `wa-bot/src/adminServer.js` |
+| 管理后台代码 | `wa-bot/src/admin/`（已 Phase 4 拆分） |
 | 配置文件 | `config/config.yaml` |
 | 业务逻辑（service） | `wa-bot/src/services/` |
 | 单元测试 | `wa-bot/src/**/__tests__/` 或 `*.test.js` |

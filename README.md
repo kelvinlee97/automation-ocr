@@ -114,26 +114,58 @@ docker compose logs -f wa-bot
 ```
 automation-ocr/
 ├── config/
-│   └── config.yaml          ← 业务规则（品牌白名单、金额门槛）
-├── wa-bot/
+│   └── config.yaml                  ← 业务规则（品牌白名单、金额门槛）
+├── infra/
+│   ├── nginx/                       ← Nginx 反代 + HTTPS 配置
+│   └── stack.yml                    ← Docker Swarm/编排配置
+├── commands/cheatsheet.md           ← 命令速查
+├── wa-bot/                          ← 主应用（Node.js）
+│   ├── index.js                     ← 入口：db.init → migrate → session → Express → Bot
+│   ├── Dockerfile
+│   ├── jest.config.js
+│   ├── scripts/                     ← 一次性脚本/迁移工具
+│   │   ├── migrate-excel-path.sh
+│   │   ├── migrate-json-to-sqlite.js
+│   │   ├── seed-test-data.js
+│   │   ├── simulate-user.js
+│   │   └── wa-simulator.js
 │   └── src/
-│       ├── bot.js               ← WhatsApp 客户端
-│       ├── messageHandler.js    ← 消息路由
-│       ├── adminServer.js       ← 管理后台
-│       ├── sessionManager.js    ← 用户会话状态
+│       ├── bot.js                   ← WhatsApp 客户端
+│       ├── messageHandler.js        ← 消息路由
+│       ├── adminServer.js           ← 兼容导出（实际逻辑在 admin/）
+│       ├── sessionManager.js        ← 用户会话状态（SQLite）
+│       ├── db/
+│       │   ├── index.js             ← SQLite 单例（better-sqlite3, WAL）
+│       │   └── schema.sql           ← 3 表：receipts / sessions / admin_users
+│       ├── admin/                   ← Phase 4 拆分后的管理后台
+│       │   ├── server.js
+│       │   ├── state.js
+│       │   ├── middleware/          ← auth / csrf / rateLimit / security / session
+│       │   ├── routes/              ← auth / receipts / users / whatsapp / export
+│       │   ├── views/               ← layout / login / qr / receipts / users / escapeHtml
+│       │   ├── static/              ← admin.css / admin.js / qr.js / theme-init.js
+│       │   └── i18n/                ← zh / en / index
 │       ├── handlers/
-│       │   ├── registrationHandler.js  ← 注册流程
-│       │   └── receiptHandler.js       ← 收据提交流程
-│       └── services/
-│           ├── aiService.js     ← Gemini AI 识别
-│           ├── excelService.js  ← Excel 读写
-│           └── receiptStore.js  ← 收据数据存储
-├── data/                    ← 运行数据（自动创建，不入版本控制）
-│   ├── excel/records.xlsx   ← 输出记录
-│   ├── images/              ← 收据图片备份
-│   └── wwebjs_auth/         ← WhatsApp 登录凭证
+│       │   ├── registrationHandler.js   ← 注册流程
+│       │   └── receiptHandler.js        ← 收据提交流程
+│       ├── services/
+│       │   ├── aiService.js             ← Gemini AI 识别
+│       │   ├── excelService.js          ← Excel 导出
+│       │   ├── receiptStore.js          ← 收据 CRUD（SQLite）
+│       │   └── adminUserService.js      ← 管理员账户（SQLite + scrypt）
+│       └── utils/
+│           ├── icParser.js              ← 身份证号解析
+│           ├── maskPhone.js             ← PII 脱敏
+│           └── logger.js                ← Winston 日志
+├── data/                            ← 运行数据（自动创建，不入版本控制）
+│   ├── app.db                       ← SQLite 数据库
+│   ├── excel/records.xlsx           ← Excel 导出
+│   ├── images/                      ← 收据图片备份
+│   └── wwebjs_auth/                 ← WhatsApp 登录凭证
 ├── docker-compose.yml
-└── .env                     ← 环境变量（不入版本控制）
+├── AGENTS.md                        ← 通用 AI 行为准则
+├── plan.md                          ← 项目优化计划（Phase 1-6）
+└── .env                             ← 环境变量（不入版本控制）
 ```
 
 ---
