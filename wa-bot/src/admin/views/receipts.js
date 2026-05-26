@@ -12,17 +12,18 @@ function _renderAiResult(aiResult, lang = "zh") {
   </div>`;
 }
 
-function renderInlineActions(r, lang = "zh") {
+function renderInlineActions(r, lang = "zh", csrfToken = "") {
   if (r.status === "pending_review") {
     return `<button class="btn btn-ai" onclick="aiExtract('${r.id}', this)">🤖 ${t('ai_extract', lang)}</button>`;
   }
   return `<form class="send-form" id="send-form-${r.id}" onsubmit="return handleSend(event, '${r.id}')">
+    <input type="hidden" name="_csrf" value="${csrfToken}" />
     <textarea name="message" id="send-msg-${r.id}" placeholder="${t('message_placeholder', lang)}" required rows="2"></textarea>
     <button type="submit" class="btn btn-send" id="send-btn-${r.id}">📤 ${t('send_to_user', lang)}</button>
   </form>`;
 }
 
-function buildExpandPanel(r, lang = "zh") {
+function buildExpandPanel(r, lang = "zh", csrfToken = "") {
   const locale = lang === 'zh' ? "zh-CN" : "en-US";
   let html = "";
 
@@ -43,6 +44,7 @@ function buildExpandPanel(r, lang = "zh") {
       <div class="expand-label">❌ ${t('reject', lang)}</div>
       <form class="reject-form" method="POST" action="/admin/receipts/${r.id}/reject"
             onsubmit="return handleReject(event, '${r.id}')">
+        <input type="hidden" name="_csrf" value="${csrfToken}" />
         <input name="note" placeholder="${t('reject_note', lang)}"
                onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.requestSubmit();}" />
         <button type="submit" class="btn btn-reject" id="reject-btn-${r.id}">❌ ${t('reject', lang)}</button>
@@ -145,9 +147,9 @@ function buildPagination(currentPage, totalPages, q, status, lang) {
   return html;
 }
 
-function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, searchQuery = "", statusFilter = "", allReceipts = null, cspNonce = "") {
+function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, searchQuery = "", statusFilter = "", allReceipts = null, cspNonce = "", csrfToken = "") {
   if (receipts.length === 0) {
-    return htmlLayout(t('receipt_audit', lang), `<div class="empty">${t('no_receipts', lang)}</div>`, '/admin', lang, cspNonce);
+    return htmlLayout(t('receipt_audit', lang), `<div class="empty">${t('no_receipts', lang)}</div>`, '/admin', lang, cspNonce, csrfToken);
   }
 
   const VALID_RECEIPT_STATUSES = new Set(['pending_review', 'ai_extracted', 'confirmed', 'rejected', 'waiting_user_reply']);
@@ -277,7 +279,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         : escapeHtml(phone);
 
       // Expand panel content (AI result + actions)
-      const panelContent = buildExpandPanel(r, lang);
+      const panelContent = buildExpandPanel(r, lang, csrfToken);
 
       return `<tr class="group-row group-row-${escapeHtml(phone)} expandable" data-phone="${escapeHtml(phone)}" data-status="${safeStatus}" id="row-${r.id}" onclick="toggleRow('${r.id}')">
       <td><span class="expand-chevron">▶</span>${receipts.length - idx}</td>
@@ -286,7 +288,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
       <td style="font-size:12px">${r.ic || "—"}</td>
       <td>${thumb}</td>
       <td>${statusBadge}</td>
-      <td style="max-width:260px" onclick="event.stopPropagation()">${renderInlineActions(r, lang)}</td>
+      <td style="max-width:260px" onclick="event.stopPropagation()">${renderInlineActions(r, lang, csrfToken)}</td>
     </tr>
     <tr class="expand-row" id="expand-${r.id}">
       <td colspan="7">
@@ -389,10 +391,10 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         btn.disabled = true;
         btn.textContent = '⏳ ' + ${JSON.stringify(t('sending', lang))};
         try {
+          // FormData 自动包含 form 中的 _csrf 隐藏字段
           const res = await fetch('/admin/receipts/' + id + '/send-message', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'message=' + encodeURIComponent(message),
+            body: new URLSearchParams(new FormData(form)),
           });
           if (!res.ok) {
             const text = await res.text();
@@ -446,7 +448,10 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         btn.disabled = true;
         btn.textContent = '⏳ ' + ${JSON.stringify(t('extracting', lang))};
         try {
-          const res = await fetch('/admin/receipts/' + id + '/ai-extract', { method: 'POST' });
+          const res = await fetch('/admin/receipts/' + id + '/ai-extract', {
+            method: 'POST',
+            headers: { 'x-csrf-token': (window.ADMIN_UI && window.ADMIN_UI.csrfToken) || '' },
+          });
           // 先检查 HTTP 状态，再解析 body——5xx 响应体可能是 HTML，直接 res.json() 会抛 SyntaxError
           if (!res.ok) {
             let errMsg = res.statusText;
@@ -481,7 +486,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
       })();
     </script>`;
 
-  return htmlLayout(t('receipt_audit', lang), content, '/admin', lang, cspNonce);
+  return htmlLayout(t('receipt_audit', lang), content, '/admin', lang, cspNonce, csrfToken);
 }
 
 module.exports = { receiptsPage, _renderAiResult, renderInlineActions, buildExpandPanel, buildPagination };

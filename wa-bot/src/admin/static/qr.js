@@ -29,7 +29,10 @@
     try {
       const res = await fetch("/admin/request-pairing-code", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": config.csrfToken || "",
+        },
         body: JSON.stringify({ phone }),
       });
       const data = await res.json();

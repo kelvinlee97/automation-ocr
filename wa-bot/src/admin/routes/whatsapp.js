@@ -15,7 +15,7 @@ function registerWhatsappRoutes(app) {
       return res.redirect("/admin/login");
     }
     const lang = getLang(req);
-    res.send(qrPage(lang, res.locals.cspNonce));
+    res.send(qrPage(lang, res.locals.cspNonce, res.locals.csrfToken));
   });
 
   app.post("/admin/request-pairing-code", apiLimiter, async (req, res) => {

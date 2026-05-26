@@ -3,7 +3,7 @@
 const state = require("../state");
 const { t } = require("../i18n");
 
-function qrPage(lang = "zh", cspNonce = "") {
+function qrPage(lang = "zh", cspNonce = "", csrfToken = "") {
   const _waConnected = state.isConnected();
   const _qrBase64 = state.getQR();
   // 已连接则直接跳转，无需渲染页面
@@ -227,6 +227,7 @@ function qrPage(lang = "zh", cspNonce = "") {
     window.QR_PAGE = {
       lang: ${JSON.stringify(lang)},
       lastHasQR: ${!!_qrBase64},
+      csrfToken: ${JSON.stringify(csrfToken)},
       T: {
         requesting: ${JSON.stringify(t('requesting', lang))},
         fetching: ${JSON.stringify(t('fetching', lang))},

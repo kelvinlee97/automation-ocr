@@ -2,7 +2,7 @@
 
 const { t } = require("../i18n");
 
-function loginPage(errorMsg = "", lang = "zh") {
+function loginPage(errorMsg = "", lang = "zh", csrfToken = "") {
   return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
@@ -67,6 +67,7 @@ function loginPage(errorMsg = "", lang = "zh") {
     <h1>🔐 ${t('admin_login', lang)}</h1>
     ${errorMsg ? `<div class="error">${errorMsg}</div>` : ""}
     <form method="POST" action="/admin/login">
+      <input type="hidden" name="_csrf" value="${csrfToken}" />
       <label>${t('username', lang)}</label>
       <input type="text" name="username" required autofocus placeholder="${t('username', lang)}" />
       <label>${t('password', lang)}</label>
@@ -78,7 +79,7 @@ function loginPage(errorMsg = "", lang = "zh") {
 </html>`;
 }
 
-function setupPage(errorMsg = "", lang = "zh") {
+function setupPage(errorMsg = "", lang = "zh", csrfToken = "") {
   return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
@@ -144,6 +145,7 @@ function setupPage(errorMsg = "", lang = "zh") {
     <div class="sub">${t('first_time_setup', lang)}</div>
     ${errorMsg ? `<div class="error">${errorMsg}</div>` : ""}
     <form method="POST" action="/admin/setup">
+      <input type="hidden" name="_csrf" value="${csrfToken}" />
       <label>${t('username_hint', lang)}</label>
       <input type="text" name="username" required autofocus minlength="3" pattern="[\\w-]+" placeholder="${t('username', lang)}" />
       <label>${t('password_hint', lang)}</label>
