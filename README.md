@@ -89,23 +89,64 @@ bot:
 
 ---
 
-## 部署（服务器）
+## 部署（EC2 一键脚本）
 
-项目已配置 GitHub Actions 自动部署，每次推送到 `main` 分支自动触发。
+> 已经在跑的步骤会自动 skip，重复执行安全。新手照做即可，不用一个个看脚本。
 
-**手动重启服务：**
+### 首次部署（全新 Ubuntu EC2 实例）
+
+1. **准备 EC2 实例**
+   - Ubuntu 22.04 / 24.04（LTS）
+   - 安全组放行 22（SSH）；如需外部访问 web，再开 80/443
+   - 在 EC2 上生成 SSH key（`ssh-keygen`）并把公钥加到 GitHub deploy keys
+
+2. **SSH 上去，先装 git 把代码拉下来**（鸡生蛋问题：脚本本身在仓库里）
+   ```bash
+   sudo apt-get update && sudo apt-get install -y git
+   git clone git@github.com:kelvinlee97/automation-ocr.git /home/ubuntu/automation-ocr
+   cd /home/ubuntu/automation-ocr
+   ```
+
+3. **创建 `.env` 文件**（必填项）
+   ```bash
+   cat > .env <<EOF
+   GEMINI_API_KEY=<你的 Gemini key>
+   SESSION_SECRET=$(openssl rand -hex 32)
+   EOF
+   ```
+
+4. **一键跑**
+   ```bash
+   bash scripts/bootstrap.sh
+   ```
+   脚本会按顺序做（每一步先检测、已就绪则 skip）：
+   - 装 docker / compose plugin / git
+   - 把当前用户加进 docker 组
+   - `docker compose pull && up -d` 启动容器
+   - 打印容器状态
+
+5. **首次启动扫 WhatsApp 二维码**
+   ```bash
+   bash scripts/docker.sh logs   # 看日志里的二维码 / 配对码
+   ```
+   或访问 `https://你的域名/admin/qr` 扫码。
+
+### 日常更新（已部署过的实例）
+
 ```bash
-docker compose up -d
+bash scripts/bootstrap.sh        # 拉新代码 + 拉新镜像 + 重启容器，已就绪的步骤自动 skip
 ```
 
-**查看运行日志：**
+### 进阶：只跑某一段
+
 ```bash
-docker compose logs -f wa-bot
+bash scripts/bootstrap.sh system   # 只装系统依赖
+bash scripts/bootstrap.sh deploy   # 只做项目部署（拉代码 → .env 校验 → 启容器）
 ```
 
-**首次部署需扫码登录 WhatsApp：**
+### CI/CD
 
-访问 `https://你的域名/admin/qr`，用绑定的 WhatsApp 号码扫码，或使用配对码方式登录。
+项目已配置 GitHub Actions，推送到 `main` 分支自动触发部署，无需手动跑脚本。
 
 ---
 
@@ -119,7 +160,8 @@ automation-ocr/
 │   ├── nginx/                   ← Nginx 反代 + HTTPS 配置
 │   └── stack.yml                ← Docker Swarm/编排配置
 ├── scripts/                     ← 项目级脚本（按用途拆分）
-│   ├── setup.sh                 ← 初始化（依赖安装、环境检查）
+│   ├── bootstrap.sh             ← EC2 一键部署（幂等，已就绪自动 skip）
+│   ├── setup.sh                 ← 本地初始化（依赖安装、环境检查）
 │   ├── start.sh                 ← 启动服务
 │   ├── docker.sh                ← Docker 相关操作
 │   ├── test.sh / check.sh / lint.sh
