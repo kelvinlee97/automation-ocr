@@ -17,7 +17,7 @@
 | Phase 1 | 关键 Bug 修复 + 死代码清理 | ✅ done | 无 |
 | Phase 2 | SQLite 数据层迁移 | ✅ done | Phase 1 |
 | Phase 3 | 路由集成测试补全 | ✅ done | Phase 2 |
-| Phase 4 | adminServer.js 拆分 | ⏳ pending | Phase 3 |
+| Phase 4 | adminServer.js 拆分 | ✅ done（待人工视觉复核） | Phase 3 |
 | Phase 5 | 安全加固 + 可观测性 | ⏳ pending | Phase 4 |
 | Phase 6 | Agentic L3 自主闭环 | ⏳ pending | Phase 5 |
 
@@ -119,39 +119,39 @@
 
 ### 任务清单
 
-- [ ] **新建目录结构**：`wa-bot/src/admin/` 下建立 `middleware/`、`routes/`、`views/`、`static/`、`i18n/` 子目录
-- [ ] **拆分 server.js**：`wa-bot/src/admin/server.js` — 保留 `startAdminServer` + 中间件装配（约 150 行）
-- [ ] **拆分 state.js**：`wa-bot/src/admin/state.js` — 模块级 `_client` / `_qrBase64` / `_waConnected` 等状态 + setter
-- [ ] **拆分 middleware**：
-  - [ ] `admin/middleware/auth.js` — `requireAuth` / `requireSetup`
-  - [ ] `admin/middleware/rateLimit.js` — `authLimiter` / `apiLimiter`
-  - [ ] `admin/middleware/session.js` — FileStore 配置
-  - [ ] `admin/middleware/security.js` — helmet + CSP nonce + CSRF token 注入（Phase 5 基础设施）
-- [ ] **拆分 routes**：
-  - [ ] `admin/routes/auth.js` — /admin/login, /admin/logout, /admin/setup
-  - [ ] `admin/routes/receipts.js` — /admin（列表）+ /admin/receipts/:id/*（ai-extract/send-message/reject）
-  - [ ] `admin/routes/users.js` — /admin/users/*
-  - [ ] `admin/routes/whatsapp.js` — /admin/qr, /admin/wa-status, /admin/request-pairing-code
-  - [ ] `admin/routes/export.js` — /admin/export, /admin/images/:filename
-- [ ] **拆分 views**：
-  - [ ] `admin/views/layout.js` — `htmlLayout` 骨架 + nonce + csrf 注入
-  - [ ] `admin/views/escapeHtml.js` — XSS 防护工具
-  - [ ] `admin/views/login.js` — loginPage + setupPage
-  - [ ] `admin/views/qr.js` — qrPage
-  - [ ] `admin/views/receipts.js` — receiptsPage + buildExpandPanel + renderInlineActions + buildPagination
-  - [ ] `admin/views/users.js` — usersPage + newUserPage
-- [ ] **拆分 static**：
-  - [ ] `admin/static/admin.css` — 抽出所有 CSS（约 500 行）
-  - [ ] `admin/static/admin.js` — toast / 灯箱 / 行展开 / AJAX 提交
-  - [ ] `admin/static/qr.js` — tab 切换 / 配对码请求 / 状态轮询
-  - [ ] `admin/static/theme-init.js` — 防 FOUC 主题切换
-- [ ] **拆分 i18n**：
-  - [ ] `admin/i18n/index.js` — `t()` + `getLang()`
-  - [ ] `admin/i18n/zh.js` — 中文字典
-  - [ ] `admin/i18n/en.js` — 英文字典
-- [ ] **静态文件服务**：路由添加 `app.use('/admin/static', express.static(...))`
-- [ ] **兼容入口**：原 `wa-bot/src/adminServer.js` 仅保留一行 `module.exports = require('./admin/server')`，保持旧 import 路径兼容
-- [ ] **等价性验证**：运行 Phase 3 全部测试 + 快照，对比无差异
+- [x] **新建目录结构**：`wa-bot/src/admin/` 下建立 `middleware/`、`routes/`、`views/`、`static/`、`i18n/` 子目录
+- [x] **拆分 server.js**：`wa-bot/src/admin/server.js` — 保留 `startAdminServer` + 中间件装配（约 150 行）
+- [x] **拆分 state.js**：`wa-bot/src/admin/state.js` — 模块级 `_client` / `_qrBase64` / `_waConnected` 等状态 + setter
+- [x] **拆分 middleware**：
+  - [x] `admin/middleware/auth.js` — `requireAuth` / `requireSetup`
+  - [x] `admin/middleware/rateLimit.js` — `authLimiter` / `apiLimiter`
+  - [x] `admin/middleware/session.js` — FileStore 配置
+  - [x] `admin/middleware/security.js` — Phase 5 安全中间件挂载点（helmet/CSP/CSRF 实现留到 Phase 5）
+- [x] **拆分 routes**：
+  - [x] `admin/routes/auth.js` — /admin/login, /admin/logout, /admin/setup
+  - [x] `admin/routes/receipts.js` — /admin（列表）+ /admin/receipts/:id/*（ai-extract/send-message/reject）
+  - [x] `admin/routes/users.js` — /admin/users/*
+  - [x] `admin/routes/whatsapp.js` — /admin/qr, /admin/wa-status, /admin/request-pairing-code
+  - [x] `admin/routes/export.js` — /admin/export
+- [x] **拆分 views**：
+  - [x] `admin/views/layout.js` — `htmlLayout` 骨架
+  - [x] `admin/views/escapeHtml.js` — XSS 防护工具
+  - [x] `admin/views/login.js` — loginPage + setupPage
+  - [x] `admin/views/qr.js` — qrPage
+  - [x] `admin/views/receipts.js` — receiptsPage + buildExpandPanel + renderInlineActions + buildPagination
+  - [x] `admin/views/users.js` — usersPage + newUserPage
+- [x] **拆分 static**：
+  - [x] `admin/static/admin.css` — 抽出主后台布局 CSS
+  - [x] `admin/static/admin.js` — toast / 灯箱 / 语言切换 / 主题切换
+  - [x] `admin/static/qr.js` — tab 切换 / 配对码请求 / 状态轮询
+  - [x] `admin/static/theme-init.js` — 防 FOUC 主题切换
+- [x] **拆分 i18n**：
+  - [x] `admin/i18n/index.js` — `t()` + `getLang()`
+  - [x] `admin/i18n/zh.js` — 中文字典
+  - [x] `admin/i18n/en.js` — 英文字典
+- [x] **静态文件服务**：路由添加 `app.use('/admin/static', express.static(...))`
+- [x] **兼容入口**：原 `wa-bot/src/adminServer.js` 仅保留一行 `module.exports = require('./admin/server')`，保持旧 import 路径兼容
+- [x] **等价性验证**：运行 Phase 3 全部测试 + 快照，对比无差异
 
 ### 成功标准
 - Phase 3 所有测试 PASS
