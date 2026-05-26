@@ -3,7 +3,7 @@
 const state = require("../state");
 const { t } = require("../i18n");
 
-function htmlLayout(title, content, currentPath = '', lang = 'zh') {
+function htmlLayout(title, content, currentPath = '', lang = 'zh', cspNonce = '') {
   const _waConnected = state.isConnected();
   // 根据当前连接状态动态渲染导航栏徽标
   const statusBadge = _waConnected
@@ -45,7 +45,7 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh') {
     <span id="lightbox-close" onclick="closeLightbox()">✕</span>
     <img id="lightbox-img" src="" alt="${t('receipt_large', lang)}" />
   </div>
-  <script>
+  <script nonce="${cspNonce}">
     window.ADMIN_UI = {
       lang: ${JSON.stringify(lang)},
       switchToDark: ${JSON.stringify(t('switch_to_dark', lang))},

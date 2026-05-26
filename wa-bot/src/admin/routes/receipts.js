@@ -35,7 +35,7 @@ function registerReceiptRoutes(app) {
       }
 
       const totalPages = Math.max(1, Math.ceil(receipts.length / 20));
-      res.send(receiptsPage(receipts, lang, page, totalPages, searchQuery, statusFilter, allReceipts));
+      res.send(receiptsPage(receipts, lang, page, totalPages, searchQuery, statusFilter, allReceipts, res.locals.cspNonce));
     } catch (err) {
       const lang = getLang(req);
       logger.error("加载收据列表失败", { error: err.message });

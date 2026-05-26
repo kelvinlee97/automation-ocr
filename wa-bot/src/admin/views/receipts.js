@@ -145,9 +145,9 @@ function buildPagination(currentPage, totalPages, q, status, lang) {
   return html;
 }
 
-function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, searchQuery = "", statusFilter = "", allReceipts = null) {
+function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, searchQuery = "", statusFilter = "", allReceipts = null, cspNonce = "") {
   if (receipts.length === 0) {
-    return htmlLayout(t('receipt_audit', lang), `<div class="empty">${t('no_receipts', lang)}</div>`, '/admin', lang);
+    return htmlLayout(t('receipt_audit', lang), `<div class="empty">${t('no_receipts', lang)}</div>`, '/admin', lang, cspNonce);
   }
 
   const VALID_RECEIPT_STATUSES = new Set(['pending_review', 'ai_extracted', 'confirmed', 'rejected', 'waiting_user_reply']);
@@ -323,7 +323,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
     </table>
     </div>
     ${buildPagination(currentPage, totalPages, searchQuery, statusFilter, lang)}
-    <script>
+    <script nonce="${cspNonce}">
       (function() {
         var searchInput = document.getElementById('searchInput');
         var statusFilter = document.getElementById('statusFilter');
@@ -481,7 +481,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
       })();
     </script>`;
 
-  return htmlLayout(t('receipt_audit', lang), content, '/admin', lang);
+  return htmlLayout(t('receipt_audit', lang), content, '/admin', lang, cspNonce);
 }
 
 module.exports = { receiptsPage, _renderAiResult, renderInlineActions, buildExpandPanel, buildPagination };

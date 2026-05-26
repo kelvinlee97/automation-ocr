@@ -3,7 +3,7 @@
 const { t } = require("../i18n");
 const { htmlLayout } = require("./layout");
 
-function usersPage(users, currentUser, flash = "", lang = "zh") {
+function usersPage(users, currentUser, flash = "", lang = "zh", cspNonce = "") {
   const rows = users.map(u => {
     const isSelf = u.username === currentUser;
     const deleteBtn = isSelf
@@ -36,7 +36,7 @@ function usersPage(users, currentUser, flash = "", lang = "zh") {
       <thead><tr><th>${t('username', lang)}</th><th>${t('created_at', lang)}</th><th>${t('actions', lang)}</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="3" style="text-align:center;color:#aaa">${t('no_users', lang)}</td></tr>`}</tbody>
     </table>
-    <script>
+    <script nonce="${cspNonce}">
       function promptReset(form, username) {
         // 翻译模板在服务端注入，{username} 在客户端运行时替换，避免 XSS 且保持动态插值
         var tpl = ${JSON.stringify(t('prompt_new_password', lang))};
@@ -47,10 +47,10 @@ function usersPage(users, currentUser, flash = "", lang = "zh") {
       }
     </script>`;
 
-  return htmlLayout(t('manage_users', lang), content, '/admin/users', lang);
+  return htmlLayout(t('manage_users', lang), content, '/admin/users', lang, cspNonce);
 }
 
-function newUserPage(errorMsg = "", lang = "zh") {
+function newUserPage(errorMsg = "", lang = "zh", cspNonce = "") {
   const content = `
     ${errorMsg ? `<div style="background:#fff0f0;border-left:4px solid #c0392b;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">${errorMsg}</div>` : ""}
     <form method="POST" action="/admin/users/new" style="max-width:400px;background:#fff;padding:32px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
@@ -74,7 +74,7 @@ function newUserPage(errorMsg = "", lang = "zh") {
         <a href="/admin/users" class="btn btn-logout" style="padding:10px 24px">${t('cancel', lang)}</a>
       </div>
     </form>`;
-  return htmlLayout(t('create_user_title', lang), content, '/admin/users', lang);
+  return htmlLayout(t('create_user_title', lang), content, '/admin/users', lang, cspNonce);
 }
 
 module.exports = { usersPage, newUserPage };

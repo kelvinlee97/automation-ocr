@@ -5,7 +5,7 @@ const path = require("path");
 const logger = require("../utils/logger");
 const state = require("./state");
 const { createSessionMiddleware } = require("./middleware/session");
-const { attachSecurityContext } = require("./middleware/security");
+const { attachSecurityContext, buildHelmet } = require("./middleware/security");
 const { registerRoutes } = require("./routes");
 const { receiptsPage } = require("./views/receipts");
 const { usersPage } = require("./views/users");
@@ -22,6 +22,7 @@ function createApp(sessionStore) {
   app.use("/admin/static", express.static(path.join(__dirname, "static")));
   app.use(createSessionMiddleware(sessionStore));
   app.use(attachSecurityContext);
+  app.use(buildHelmet());
 
   registerRoutes(app);
 
