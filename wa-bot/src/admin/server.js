@@ -5,8 +5,6 @@ const path = require("path");
 const logger = require("../utils/logger");
 const state = require("./state");
 const { createSessionMiddleware } = require("./middleware/session");
-const { attachSecurityContext, buildHelmet } = require("./middleware/security");
-const { csrfProtection } = require("./middleware/csrf");
 const { registerRoutes } = require("./routes");
 const { receiptsPage } = require("./views/receipts");
 const { usersPage } = require("./views/users");
@@ -22,9 +20,6 @@ function createApp(sessionStore) {
   app.use(express.json({ limit: "1mb" }));
   app.use("/admin/static", express.static(path.join(__dirname, "static")));
   app.use(createSessionMiddleware(sessionStore));
-  app.use(attachSecurityContext);
-  app.use(buildHelmet());
-  app.use(csrfProtection);
 
   registerRoutes(app);
 

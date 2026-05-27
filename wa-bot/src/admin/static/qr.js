@@ -31,7 +31,6 @@
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-csrf-token": config.csrfToken || "",
         },
         body: JSON.stringify({ phone }),
       });

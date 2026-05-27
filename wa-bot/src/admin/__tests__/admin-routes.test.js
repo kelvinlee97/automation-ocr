@@ -71,16 +71,13 @@ function buildApp() {
 
 // ── 工具：在 MemoryStore 中植入已认证 session，返回 cookie 字符串 ─────────────
 
-// 测试环境 csrf token 固定（与 middleware/csrf.js 中 FIXED_TEST_TOKEN 一致）
-const CSRF = "_csrf=test-csrf-token-fixed";
-
 async function getAuthCookie(app) {
   const adminUserService = require("../../services/adminUserService");
   adminUserService.authenticate.mockReturnValueOnce(true);
 
   const res = await request(app)
     .post("/admin/login")
-    .send(`${CSRF}&username=admin&password=pass`);
+    .send("username=admin&password=pass");
 
   const cookies = res.headers["set-cookie"];
   if (!cookies) throw new Error("登录后未收到 Set-Cookie");
@@ -123,7 +120,7 @@ describe("POST /admin/setup（首次建号）", () => {
     const app = buildApp();
     const res = await request(app)
       .post("/admin/setup")
-      .send(`${CSRF}&username=admin&password=secret&confirm=secret`);
+      .send("username=admin&password=secret&confirm=secret");
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toMatch(/\/admin\/login/);
@@ -136,7 +133,7 @@ describe("POST /admin/setup（首次建号）", () => {
     const app = buildApp();
     const res = await request(app)
       .post("/admin/setup")
-      .send(`${CSRF}&username=admin&password=secret&confirm=secret`);
+      .send("username=admin&password=secret&confirm=secret");
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toMatch(/\/admin\/login/);
@@ -151,7 +148,7 @@ describe("POST /admin/login", () => {
     const app = buildApp();
     const res = await request(app)
       .post("/admin/login")
-      .send(`${CSRF}&username=admin&password=correct`);
+      .send("username=admin&password=correct");
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toMatch(/\/admin$/);
@@ -165,7 +162,7 @@ describe("POST /admin/login", () => {
     const app = buildApp();
     const res = await request(app)
       .post("/admin/login")
-      .send(`${CSRF}&username=admin&password=wrong`);
+      .send("username=admin&password=wrong");
 
     expect(res.status).toBe(200);
     // 页面中包含错误信息（中文界面）
@@ -179,8 +176,7 @@ describe("POST /admin/logout", () => {
     const cookie = await getAuthCookie(app);
     const res = await request(app)
       .post("/admin/logout")
-      .set("Cookie", cookie)
-      .set("x-csrf-token", "test-csrf-token-fixed");
+      .set("Cookie", cookie);
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toMatch(/\/admin\/login/);
@@ -212,7 +208,7 @@ describe("POST /admin/request-pairing-code", () => {
     const app = buildApp();
     const res = await request(app)
       .post("/admin/request-pairing-code")
-      .send(`${CSRF}&phone=123`);  // 太短，不符合 10-15 位
+      .send("phone=123");  // 太短，不符合 10-15 位
 
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -228,8 +224,7 @@ describe("POST /admin/receipts/:id/ai-extract", () => {
     const cookie = await getAuthCookie(app);
     const res = await request(app)
       .post("/admin/receipts/nonexistent-id/ai-extract")
-      .set("Cookie", cookie)
-      .set("x-csrf-token", "test-csrf-token-fixed");
+      .set("Cookie", cookie);
 
     expect(res.status).toBe(404);
     expect(res.body).toHaveProperty("error");
@@ -246,7 +241,7 @@ describe("POST /admin/receipts/:id/reject", () => {
     const res = await request(app)
       .post("/admin/receipts/test-id-123/reject")
       .set("Cookie", cookie)
-      .send(`${CSRF}&note=测试拒绝`);
+      .send("note=测试拒绝");
 
     expect(res.status).toBe(302);
     expect(receiptStore.rejectReceipt).toHaveBeenCalledWith("test-id-123", "测试拒绝");
@@ -261,7 +256,7 @@ describe("POST /admin/receipts/:id/send-message（_client=null）", () => {
     const res = await request(app)
       .post("/admin/receipts/test-id/send-message")
       .set("Cookie", cookie)
-      .send(`${CSRF}&message=hello`);
+      .send("message=hello");
 
     expect(res.status).toBe(503);
   });
@@ -379,29 +374,6 @@ describe("GET / 根路径", () => {
     const res = await request(app).get("/");
     expect(res.status).toBe(302);
     expect(res.headers.location).toMatch(/\/admin\/setup/);
-  });
-});
-
-describe("CSRF 防护", () => {
-  test("POST 不带 _csrf 时返回 403", async () => {
-    const app = buildApp();
-    const cookie = await getAuthCookie(app);
-    const res = await request(app)
-      .post("/admin/receipts/test-id/reject")
-      .set("Cookie", cookie)
-      .send("note=missing-csrf");
-    expect(res.status).toBe(403);
-  });
-
-  test("POST 带错误 token 时返回 403", async () => {
-    const app = buildApp();
-    const cookie = await getAuthCookie(app);
-    const res = await request(app)
-      .post("/admin/receipts/test-id/reject")
-      .set("Cookie", cookie)
-      .set("x-csrf-token", "wrong-token")
-      .send("note=bad-csrf");
-    expect(res.status).toBe(403);
   });
 });
 

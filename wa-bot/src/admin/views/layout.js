@@ -3,7 +3,7 @@
 const state = require("../state");
 const { t } = require("../i18n");
 
-function htmlLayout(title, content, currentPath = '', lang = 'zh', cspNonce = '', csrfToken = '') {
+function htmlLayout(title, content, currentPath = '', lang = 'zh') {
   const _waConnected = state.isConnected();
   // 根据当前连接状态动态渲染导航栏徽标
   const statusBadge = _waConnected
@@ -30,7 +30,6 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh', cspNonce = ''
       <button class="lang-toggle" id="langToggle" title="${t('switch_language', lang)}" aria-label="${t('switch_language', lang)}">${lang === 'zh' ? t('lang_en', lang) : t('lang_zh', lang)}</button>
       <button class="theme-toggle" id="themeToggle" title="${lang === 'zh' ? t('switch_to_dark', lang) : t('switch_to_light', lang)}" aria-label="${lang === 'zh' ? t('switch_to_dark', lang) : t('switch_to_light', lang)}">🌙</button>
       <form class="inline" method="POST" action="/admin/logout">
-        <input type="hidden" name="_csrf" value="${csrfToken}" />
         <button class="btn btn-logout" style="margin-left:4px">${t('logout', lang)}</button>
       </form>
     </div>
@@ -46,10 +45,9 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh', cspNonce = ''
     <span id="lightbox-close" onclick="closeLightbox()">✕</span>
     <img id="lightbox-img" src="" alt="${t('receipt_large', lang)}" />
   </div>
-  <script nonce="${cspNonce}">
+  <script>
     window.ADMIN_UI = {
       lang: ${JSON.stringify(lang)},
-      csrfToken: ${JSON.stringify(csrfToken)},
       switchToDark: ${JSON.stringify(t('switch_to_dark', lang))},
       switchToLight: ${JSON.stringify(t('switch_to_light', lang))}
     };

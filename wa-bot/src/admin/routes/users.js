@@ -11,20 +11,20 @@ function registerUserRoutes(app) {
     const lang = getLang(req);
     const users = adminUserService.listUsers();
     const flash = req.query.flash || "";
-    res.send(usersPage(users, req.session.username, flash, lang, res.locals.cspNonce, res.locals.csrfToken));
+    res.send(usersPage(users, req.session.username, flash, lang));
   });
 
   app.get("/admin/users/new", requireAuth, (req, res) => {
     const lang = getLang(req);
-    res.send(newUserPage("", lang, res.locals.cspNonce, res.locals.csrfToken));
+    res.send(newUserPage("", lang));
   });
 
   app.post("/admin/users/new", requireAuth, (req, res) => {
     const { username, password, confirm } = req.body;
     const lang = getLang(req);
-    if (password !== confirm) return res.send(newUserPage(t('password_mismatch', lang), lang, res.locals.cspNonce, res.locals.csrfToken));
+    if (password !== confirm) return res.send(newUserPage(t('password_mismatch', lang), lang));
     const result = adminUserService.createUser(username, password);
-    if (!result.ok) return res.send(newUserPage(result.error, lang, res.locals.cspNonce, res.locals.csrfToken));
+    if (!result.ok) return res.send(newUserPage(result.error, lang));
     logger.info("新管理员账号已创建", { by: req.session.username, newUser: username });
     res.redirect("/admin/users?flash=" + encodeURIComponent(t('user_created', lang)));
   });

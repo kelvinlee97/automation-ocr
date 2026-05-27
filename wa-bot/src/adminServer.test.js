@@ -10,8 +10,7 @@ const vm = require('vm');
  * 使用 vm.Script 做静态语法检查，不实际执行代码
  */
 function assertScriptSyntax(html, label) {
-  // 匹配 <script> 与 <script nonce="..."> 形式（仅内联，不含 src=）
-  const scriptRegex = /<script(?:\s+nonce="[^"]*")?>([\s\S]*?)<\/script>/g;
+  const scriptRegex = /<script>([\s\S]*?)<\/script>/g;
   let match;
   let count = 0;
   while ((match = scriptRegex.exec(html)) !== null) {
