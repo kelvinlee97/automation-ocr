@@ -92,11 +92,11 @@ function buildPagination(currentPage, totalPages, q, status, lang) {
   };
 
   let html = '<div class="pagination-container" style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; padding:10px 0;">';
-  
+
   html += '<div class="page-info" style="color:var(--text-muted); font-size:13px;">' + t('page_info', lang, { current: currentPage, total: totalPages }) + '</div>';
-  
+
   html += '<div class="page-buttons" style="display:flex; gap:6px;">';
-  
+
   if (currentPage > 1) {
     html += '<a href="' + getUrl(currentPage - 1) + '" class="btn btn-page">' + t('page_previous', lang) + '</a>';
   } else {
@@ -105,7 +105,7 @@ function buildPagination(currentPage, totalPages, q, status, lang) {
 
   let startPage = Math.max(1, currentPage - 2);
   let endPage = Math.min(totalPages, currentPage + 2);
-  
+
   if (currentPage <= 3) {
     endPage = Math.min(totalPages, 5);
   }
@@ -217,7 +217,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
   const paginatedGroups = {};
   let currentReceiptCount = 0;
   let pageCounter = 1;
-  
+
   for (const [phone, groupReceipts] of groupEntries) {
     if (pageCounter === currentPage) {
       paginatedGroups[phone] = groupReceipts;
@@ -237,7 +237,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
       const s = r.status || 'pending_review';
       counts[s] = (counts[s] || 0) + 1;
     });
-    
+
     let badgesHtml = "";
     for (const [status, count] of Object.entries(counts)) {
       if (badgeMap[status]) {
@@ -368,7 +368,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         header.dataset.collapsed = isCollapsed ? 'false' : 'true';
         var icon = document.getElementById('toggle-icon-' + CSS.escape(phone));
         if (icon) icon.textContent = isCollapsed ? '▼' : '▶';
-        
+
         document.querySelectorAll('.group-row-' + CSS.escape(phone)).forEach(function(row) {
           row.style.display = isCollapsed ? '' : 'none';
           // 同时隐藏对应的展开面板

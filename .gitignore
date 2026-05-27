@@ -24,6 +24,9 @@ data/sessions.json
 # ── 日志 ──────────────────────────────────────
 logs/*.log
 
+# ── 测试覆盖率产物 ────────────────────────────
+wa-bot/coverage/
+
 # ── 系统 / 环境 ────────────────────────────────
 .DS_Store
 *.env
@@ -47,3 +50,5 @@ gha-creds-*.json
 !wa-bot/package.json
 !wa-bot/package-lock.json
 
+.codebuddy
+.workbuddy

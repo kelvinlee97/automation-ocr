@@ -89,23 +89,64 @@ bot:
 
 ---
 
-## 部署（服务器）
+## 部署（EC2 一键脚本）
 
-项目已配置 GitHub Actions 自动部署，每次推送到 `main` 分支自动触发。
+> 已经在跑的步骤会自动 skip，重复执行安全。新手照做即可，不用一个个看脚本。
 
-**手动重启服务：**
+### 首次部署（全新 Ubuntu EC2 实例）
+
+1. **准备 EC2 实例**
+   - Ubuntu 22.04 / 24.04（LTS）
+   - 安全组放行 22（SSH）；如需外部访问 web，再开 80/443
+   - 在 EC2 上生成 SSH key（`ssh-keygen`）并把公钥加到 GitHub deploy keys
+
+2. **SSH 上去，先装 git 把代码拉下来**（鸡生蛋问题：脚本本身在仓库里）
+   ```bash
+   sudo apt-get update && sudo apt-get install -y git
+   git clone git@github.com:kelvinlee97/automation-ocr.git /home/ubuntu/automation-ocr
+   cd /home/ubuntu/automation-ocr
+   ```
+
+3. **创建 `.env` 文件**（必填项）
+   ```bash
+   cat > .env <<EOF
+   GEMINI_API_KEY=<你的 Gemini key>
+   SESSION_SECRET=$(openssl rand -hex 32)
+   EOF
+   ```
+
+4. **一键跑**
+   ```bash
+   bash scripts/bootstrap.sh
+   ```
+   脚本会按顺序做（每一步先检测、已就绪则 skip）：
+   - 装 docker / compose plugin / git
+   - 把当前用户加进 docker 组
+   - `docker compose pull && up -d` 启动容器
+   - 打印容器状态
+
+5. **首次启动扫 WhatsApp 二维码**
+   ```bash
+   bash scripts/docker.sh logs   # 看日志里的二维码 / 配对码
+   ```
+   或访问 `https://你的域名/admin/qr` 扫码。
+
+### 日常更新（已部署过的实例）
+
 ```bash
-docker compose up -d
+bash scripts/bootstrap.sh        # 拉新代码 + 拉新镜像 + 重启容器，已就绪的步骤自动 skip
 ```
 
-**查看运行日志：**
+### 进阶：只跑某一段
+
 ```bash
-docker compose logs -f wa-bot
+bash scripts/bootstrap.sh system   # 只装系统依赖
+bash scripts/bootstrap.sh deploy   # 只做项目部署（拉代码 → .env 校验 → 启容器）
 ```
 
-**首次部署需扫码登录 WhatsApp：**
+### CI/CD
 
-访问 `https://你的域名/admin/qr`，用绑定的 WhatsApp 号码扫码，或使用配对码方式登录。
+项目已配置 GitHub Actions，推送到 `main` 分支自动触发部署，无需手动跑脚本。
 
 ---
 
@@ -114,37 +155,45 @@ docker compose logs -f wa-bot
 ```
 automation-ocr/
 ├── config/
-│   └── config.yaml                  ← 业务规则（品牌白名单、金额门槛）
+│   └── config.yaml              ← 业务规则（品牌白名单、金额门槛）
 ├── infra/
-│   ├── nginx/                       ← Nginx 反代 + HTTPS 配置
-│   └── stack.yml                    ← Docker Swarm/编排配置
-├── commands/cheatsheet.md           ← 命令速查
-├── wa-bot/                          ← 主应用（Node.js）
-│   ├── index.js                     ← 入口：db.init → migrate → session → Express → Bot
+│   ├── nginx/                   ← Nginx 反代 + HTTPS 配置
+│   └── stack.yml                ← Docker Swarm/编排配置
+├── scripts/                     ← 项目级脚本（按用途拆分）
+│   ├── bootstrap.sh             ← EC2 一键部署（幂等，已就绪自动 skip）
+│   ├── setup.sh                 ← 本地初始化（依赖安装、环境检查）
+│   ├── start.sh                 ← 启动服务
+│   ├── docker.sh                ← Docker 相关操作
+│   ├── test.sh / check.sh / lint.sh
+├── rules/RULES.md               ← 项目规则（贡献者必读）
+├── skills/                      ← AI 协作技能定义
+├── wa-bot/                      ← 主应用（Node.js）
+│   ├── index.js                 ← 入口：db.init → migrate → session → Express → Bot
 │   ├── Dockerfile
 │   ├── jest.config.js
-│   ├── scripts/                     ← 一次性脚本/迁移工具
-│   │   ├── migrate-excel-path.sh
-│   │   ├── migrate-json-to-sqlite.js
+│   ├── scripts/                 ← 一次性脚本/迁移工具
+│   │   ├── migrate-excel-path.sh        ← Phase 1 路径迁移
+│   │   ├── migrate-json-to-sqlite.js    ← Phase 2 JSON→SQLite 迁移
 │   │   ├── seed-test-data.js
 │   │   ├── simulate-user.js
 │   │   └── wa-simulator.js
 │   └── src/
-│       ├── bot.js                   ← WhatsApp 客户端
-│       ├── messageHandler.js        ← 消息路由
-│       ├── adminServer.js           ← 兼容导出（实际逻辑在 admin/）
-│       ├── sessionManager.js        ← 用户会话状态（SQLite）
+│       ├── bot.js               ← WhatsApp 客户端
+│       ├── messageHandler.js    ← 消息路由
+│       ├── adminServer.js       ← 兼容导出（实际逻辑在 admin/）
+│       ├── sessionManager.js    ← 用户会话状态（SQLite）
 │       ├── db/
-│       │   ├── index.js             ← SQLite 单例（better-sqlite3, WAL）
-│       │   └── schema.sql           ← 3 表：receipts / sessions / admin_users
-│       ├── admin/                   ← Phase 4 拆分后的管理后台
+│       │   ├── index.js         ← SQLite 单例（better-sqlite3, WAL）
+│       │   └── schema.sql       ← 3 表：receipts / sessions / admin_users
+│       ├── admin/               ← Phase 4 拆分后的管理后台
 │       │   ├── server.js
 │       │   ├── state.js
-│       │   ├── middleware/          ← auth / csrf / rateLimit / security / session
-│       │   ├── routes/              ← auth / receipts / users / whatsapp / export
-│       │   ├── views/               ← layout / login / qr / receipts / users / escapeHtml
-│       │   ├── static/              ← admin.css / admin.js / qr.js / theme-init.js
-│       │   └── i18n/                ← zh / en / index
+│       │   ├── middleware/      ← auth / rateLimit / security / session
+│       │   ├── routes/          ← auth / receipts / users / whatsapp / export
+│       │   ├── views/           ← layout / login / qr / receipts / users / escapeHtml
+│       │   ├── static/          ← admin.css / admin.js / qr.js / theme-init.js
+│       │   ├── i18n/            ← zh / en / index
+│       │   └── __tests__/       ← 路由集成测试
 │       ├── handlers/
 │       │   ├── registrationHandler.js   ← 注册流程
 │       │   └── receiptHandler.js        ← 收据提交流程
@@ -153,19 +202,19 @@ automation-ocr/
 │       │   ├── excelService.js          ← Excel 导出
 │       │   ├── receiptStore.js          ← 收据 CRUD（SQLite）
 │       │   └── adminUserService.js      ← 管理员账户（SQLite + scrypt）
-│       └── utils/
-│           ├── icParser.js              ← 身份证号解析
-│           ├── maskPhone.js             ← PII 脱敏
-│           └── logger.js                ← Winston 日志
-├── data/                            ← 运行数据（自动创建，不入版本控制）
-│   ├── app.db                       ← SQLite 数据库
-│   ├── excel/records.xlsx           ← Excel 导出
-│   ├── images/                      ← 收据图片备份
-│   └── wwebjs_auth/                 ← WhatsApp 登录凭证
+│       ├── utils/
+│       │   ├── icParser.js              ← 身份证号解析
+│       │   ├── maskPhone.js             ← PII 脱敏
+│       │   └── logger.js                ← Winston 日志
+│       └── **/__tests__/                ← 各模块单元测试
+├── data/                        ← 运行数据（自动创建，不入版本控制）
+│   ├── app.db                   ← SQLite 数据库
+│   ├── excel/records.xlsx       ← Excel 导出
+│   ├── images/                  ← 收据图片备份
+│   └── wwebjs_auth/             ← WhatsApp 登录凭证
 ├── docker-compose.yml
-├── AGENTS.md                        ← 通用 AI 行为准则
-├── plan.md                          ← 项目优化计划（Phase 1-6）
-└── .env                             ← 环境变量（不入版本控制）
+├── plan.md                      ← 项目优化计划（Phase 1-6）
+└── .env                         ← 环境变量（不入版本控制）
 ```
 
 ---
