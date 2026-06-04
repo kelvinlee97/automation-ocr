@@ -1,0 +1,3 @@
+{$DOMAIN} {
+    reverse_proxy wa-bot:3000
+}
