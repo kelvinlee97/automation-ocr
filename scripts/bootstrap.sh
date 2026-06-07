@@ -11,7 +11,7 @@
 #   - 已在 Droplet 上配好 SSH key
 #   - 准备好 GEMINI_API_KEY、SESSION_SECRET、DOMAIN
 #
-set -e
+set -euo pipefail
 
 # ============================================================
 # 全局常量
@@ -40,6 +40,7 @@ log_err()  { echo "[err]  $*" >&2; }
 
 # ============================================================
 # system 阶段：系统依赖 + 安全配置
+# 每步先检查是否已就绪，就绪则 skip，未就绪则执行（失败即终止）
 # ============================================================
 do_system() {
   echo "=== [1/2] 系统依赖 ==="
@@ -48,18 +49,18 @@ do_system() {
   log_run "apt-get update"
   $SUDO apt-get update -qq
 
-  # 1.2 基础工具
-  local pkgs_needed=()
+  # 1.2 基础工具（git ca-certificates curl gnupg lsb-release ufw）
+  local pkgs_to_install=()
   for pkg in git ca-certificates curl gnupg lsb-release ufw; do
-    if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-      pkgs_needed+=("$pkg")
+    if dpkg -s "$pkg" >/dev/null 2>&1; then
+      log_skip "包已安装: $pkg"
+    else
+      pkgs_to_install+=("$pkg")
     fi
   done
-  if [ ${#pkgs_needed[@]} -eq 0 ]; then
-    log_skip "基础工具均已安装"
-  else
-    log_run "安装基础工具: ${pkgs_needed[*]}"
-    $SUDO apt-get install -y "${pkgs_needed[@]}"
+  if [ ${#pkgs_to_install[@]} -gt 0 ]; then
+    log_run "安装基础工具: ${pkgs_to_install[*]}"
+    $SUDO apt-get install -y "${pkgs_to_install[@]}"
   fi
 
   # 1.3 Docker 官方 apt 源
@@ -95,14 +96,15 @@ do_system() {
     $SUDO usermod -aG docker "$DEPLOY_USER"
   fi
 
-  # 确保 deploy 用户在 docker 组
-  if id -nG "$DEPLOY_USER" | tr ' ' '\n' | grep -qx docker; then
+  # 1.6 确保 deploy 用户在 docker 组
+  if id -nG "$DEPLOY_USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
     log_skip "$DEPLOY_USER 已在 docker 组"
   else
+    log_run "将 $DEPLOY_USER 加入 docker 组"
     $SUDO usermod -aG docker "$DEPLOY_USER"
   fi
 
-  # 1.6 docker 开机自启
+  # 1.7 docker 开机自启
   if systemctl is-enabled docker >/dev/null 2>&1 && systemctl is-active docker >/dev/null 2>&1; then
     log_skip "docker 服务已 enabled 且 active"
   else
@@ -110,8 +112,8 @@ do_system() {
     $SUDO systemctl enable --now docker
   fi
 
-  # 1.7 UFW 防火墙配置
-  if $SUDO ufw status | grep -q "Status: active"; then
+  # 1.8 UFW 防火墙配置
+  if $SUDO ufw status 2>/dev/null | grep -q "Status: active"; then
     log_skip "UFW 已启用"
   else
     log_run "配置 UFW 防火墙（允许 22, 80, 443）"
@@ -124,7 +126,7 @@ do_system() {
     $SUDO ufw --force enable
   fi
 
-  # 1.8 项目目录（属主为 deploy 用户）
+  # 1.9 项目目录（属主为 deploy 用户）
   if [ -d "$APP_DIR" ]; then
     log_skip "项目目录 $APP_DIR 已存在"
   else
