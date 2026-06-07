@@ -56,16 +56,21 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: 部署到 Droplet
-        uses: appleboy/ssh-action@v1.2.5
-        with:
-          host: ${{ secrets.DO_SSH_HOST }}
-          username: ${{ secrets.DO_SSH_USER }}
-          key: ${{ secrets.DO_SSH_KEY }}
-          port: ${{ secrets.DO_SSH_PORT }}
-          script: |
+      - name: 部署到 Droplet（SSH）
+        run: |
+          # 设置 SSH key
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DO_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # 添加 host key（避免首次连接确认）
+          ssh-keyscan -H -p ${{ secrets.DO_SSH_PORT }} ${{ secrets.DO_SSH_HOST }} >> ~/.ssh/known_hosts
+
+          # 执行部署命令
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DO_SSH_PORT }} ${{ secrets.DO_SSH_USER }}@${{ secrets.DO_SSH_HOST }} <<'EOF'
             cd /opt/automation-ocr
             docker compose pull
             docker compose up -d --remove-orphans
             docker image prune -f
             docker compose ps
+          EOF
