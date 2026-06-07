@@ -11,7 +11,7 @@
 #   - 已在 Droplet 上配好 SSH key
 #   - 准备好 GEMINI_API_KEY、SESSION_SECRET、DOMAIN
 #
-set -euo pipefail
+set -e
 
 # ============================================================
 # 全局常量
@@ -50,17 +50,17 @@ do_system() {
   $SUDO apt-get update -qq
 
   # 1.2 基础工具（git ca-certificates curl gnupg lsb-release ufw）
-  local pkgs_to_install=()
+  local pkgs_needed=()
   for pkg in git ca-certificates curl gnupg lsb-release ufw; do
-    if dpkg -s "$pkg" >/dev/null 2>&1; then
-      log_skip "包已安装: $pkg"
-    else
-      pkgs_to_install+=("$pkg")
+    if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+      pkgs_needed+=("$pkg")
     fi
   done
-  if [ ${#pkgs_to_install[@]} -gt 0 ]; then
-    log_run "安装基础工具: ${pkgs_to_install[*]}"
-    $SUDO apt-get install -y "${pkgs_to_install[@]}"
+  if [ ${#pkgs_needed[@]} -eq 0 ]; then
+    log_skip "基础工具均已安装"
+  else
+    log_run "安装基础工具: ${pkgs_needed[*]}"
+    $SUDO apt-get install -y "${pkgs_needed[@]}"
   fi
 
   # 1.3 Docker 官方 apt 源
