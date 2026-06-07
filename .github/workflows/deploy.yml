@@ -64,7 +64,10 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
 
           # 添加 host key（避免首次连接确认）
-          ssh-keyscan -H -p 22 ${{ secrets.DO_SSH_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H -p 22 ${{ secrets.DO_SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          # 测试 SSH 连接
+          ssh -v -i ~/.ssh/deploy_key -p 22 ${{ secrets.DO_SSH_USER }}@${{ secrets.DO_SSH_HOST }} echo "SSH connection OK" 2>&1
 
           # 执行部署命令
           ssh -i ~/.ssh/deploy_key -p 22 ${{ secrets.DO_SSH_USER }}@${{ secrets.DO_SSH_HOST }} <<'EOF'
