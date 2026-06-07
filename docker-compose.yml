@@ -1,35 +1,39 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - wa-bot
+
   wa-bot:
-    # 镜像地址通过 IMAGE_URI 环境变量注入，支持两种场景：
-    # - 生产（ECR）：IMAGE_URI=<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/automation-ocr:latest
-    # - 回退（GHCR）：IMAGE_URI=ghcr.io/kelvinlee97/automation-ocr:latest
-    # 注入方式：EC2 部署脚本执行前 export IMAGE_URI=$(cfn-output EcrRepositoryUri):latest
     image: ${IMAGE_URI:-ghcr.io/kelvinlee97/automation-ocr:latest}
     container_name: wa-bot
     restart: always
-    ports:
-      # 只绑定 loopback，由宿主机 Nginx 统一处理 80/443 后反代至此
-      # 避免外网绕过 Nginx 直接访问，也是 Certbot HTTP-01 Challenge 的前提
-      - "127.0.0.1:3000:3000"
     environment:
       - NODE_ENV=production
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      # 收据图片和 JSON 存储目录，与下方 volumes 挂载路径保持一致
       - DATA_DIR=/opt/automation-ocr/data
-      # 固定 session secret，确保容器重启后浏览器 cookie 仍有效
-      # 若未设置则每次重启随机生成，导致重启即登出
       - SESSION_SECRET=${SESSION_SECRET}
     volumes:
-      # 挂载配置文件目录（Dockerfile 中已创建 /config -> /app/config 符号链接）
-      - ./config:/app/config
-      # 注意：移除了 ./wa-bot/src:/app/src 挂载
-      # 使用预构建镜像后，src 挂载会用服务器旧代码覆盖镜像中的新代码，导致代码不更新
+      - ./config:/app/config:ro
       - ./data:/opt/automation-ocr/data
-      # 持久化 WhatsApp 登录凭据，防止重启后重新扫码
-      # LocalAuth dataPath='.wwebjs_auth'，工作目录为 /app，实际写入 /app/.wwebjs_auth
       - ./data/wwebjs_auth:/app/.wwebjs_auth
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -25,9 +25,9 @@ const KEY_LEN       = 64;
  * @returns {string}  格式："scrypt:<salt_hex>:<hash_hex>"
  */
 function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString("hex");
+  const salt = crypto.randomBytes(16);
   const hash = crypto.scryptSync(password, salt, KEY_LEN, SCRYPT_PARAMS);
-  return `scrypt:${salt}:${hash.toString("hex")}`;
+  return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
 }
 
 /**
@@ -36,8 +36,9 @@ function hashPassword(password) {
  */
 function verifyPassword(password, storedHash) {
   try {
-    const [algo, salt, hashHex] = storedHash.split(":");
-    if (algo !== "scrypt" || !salt || !hashHex) return false;
+    const [algo, saltHex, hashHex] = storedHash.split(":");
+    if (algo !== "scrypt" || !saltHex || !hashHex) return false;
+    const salt     = Buffer.from(saltHex, "hex");
     const expected = Buffer.from(hashHex, "hex");
     const actual   = crypto.scryptSync(password, salt, KEY_LEN, SCRYPT_PARAMS);
     return crypto.timingSafeEqual(expected, actual);
