@@ -57,7 +57,7 @@ jobs:
 
     steps:
       - name: 部署到 Droplet
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.DO_SSH_HOST }}
           username: ${{ secrets.DO_SSH_USER }}
