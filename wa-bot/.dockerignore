@@ -7,7 +7,6 @@ node_modules
 *.log
 logs/
 .DS_Store
-*.md
 .gitkeep
 coverage/
 .nyc_output/
