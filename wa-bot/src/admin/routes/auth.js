@@ -30,7 +30,8 @@ function registerAuthRoutes(app) {
   app.get("/admin/login", requireSetup, (req, res) => {
     if (req.session.authenticated) return res.redirect("/admin");
     const lang = getLang(req);
-    res.send(loginPage("", lang));
+    const showSetupLink = adminUserService.isEmpty();
+    res.send(loginPage("", lang, showSetupLink));
   });
 
   app.post("/admin/login", requireSetup, authLimiter, (req, res) => {

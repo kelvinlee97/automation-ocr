@@ -127,5 +127,8 @@ module.exports = {
   "toast_error": "操作失败",
   "sending": "发送中…",
   "send_fail": "发送失败：",
-  "reject_fail": "拒绝失败："
+  "reject_fail": "拒绝失败：",
+  "forgot_password": "忘记密码？",
+  "contact_admin": "请联系系统管理员重置密码",
+  "first_time_setup_link": "首次使用？点击这里初始化"
 };

@@ -1,245 +1,180 @@
 # 📱 WhatsApp 收据审核系统
 
-> 消费者通过 WhatsApp 提交收据截图，AI 自动识别金额和品牌，工作人员在管理后台一键审核并发送结果消息。
+> 让促销活动收据审核变得简单高效：消费者通过 WhatsApp 提交收据，AI 自动识别信息，工作人员一键审核回复。
 
 ---
 
-## 这个系统能做什么？
+## 系统简介
 
-马来西亚促销活动（如电器返现）通常要求消费者提交收据证明资格。传统方式靠人工逐张核对，费时且容易出错。
+这个系统是为马来西亚促销活动（如电器返现、品牌优惠等）设计的自动化工具。
 
-**这个系统把流程变成：**
+**传统方式的问题：**
+- 消费者需要亲自到店铺或上网提交收据
+- 工作人员要一张张人工核对收据信息，费时费力
+- 容易出错，效率低下
 
-1. **消费者** 在 WhatsApp 发送身份证号和收据截图
-2. **系统** 自动保存并用 AI（Gemini 2.5）识别收据中的品牌和金额
-3. **工作人员** 登录管理后台，查看 AI 提取结果，确认后一键发送审核结果给消费者
-4. **记录** 自动写入 Excel 存档
-
----
-
-## 使用流程
-
-### 消费者端（WhatsApp）
-
-| 步骤 | 消费者操作 | 系统响应 |
-|------|-----------|---------|
-| 1 | 发送身份证号（格式：XXXXXX-XX-XXXX） | 验证格式，提示发送收据 |
-| 2 | 发送收据截图 | 确认已收到，通知等待审核 |
-| 3 | 等待 | 工作人员审核后收到结果消息 |
-
-### 工作人员端（管理后台）
-
-1. 登录 `https://你的域名/admin`
-2. 在收据审核页查看所有提交记录
-3. 点击「AI 提取」查看识别结果（品牌、金额）
-4. 输入要发给消费者的消息，点击「发送给用户」
+**使用本系统后：**
+- 消费者只需用 WhatsApp 发送收据照片
+- AI 自动识别收据上的品牌和金额
+- 工作人员在电脑上快速审核并发送结果给消费者
+- 所有记录自动保存，随时可查
 
 ---
 
-## 状态说明
+## 适用对象
 
-| 状态 | 含义 |
-|------|------|
-| 🟡 待 AI 提取 | 消费者已提交，尚未进行 AI 识别 |
-| 🔵 待发消息 | AI 已识别完成，等待工作人员发送结果 |
-| 🟢 已发送 | 工作人员已发送审核结果给消费者 |
-| 🔴 已拒绝 | 已拒绝该收据 |
+✅ **活动主办方** - 需要审核大量消费者收据的企业或机构  
+✅ **促销活动的品牌方** - 如三星、苹果、戴森等品牌的返现活动  
+✅ **市场营销公司** - 帮助客户管理促销活动  
+✅ **需要收据验证的任何组织**
 
 ---
 
-## 业务规则配置
+## 主要功能
 
-所有规则集中在 **`config/config.yaml`**，修改后重启服务生效，无需改代码：
+### 📸 消费者端（WhatsApp）
 
-```yaml
-eligibility:
-  eligible_brands:        # 品牌白名单（直接增减品牌名）
-    - "Samsung"
-    - "Apple"
-    - "Dyson"
-    - "Panasonic"
-    - "Sony"
-  minimum_amount: 500.00  # 最低消费金额（马币 RM）
+消费者不需要安装任何 App，直接用 WhatsApp 就能参与活动：
 
-bot:
-  session_timeout_minutes: 30   # 消费者提交超时时间（分钟）
-  max_receipts_per_day: 5       # 每人每天最多提交次数
-```
+| 步骤 | 消费者做什么 | 系统自动做什么 |
+|------|-------------|---------------|
+| 1 | 发送身份证号 | 验证格式是否正确，提示下一步操作 |
+| 2 | 拍摄并发送收据照片 | 确认收到照片，通知等待审核结果 |
+| 3 | 等待通知 | 收到审核结果（通过/不通过）|
 
----
+**特点：**
+- 无需下载 App，用熟悉的 WhatsApp 即可
+- 操作简单，按提示一步步来
+- 24小时随时可提交
 
-## Excel 记录
+### 💻 工作人员端（电脑后台）
 
-系统自动维护两张表（路径：`data/excel/records.xlsx`）：
+工作人员通过网页浏览器登录管理后台，进行高效审核：
 
-| Sheet | 内容 |
-|-------|------|
-| Registrations | 所有注册用户：手机号、身份证、注册时间 |
-| Receipts | 所有收据：单据号、品牌、金额、审核结果、AI 置信度 |
+1. **登录后台** - 用浏览器打开管理网站，输入账号密码登录
+2. **查看提交记录** - 看到所有消费者提交的收据列表
+3. **AI 辅助审核** - 点击查看 AI 自动识别的结果（品牌、金额、置信度）
+4. **一键回复** - 输入审核意见，点击发送，消费者立即在 WhatsApp 收到通知
 
----
-
-## 环境变量
-
-| 变量 | 必需 | 说明 |
-|------|------|------|
-| `GEMINI_API_KEY` | ✅ | Google Gemini AI 密钥，用于识别收据 |
-| `SESSION_SECRET` | ✅ | 管理后台登录会话密钥，重启后保持登录状态 |
-| `NODE_ENV` | - | 设为 `production` 启用生产模式 |
+**特点：**
+- 网页操作，无需安装软件
+- AI 自动识别，减少人工输入错误
+- 批量处理，提高效率
+- 所有操作有记录，可追溯
 
 ---
 
-## 部署（EC2 一键脚本）
+## 审核状态说明
 
-> 已经在跑的步骤会自动 skip，重复执行安全。新手照做即可，不用一个个看脚本。
+在管理后台，您会看到每个收据的审核状态：
 
-### 首次部署（全新 Ubuntu EC2 实例）
-
-1. **准备 EC2 实例**
-   - Ubuntu 22.04 / 24.04（LTS）
-   - 安全组放行 22（SSH）；如需外部访问 web，再开 80/443
-   - 在 EC2 上生成 SSH key（`ssh-keygen`）并把公钥加到 GitHub deploy keys
-
-2. **SSH 上去，先装 git 把代码拉下来**（鸡生蛋问题：脚本本身在仓库里）
-   ```bash
-   sudo apt-get update && sudo apt-get install -y git
-   git clone git@github.com:kelvinlee97/automation-ocr.git /home/ubuntu/automation-ocr
-   cd /home/ubuntu/automation-ocr
-   ```
-
-3. **创建 `.env` 文件**（必填项）
-   ```bash
-   cat > .env <<EOF
-   GEMINI_API_KEY=<你的 Gemini key>
-   SESSION_SECRET=$(openssl rand -hex 32)
-   EOF
-   ```
-
-4. **一键跑**
-   ```bash
-   bash scripts/bootstrap.sh
-   ```
-   脚本会按顺序做（每一步先检测、已就绪则 skip）：
-   - 装 docker / compose plugin / git
-   - 把当前用户加进 docker 组
-   - `docker compose pull && up -d` 启动容器
-   - 打印容器状态
-
-5. **首次启动扫 WhatsApp 二维码**
-   ```bash
-   bash scripts/docker.sh logs   # 看日志里的二维码 / 配对码
-   ```
-   或访问 `https://你的域名/admin/qr` 扫码。
-
-### 日常更新（已部署过的实例）
-
-```bash
-bash scripts/bootstrap.sh        # 拉新代码 + 拉新镜像 + 重启容器，已就绪的步骤自动 skip
-```
-
-### 进阶：只跑某一段
-
-```bash
-bash scripts/bootstrap.sh system   # 只装系统依赖
-bash scripts/bootstrap.sh deploy   # 只做项目部署（拉代码 → .env 校验 → 启容器）
-```
-
-### CI/CD
-
-项目已配置 GitHub Actions，推送到 `main` 分支自动触发部署，无需手动跑脚本。
+| 状态 | 含义 | 下一步操作 |
+|------|------|-----------|
+| 🟡 待 AI 提取 | 消费者已提交收据，正在等待 AI 识别 | 等待系统自动处理（通常几秒内完成）|
+| 🔵 待发消息 | AI 已识别完成，等待工作人员审核 | 查看识别结果，输入审核意见并发送 |
+| 🟢 已发送 | 已审核并通过，消费者已收到通知 | 无需操作，记录已存档 |
+| 🔴 已拒绝 | 已审核但不通过，消费者已收到通知 | 无需操作，可查看拒绝原因 |
 
 ---
 
-## 目录结构
+## 活动规则设置
 
-```
-automation-ocr/
-├── config/
-│   └── config.yaml              ← 业务规则（品牌白名单、金额门槛）
-├── infra/
-│   ├── nginx/                   ← Nginx 反代 + HTTPS 配置
-│   └── stack.yml                ← Docker Swarm/编排配置
-├── scripts/                     ← 项目级脚本（按用途拆分）
-│   ├── bootstrap.sh             ← EC2 一键部署（幂等，已就绪自动 skip）
-│   ├── setup.sh                 ← 本地初始化（依赖安装、环境检查）
-│   ├── start.sh                 ← 启动服务
-│   ├── docker.sh                ← Docker 相关操作
-│   ├── test.sh / check.sh / lint.sh
-├── rules/RULES.md               ← 项目规则（贡献者必读）
-├── skills/                      ← AI 协作技能定义
-├── wa-bot/                      ← 主应用（Node.js）
-│   ├── index.js                 ← 入口：db.init → migrate → session → Express → Bot
-│   ├── Dockerfile
-│   ├── jest.config.js
-│   ├── scripts/                 ← 一次性脚本/迁移工具
-│   │   ├── migrate-excel-path.sh        ← Phase 1 路径迁移
-│   │   ├── migrate-json-to-sqlite.js    ← Phase 2 JSON→SQLite 迁移
-│   │   ├── seed-test-data.js
-│   │   ├── simulate-user.js
-│   │   └── wa-simulator.js
-│   └── src/
-│       ├── bot.js               ← WhatsApp 客户端
-│       ├── messageHandler.js    ← 消息路由
-│       ├── adminServer.js       ← 兼容导出（实际逻辑在 admin/）
-│       ├── sessionManager.js    ← 用户会话状态（SQLite）
-│       ├── db/
-│       │   ├── index.js         ← SQLite 单例（better-sqlite3, WAL）
-│       │   └── schema.sql       ← 3 表：receipts / sessions / admin_users
-│       ├── admin/               ← Phase 4 拆分后的管理后台
-│       │   ├── server.js
-│       │   ├── state.js
-│       │   ├── middleware/      ← auth / rateLimit / security / session
-│       │   ├── routes/          ← auth / receipts / users / whatsapp / export
-│       │   ├── views/           ← layout / login / qr / receipts / users / escapeHtml
-│       │   ├── static/          ← admin.css / admin.js / qr.js / theme-init.js
-│       │   ├── i18n/            ← zh / en / index
-│       │   └── __tests__/       ← 路由集成测试
-│       ├── handlers/
-│       │   ├── registrationHandler.js   ← 注册流程
-│       │   └── receiptHandler.js        ← 收据提交流程
-│       ├── services/
-│       │   ├── aiService.js             ← Gemini AI 识别
-│       │   ├── excelService.js          ← Excel 导出
-│       │   ├── receiptStore.js          ← 收据 CRUD（SQLite）
-│       │   └── adminUserService.js      ← 管理员账户（SQLite + scrypt）
-│       ├── utils/
-│       │   ├── icParser.js              ← 身份证号解析
-│       │   ├── maskPhone.js             ← PII 脱敏
-│       │   └── logger.js                ← Winston 日志
-│       └── **/__tests__/                ← 各模块单元测试
-├── data/                        ← 运行数据（自动创建，不入版本控制）
-│   ├── app.db                   ← SQLite 数据库
-│   ├── excel/records.xlsx       ← Excel 导出
-│   ├── images/                  ← 收据图片备份
-│   └── wwebjs_auth/             ← WhatsApp 登录凭证
-├── docker-compose.yml
-├── plan.md                      ← 项目优化计划（Phase 1-6）
-└── .env                         ← 环境变量（不入版本控制）
-```
+您可以根据活动需求，灵活设置审核规则：
+
+**可配置的规则包括：**
+- **认可的品牌列表** - 只有这些品牌的收据才能通过（如：Samsung、Apple、Dyson、Panasonic、Sony）
+- **最低消费金额** - 收据金额必须达到这个数目才符合要求（如：RM 500）
+- **每人每天提交次数限制** - 防止重复提交（如：每人每天最多 5 次）
+- **提交超时时间** - 消费者发送身份证后，必须在规定时间内发送收据（如：30 分钟）
+
+**如何修改规则：**  
+请联系系统管理员修改配置文档，修改后需要重启系统才能生效。
 
 ---
 
-## 常见问题
+## 数据记录与导出
 
-**Q：AI 提取失败，提示 403 Forbidden**
+系统会自动保存所有重要数据：
 
-`GEMINI_API_KEY` 未正确注入容器。执行 `docker compose up -d` 重建容器（`restart` 不会重新读取 `.env`）。
+### 📊 自动生成的 Excel 表格
 
-**Q：容器重启后需要重新扫码**
+系统会维护两个 Excel 表格，记录所有活动数据：
 
-确认 `docker-compose.yml` 中已挂载 `./data/wwebjs_auth:/app/.wwebjs_auth`，且 `SESSION_SECRET` 已设置。
+| 表格名称 | 记录内容 | 用途 |
+|---------|---------|------|
+| **Registrations** | 所有参与活动的用户：手机号、身份证号、注册时间 | 统计参与人数、用户信息 |
+| **Receipts** | 所有提交的收据：单据编号、品牌、金额、审核结果、AI 识别准确度 | 财务对账、活动效果分析 |
 
-**Q：手机号显示带 `@lid` 或 `@c.us`**
+### 📁 数据备份
 
-管理后台已自动裁剪，如仍出现请更新到最新版本。
+系统会自动备份：
+- 所有收据图片（方便复查）
+- 完整的数据库（包含所有操作记录）
+- Excel 导出文件（可直接打印或发送给财务）
+
+---
+
+## 常见问题 (FAQ)
+
+### ❓ 消费者常见问题
+
+**Q：我需要下载 App 吗？**  
+A：不需要！您只需要用手机上的 WhatsApp 即可参与活动。
+
+**Q：我的个人信息安全吗？**  
+A：系统会严格保护您的隐私。身份证号和手机号只会用于活动审核，不会泄露给第三方。
+
+**Q：提交后多久能收到结果？**  
+A：通常几分钟到几小时内就会有结果。具体时间取决于工作人员审核速度。
+
+**Q：如果收据拍得不清楚怎么办？**  
+A：系统会提示您重新拍摄。请确保照片清晰、光线充足，能看到品牌名称和金额。
+
+**Q：我可以提交多张收据吗？**  
+A：可以，但每人每天有提交次数限制（具体次数由活动规则决定）。
+
+### ❓ 工作人员常见问题
+
+**Q：我需要懂技术才能用吗？**  
+A：不需要！管理后台设计得很简单，会用网页就能操作。如果有疑问，请看操作手册或联系技术支持。
+
+**Q：AI 识别错了怎么办？**  
+A：AI 只是辅助工具，最终审核权在您手里。如果 AI 识别有误，您可以手动修改品牌和金额，再发送审核结果。
+
+**Q：如何导出数据给财务？**  
+A：系统会自动生成 Excel 文件，您可以直接下载或打印。文件路径在系统设置中有说明。
+
+**Q：如果系统出问题了怎么办？**  
+A：请联系系统管理员或技术支持。系统有自动备份功能，数据不会丢失。
+
+**Q：可以同时多人审核吗？**  
+A：可以！多个工作人员可以同时登录后台，各自处理不同的收据，互不影响。
 
 ---
 
 ## 注意事项
 
-- `data/wwebjs_auth/` 含 WhatsApp 登录凭证，**切勿提交到版本控制或泄露**
-- 本项目使用 [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) 非官方库，建议使用**专用号码**而非个人主号，存在封号风险
-- 定期备份 `data/` 目录
+- **登录凭证安全** - 工作人员的账号密码请妥善保管，不要泄露给他人
+- **定期备份** - 建议定期备份系统数据，防止意外丢失
+- **网络稳定** - 使用时请确保网络连接稳定，以免影响审核效率
+- **培训工作人员** - 首次使用前，请对工作人员进行简单培训，确保他们熟悉操作流程
+
+---
+
+## 技术支持
+
+如果您在使用过程中遇到任何问题，请通过以下方式联系我们：
+
+- **技术支持邮箱**：[请填入您的技术支持邮箱]
+- **技术支持电话**：[请填入您的技术支持电话]
+- **在线客服**：[请填入在线客服链接]
+
+---
+
+## 版本历史
+
+- **当前版本**：v1.0
+- **最后更新**：2026年6月
 
 ---
 

@@ -127,5 +127,8 @@ module.exports = {
   "toast_error": "Operation failed",
   "sending": "Sending…",
   "send_fail": "Send failed: ",
-  "reject_fail": "Reject failed: "
+  "reject_fail": "Reject failed: ",
+  "forgot_password": "Forgot password?",
+  "contact_admin": "Please contact the system administrator to reset your password",
+  "first_time_setup_link": "First time? Click here to initialize"
 };
