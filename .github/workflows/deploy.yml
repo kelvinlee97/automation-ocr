@@ -69,6 +69,8 @@ jobs:
           # 执行部署命令
           ssh -i ~/.ssh/deploy_key -p 22 ${{ secrets.DO_SSH_USER }}@${{ secrets.DO_SSH_HOST }} <<'EOF'
             cd /opt/automation-ocr
+            git fetch origin main
+            git reset --hard origin/main
             docker compose pull
             docker compose up -d --remove-orphans
             docker image prune -f
