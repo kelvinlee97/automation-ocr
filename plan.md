@@ -4,9 +4,11 @@
 >
 > **版本**：v1.0
 > **生成时间**：2026-05-07
+> **更新时间**：2026-06-08
 > **作者**：AI Agent (CodeBuddy)
 > **适用项目**：`/Users/kelvinlee/Documents/projects/automation-ocr`
 > **当前分支**：main
+> **部署说明**：本计划生成时项目部署在 AWS EC2，后已迁移至 DigitalOcean Droplet（2026-06-07）。计划内容（Phase 1-6）与部署平台无关，无需因迁移调整。
 
 ---
 
