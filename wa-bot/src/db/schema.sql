@@ -35,3 +35,24 @@ CREATE TABLE IF NOT EXISTS admin_users (
   password_hash TEXT NOT NULL,
   created_at    TEXT NOT NULL
 );
+
+-- feedback: 开发者反馈表
+CREATE TABLE IF NOT EXISTS feedback (
+  id                  TEXT PRIMARY KEY,
+  github_issue_id     INTEGER,
+  github_issue_url    TEXT,
+  github_issue_state  TEXT DEFAULT 'open',
+  title               TEXT NOT NULL,
+  type                TEXT NOT NULL CHECK(type IN ('bug', 'improvement')),
+  description         TEXT NOT NULL,
+  screenshot_url      TEXT,
+  submitted_by        TEXT NOT NULL,
+  submitted_at        INTEGER NOT NULL,
+  status              TEXT DEFAULT 'open',
+  created_at          INTEGER NOT NULL,
+  updated_at          INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_submitted_at ON feedback(submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback(status);
+CREATE INDEX IF NOT EXISTS idx_feedback_type ON feedback(type);

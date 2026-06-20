@@ -7,6 +7,7 @@ const { registerAuthRoutes } = require("./auth");
 const { registerWhatsappRoutes } = require("./whatsapp");
 const { registerUserRoutes } = require("./users");
 const { registerExportRoutes } = require("./export");
+const { registerFeedbackRoutes } = require("./feedback");
 
 function registerRoutes(app) {
   app.get("/health", (req, res) => {
@@ -22,6 +23,7 @@ function registerRoutes(app) {
   registerWhatsappRoutes(app);
   registerUserRoutes(app);
   registerExportRoutes(app);
+  registerFeedbackRoutes(app);
 
   app.get("/", (req, res) => {
     if (adminUserService.isEmpty()) return res.redirect("/admin/setup");

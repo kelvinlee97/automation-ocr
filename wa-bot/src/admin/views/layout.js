@@ -25,6 +25,7 @@ function htmlLayout(title, content, currentPath = '', lang = 'zh') {
     <div class="nav-right">
       ${statusBadge}
       <a href="/admin" class="${currentPath === '/admin' ? 'nav-active' : ''}">📋 ${t('receipt_review', lang)}</a>
+      <a href="/admin/feedback" class="${currentPath === '/admin/feedback' ? 'nav-active' : ''}">💬 ${t('feedback', lang)}</a>
       <a href="/admin/export">⬇ ${t('download_excel', lang)}</a>
       <a href="/admin/users" class="${currentPath === '/admin/users' ? 'nav-active' : ''}">👥 ${t('user_management', lang)}</a>
       <button class="lang-toggle" id="langToggle" title="${t('switch_language', lang)}" aria-label="${t('switch_language', lang)}">${lang === 'zh' ? t('lang_en', lang) : t('lang_zh', lang)}</button>
