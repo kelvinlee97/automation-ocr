@@ -27,7 +27,7 @@ function feedbackDetailPage(feedback, lang = "zh") {
     lang === "zh" ? "zh-CN" : "en-US"
   );
 
-  let content = `
+  const content = `
   <div class="detail-container" style="max-width:800px; margin:0 auto;">
     <div class="detail-header">
       <h2>${escapeHtml(feedback.title)}</h2>

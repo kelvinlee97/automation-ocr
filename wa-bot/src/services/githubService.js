@@ -74,7 +74,7 @@ async function createIssue(feedbackData) {
       repo: env.name,
       title: issueTitle,
       body: issueBody,
-      labels: labels,
+      labels,
     });
 
     logger.info("GitHub Issue 创建成功", {

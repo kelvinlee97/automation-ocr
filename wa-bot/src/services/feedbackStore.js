@@ -89,8 +89,8 @@ function create(feedbackData) {
 function getAll(filters = {}, pagination = { page: 1, limit: 20 }) {
   db.init();
 
-  let query = "SELECT * FROM feedback WHERE 1=1";
-  let params = [];
+      let query = "SELECT * FROM feedback WHERE 1=1";
+      const params = [];
 
   if (filters.status) {
     query += " AND status = ?";

@@ -43,17 +43,17 @@ function createMocks() {
       getLang: jest.fn(() => "zh"),
       t: jest.fn((key) => {
         const translations = {
-          "load_fail": "加载失败：",
-          "feedback_required_fields": "请填写所有必填字段",
-          "feedback_title_too_long": "标题过长（最多 200 字符）",
-          "feedback_description_too_long": "描述过长（最多 5000 字符）",
-          "feedback_invalid_type": "反馈类型无效",
-          "feedback_submit_fail": "提交失败：",
-          "feedback_not_found": "反馈不存在",
-          "feedback_no_github_issue": "该反馈未关联 GitHub Issue",
-          "feedback_upload_fail": "上传失败：",
-          "feedback_no_file": "未收到文件",
-          "feedback_screenshot_not_found": "截图不存在",
+          load_fail: "加载失败：",
+          feedback_required_fields: "请填写所有必填字段",
+          feedback_title_too_long: "标题过长（最多 200 字符）",
+          feedback_description_too_long: "描述过长（最多 5000 字符）",
+          feedback_invalid_type: "反馈类型无效",
+          feedback_submit_fail: "提交失败：",
+          feedback_not_found: "反馈不存在",
+          feedback_no_github_issue: "该反馈未关联 GitHub Issue",
+          feedback_upload_fail: "上传失败：",
+          feedback_no_file: "未收到文件",
+          feedback_screenshot_not_found: "截图不存在",
         };
         return translations[key] || key;
       }),
