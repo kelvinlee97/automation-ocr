@@ -52,3 +52,4 @@ gha-creds-*.json
 
 .codebuddy
 .workbuddy
+node_modules.mac/
