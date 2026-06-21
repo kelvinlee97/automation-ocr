@@ -13,12 +13,13 @@ function feedbackFormPage(lang = "zh") {
   const title = t("feedback_new_title", lang) || "New Feedback";
 
   const content = `
-  <div class="form-container" style="max-width:600px; margin:0 auto;">
+  <div class="feedback-form-card">
     <form method="POST" action="/admin/feedback" class="feedback-form" onsubmit="return validateForm()">
       <div class="form-group">
         <label for="title">${t("feedback_title_label", lang)} *</label>
         <input type="text" id="title" name="title" maxlength="200" required
-               placeholder="${t("feedback_title_placeholder", lang)}" />
+               placeholder="${t("feedback_title_placeholder", lang)}" oninput="updateTitleCount()" />
+        <span id="title-count" class="feedback-char-count">0/200</span>
         <small class="form-hint">${t("feedback_title_hint", lang)}</small>
       </div>
 
@@ -34,32 +35,78 @@ function feedbackFormPage(lang = "zh") {
       <div class="form-group">
         <label for="description">${t("feedback_description_label", lang)} *</label>
         <textarea id="description" name="description" rows="6" required
-                  placeholder="${t("feedback_description_placeholder", lang)}"></textarea>
+                  placeholder="${t("feedback_description_placeholder", lang)}"
+                  oninput="updateDescCount()"></textarea>
+        <span id="description-count" class="feedback-char-count">0/5000</span>
         <small class="form-hint">${t("feedback_description_hint", lang)}</small>
       </div>
 
       <div class="form-group">
-        <label for="screenshot">${t("feedback_screenshot_label", lang)}</label>
-        <input type="file" id="screenshot" name="screenshot" accept="image/jpeg,image/png,image/gif"
-               onchange="uploadScreenshot()" />
-        <small class="form-hint">${t("feedback_screenshot_hint", lang)}</small>
-        <div id="screenshot-preview" style="margin-top:10px;"></div>
-        <div id="screenshot-progress" style="display:none; margin-top:10px;">
-          <span id="upload-status"></span>
+        <label for="dropzone">${t("feedback_screenshot_label", lang)}</label>
+        <div class="screenshot-dropzone" id="dropzone">
+          <input type="file" id="screenshot" name="screenshot" accept="image/jpeg,image/png,image/gif"
+                 onchange="handleFileSelect(event)" />
+          <div class="dropzone-icon">📎</div>
+          <div class="dropzone-text">${lang === "zh" ? "点击或拖拽截图到此处" : "Click or drag screenshot here"}</div>
+          <div class="dropzone-hint">${t("feedback_screenshot_hint", lang)}</div>
         </div>
-        <!-- Hidden field to store uploaded screenshot filename -->
+        <div id="screenshot-preview"></div>
+        <div id="screenshot-progress" class="screenshot-progress" style="display:none;">
+          <span class="spinner"></span><span id="upload-status"></span>
+        </div>
         <input type="hidden" id="screenshotFilename" name="screenshotFilename" value="" />
       </div>
 
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary">${t("feedback_submit", lang)}</button>
-        <a href="/admin/feedback" class="btn btn-secondary">${t("cancel", lang)}</a>
+      <div class="feedback-form-actions">
+        <button type="submit" class="btn-primary" id="submit-btn">${t("feedback_submit", lang)}</button>
+        <a href="/admin/feedback" class="btn-secondary">${t("cancel", lang)}</a>
       </div>
     </form>
   </div>
 
   <script>
     let screenshotFilename = '';
+
+    // Character counters
+    function updateTitleCount() {
+      const el = document.getElementById('title');
+      const counter = document.getElementById('title-count');
+      const len = el.value.length;
+      counter.textContent = len + '/200';
+      counter.className = 'feedback-char-count';
+      if (len > 200) counter.classList.add('danger');
+      else if (len > 160) counter.classList.add('warn');
+    }
+    function updateDescCount() {
+      const el = document.getElementById('description');
+      const counter = document.getElementById('description-count');
+      const len = el.value.length;
+      counter.textContent = len + '/5000';
+      counter.className = 'feedback-char-count';
+      if (len > 5000) counter.classList.add('danger');
+      else if (len > 4000) counter.classList.add('warn');
+    }
+
+    // Drag-and-drop
+    const dropzone = document.getElementById('dropzone');
+    dropzone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      dropzone.classList.add('drag-over');
+    });
+    dropzone.addEventListener('dragleave', function() {
+      dropzone.classList.remove('drag-over');
+    });
+    dropzone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) handleScreenshot(file);
+    });
+
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (file) handleScreenshot(file);
+    }
 
     function validateForm() {
       const title = document.getElementById('title').value.trim();
@@ -81,18 +128,17 @@ function feedbackFormPage(lang = "zh") {
         return false;
       }
 
+      // Show loading state
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = '${lang === "zh" ? "提交中…" : "Submitting…"}';
       return true;
     }
 
-    async function uploadScreenshot() {
-      const fileInput = document.getElementById('screenshot');
-      const file = fileInput.files[0];
-      if (!file) return;
-
+    async function handleScreenshot(file) {
       // Validate file size (5MB)
       if (file.size > 5 * 1024 * 1024) {
         showToast('${t("feedback_file_too_large", lang)}');
-        fileInput.value = '';
         return;
       }
 
@@ -100,7 +146,10 @@ function feedbackFormPage(lang = "zh") {
       const reader = new FileReader();
       reader.onload = function(e) {
         document.getElementById('screenshot-preview').innerHTML =
-          '<img src="' + e.target.result + '" style="max-width:200px; max-height:150px; border-radius:4px;" />';
+          '<div class="screenshot-preview">' +
+          '<img src="' + e.target.result + '" />' +
+          '<button type="button" class="remove-btn" onclick="removeScreenshot()">✕</button>' +
+          '</div>';
       };
       reader.readAsDataURL(file);
 
@@ -133,6 +182,14 @@ function feedbackFormPage(lang = "zh") {
         document.getElementById('upload-status').textContent = '${t("feedback_upload_fail", lang)}: ' + error.message;
         showToast('${t("feedback_upload_fail", lang)}: ' + error.message);
       }
+    }
+
+    function removeScreenshot() {
+      screenshotFilename = '';
+      document.getElementById('screenshotFilename').value = '';
+      document.getElementById('screenshot').value = '';
+      document.getElementById('screenshot-preview').innerHTML = '';
+      document.getElementById('screenshot-progress').style.display = 'none';
     }
   </script>`;
 

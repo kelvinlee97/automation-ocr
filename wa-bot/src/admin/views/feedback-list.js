@@ -23,45 +23,45 @@ function feedbackListPage(items, stats, lang = "zh", page = 1, totalPages = 1, s
 
   // Stats cards
   content += `
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-label">${t("feedback_total", lang)}</div>
-      <div class="stat-value">${stats.total}</div>
+  <div class="feedback-stats">
+    <div class="feedback-stat-card stat-total">
+      <div class="feedback-stat-label">${t("feedback_total", lang)}</div>
+      <div class="feedback-stat-value">${stats.total}</div>
     </div>
-    <div class="stat-card stat-open">
-      <div class="stat-label">${t("feedback_open", lang)}</div>
-      <div class="stat-value">${stats.open}</div>
+    <div class="feedback-stat-card stat-open">
+      <div class="feedback-stat-label">${t("feedback_open", lang)}</div>
+      <div class="feedback-stat-value">${stats.open}</div>
     </div>
-    <div class="stat-card stat-resolved">
-      <div class="stat-label">${t("feedback_resolved", lang)}</div>
-      <div class="stat-value">${stats.resolved}</div>
+    <div class="feedback-stat-card stat-resolved">
+      <div class="feedback-stat-label">${t("feedback_resolved", lang)}</div>
+      <div class="feedback-stat-value">${stats.resolved}</div>
     </div>
   </div>`;
 
   // Filters
   content += `
-  <form class="filter-bar" method="GET" action="/admin/feedback">
+  <form class="feedback-filters" method="GET" action="/admin/feedback">
     <input type="text" name="q" placeholder="${t("feedback_search_placeholder", lang)}" value="${escapeHtml(searchQuery)}" />
-    <select name="status" onchange="this.form.submit()">
+    <select name="status">
       <option value="">${t("feedback_all_status", lang)}</option>
       <option value="open" ${statusFilter === "open" ? "selected" : ""}>${t("feedback_status_open", lang)}</option>
       <option value="resolved" ${statusFilter === "resolved" ? "selected" : ""}>${t("feedback_status_resolved", lang)}</option>
     </select>
-    <select name="type" onchange="this.form.submit()">
+    <select name="type">
       <option value="">${t("feedback_all_type", lang)}</option>
       <option value="bug" ${typeFilter === "bug" ? "selected" : ""}>${t("feedback_type_bug", lang)}</option>
       <option value="improvement" ${typeFilter === "improvement" ? "selected" : ""}>${t("feedback_type_improvement", lang)}</option>
     </select>
-    <button type="submit" class="btn btn-filter">${t("filter", lang)}</button>
-    <a href="/admin/feedback/new" class="btn btn-primary">+ ${t("feedback_new", lang)}</a>
+    <button type="submit" class="btn-filter">${t("filter", lang)}</button>
+    <a href="/admin/feedback/new" class="btn-new">+ ${t("feedback_new", lang)}</a>
   </form>`;
 
   // Table
-  if (items.length === 0) {
-    content += `<div class="empty-state">${t("feedback_no_feedback", lang)}</div>`;
+    if (items.length === 0) {
+    content += `<div class="feedback-empty"><div class="feedback-empty-icon">📭</div><div class="feedback-empty-text">${t("feedback_no_feedback", lang)}</div><a href="/admin/feedback/new" class="btn-primary">+ ${t("feedback_new", lang)}</a></div>`;
   } else {
     content += `
-    <table class="data-table">
+    <table class="data-table feedback-table">
       <thead>
         <tr>
           <th>${t("feedback_title_col", lang)}</th>
@@ -75,16 +75,16 @@ function feedbackListPage(items, stats, lang = "zh", page = 1, totalPages = 1, s
       <tbody>`;
 
     for (const item of items) {
-      const typeLabel = item.type === "bug" ? `🐛 ${t("feedback_type_bug", lang)}` : `💡 ${t("feedback_type_improvement", lang)}`;
-      const statusClass = item.status === "open" ? "status-open" : "status-resolved";
+      const typeIcon = item.type === "bug" ? "⬤" : "◯";
+      const typeLabel = item.type === "bug" ? t("feedback_type_bug", lang) : t("feedback_type_improvement", lang);
       const statusLabel = item.status === "open" ? t("feedback_status_open", lang) : t("feedback_status_resolved", lang);
       const submittedAt = new Date(item.submittedAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US");
 
       content += `
         <tr>
           <td><a href="/admin/feedback/${item.id}">${escapeHtml(item.title)}</a></td>
-          <td>${typeLabel}</td>
-          <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+          <td><span class="feedback-type-badge ${item.type}">${typeIcon} ${typeLabel}</span></td>
+          <td><span class="feedback-status-dot status-${item.status}">${statusLabel}</span></td>
           <td>${escapeHtml(item.submittedBy)}</td>
           <td>${submittedAt}</td>
           <td>
@@ -118,11 +118,11 @@ function buildPagination(currentPage, totalPages, q, status, type, lang) {
     return '/admin/feedback?' + params.toString();
   };
 
-  let html = '<div class="pagination-container" style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; padding:10px 0;">';
+  let html = '<div class="feedback-pagination">';
 
-  html += '<div class="page-info" style="color:var(--text-muted); font-size:13px;">' + t('page_info', lang, { current: currentPage, total: totalPages }) + '</div>';
+  html += '<div class="page-info">' + t('page_info', lang, { current: currentPage, total: totalPages }) + '</div>';
 
-  html += '<div class="page-buttons" style="display:flex; gap:6px;">';
+  html += '<div class="page-buttons">';
 
   if (currentPage > 1) {
     html += `<a href="${getUrl(currentPage - 1)}" class="page-btn">←</a>`;
@@ -133,7 +133,7 @@ function buildPagination(currentPage, totalPages, q, status, type, lang) {
 
   for (let i = startPage; i <= endPage; i++) {
     if (i === currentPage) {
-      html += `<span class="page-btn page-current">${i}</span>`;
+      html += `<span class="page-btn active">${i}</span>`;
     } else {
       html += `<a href="${getUrl(i)}" class="page-btn">${i}</a>`;
     }

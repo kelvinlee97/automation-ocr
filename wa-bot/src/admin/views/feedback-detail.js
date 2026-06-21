@@ -28,57 +28,75 @@ function feedbackDetailPage(feedback, lang = "zh") {
   );
 
   const content = `
-  <div class="detail-container" style="max-width:800px; margin:0 auto;">
-    <div class="detail-header">
+  <div class="feedback-detail-card">
+    <div class="feedback-detail-header">
       <h2>${escapeHtml(feedback.title)}</h2>
-      <span class="status-badge ${statusClass}">${statusLabel}</span>
+      <span class="feedback-status-badge ${statusClass}">${statusLabel}</span>
     </div>
 
-    <div class="detail-meta">
-      <div class="meta-item">
-        <strong>${t("feedback_type_label", lang)}：</strong>${typeLabel}
+    <div class="feedback-meta-grid">
+      <div class="feedback-meta-item">
+        <strong>${t("feedback_type_label", lang)}</strong>
+        ${typeLabel}
       </div>
-      <div class="meta-item">
-        <strong>${t("feedback_submitted_by_label", lang)}：</strong>${escapeHtml(feedback.submittedBy)}
+      <div class="feedback-meta-item">
+        <strong>${t("feedback_submitted_by_label", lang)}</strong>
+        ${escapeHtml(feedback.submittedBy)}
       </div>
-      <div class="meta-item">
-        <strong>${t("feedback_submitted_at_label", lang)}：</strong>${submittedAt}
+      <div class="feedback-meta-item">
+        <strong>${t("feedback_submitted_at_label", lang)}</strong>
+        ${submittedAt}
       </div>
       ${
         feedback.githubIssueUrl
-          ? `<div class="meta-item">
-              <strong>${t("feedback_github_issue_label", lang)}：</strong>
+          ? `<div class="feedback-meta-item">
+              <strong>${t("feedback_github_issue_label", lang)}</strong>
               <a href="${feedback.githubIssueUrl}" target="_blank">${t("feedback_view_on_github", lang)} ↗</a>
             </div>`
           : ""
       }
     </div>
 
-    <div class="detail-description">
+    ${
+      feedback.githubIssueUrl
+        ? `<div class="feedback-github-card">
+            <div class="github-icon">🐙</div>
+            <div class="github-info">
+              <a href="${feedback.githubIssueUrl}" target="_blank">${t("feedback_view_on_github", lang)} ↗</a>
+              ${
+                feedback.githubIssueState
+                  ? `<span class="issue-state ${feedback.githubIssueState}">${feedback.githubIssueState === 'open' ? 'Open' : 'Closed'}</span>`
+                  : ""
+              }
+            </div>
+          </div>`
+        : ""
+    }
+
+    <div class="feedback-description-section">
       <h3>${t("feedback_description_label", lang)}</h3>
-      <div class="description-content">${escapeHtml(feedback.description).replace(/\n/g, "<br>")}</div>
+      <div class="feedback-description-content">${escapeHtml(feedback.description).replace(/\n/g, "<br>")}</div>
     </div>
 
     ${
       feedback.screenshotUrl
-        ? `<div class="detail-screenshot">
+        ? `<div class="feedback-screenshot-section">
             <h3>${t("feedback_screenshot_label", lang)}</h3>
             <img src="${feedback.screenshotUrl}" alt="${t("feedback_screenshot_alt", lang)}"
-                 style="max-width:100%; border-radius:8px; cursor:pointer;"
                  onclick="openLightbox('${feedback.screenshotUrl}')" />
           </div>`
         : ""
     }
 
-    <div class="detail-actions">
+    <div class="feedback-detail-actions">
       ${
         feedback.githubIssueId
-          ? `<button class="btn btn-primary" onclick="syncStatus('${feedback.id}')">
+          ? `<button class="btn-sync" id="sync-btn" onclick="syncStatus('${feedback.id}')">
               🔄 ${t("feedback_sync_status", lang)}
             </button>`
           : ""
       }
-      <a href="/admin/feedback" class="btn btn-secondary">${t("feedback_back_to_list", lang)}</a>
+      <a href="/admin/feedback" class="btn-back">${t("feedback_back_to_list", lang)}</a>
     </div>
   </div>
 
@@ -86,9 +104,12 @@ function feedbackDetailPage(feedback, lang = "zh") {
     function syncStatus(feedbackId) {
       if (!confirm('${t("feedback_sync_confirm", lang)}')) return;
 
-      const btn = event.target;
-      btn.disabled = true;
-      btn.textContent = '⏳ ${t("feedback_syncing", lang)}';
+      const btn = document.getElementById('sync-btn');
+      if (btn) {
+        btn.classList.add('syncing');
+        btn.disabled = true;
+        btn.textContent = '';
+      }
 
       fetch('/admin/feedback/' + feedbackId + '/sync', {
         method: 'POST',
@@ -101,27 +122,21 @@ function feedbackDetailPage(feedback, lang = "zh") {
           setTimeout(() => location.reload(), 1000);
         } else {
           showToast(data.error || '${t("feedback_sync_fail", lang)}');
-          btn.disabled = false;
-          btn.textContent = '🔄 ${t("feedback_sync_status", lang)}';
+          if (btn) {
+            btn.classList.remove('syncing');
+            btn.disabled = false;
+            btn.textContent = '🔄 ${t("feedback_sync_status", lang)}';
+          }
         }
       })
       .catch(err => {
         showToast('${t("feedback_sync_error", lang)}');
-        btn.disabled = false;
-        btn.textContent = '🔄 ${t("feedback_sync_status", lang)}';
+        if (btn) {
+          btn.classList.remove('syncing');
+          btn.disabled = false;
+          btn.textContent = '🔄 ${t("feedback_sync_status", lang)}';
+        }
       });
-    }
-
-    function openLightbox(src) {
-      const lightbox = document.getElementById('lightbox');
-      const img = document.getElementById('lightbox-img');
-      img.src = src;
-      lightbox.classList.add('active');
-    }
-
-    function closeLightbox() {
-      const lightbox = document.getElementById('lightbox');
-      lightbox.classList.remove('active');
     }
   </script>`;
 
