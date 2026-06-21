@@ -46,6 +46,10 @@ async function handleMessage(message, phone) {
     } else if (message.hasMedia && message.type === "image") {
       // 图片消息 → 保存收据（携带 session.ic）
       await handleReceipt(message, session, phone);
+      // 图文混发：如果消息同时包含文字，尝试解析 IC
+      if (message.body && message.body.trim()) {
+        await handleRegistration(message, session, sessionManager, phone);
+      }
     }
     // 其他类型（语音、贴纸、文件等）→ 静默忽略
   } catch (err) {
