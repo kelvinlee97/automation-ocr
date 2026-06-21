@@ -52,7 +52,9 @@ function rowToRecord(row) {
   return {
     id:             row.id,
     phone:          row.phone,
-    ic:             row.ic,
+    name:           row.name || null,
+    ic:             row.ic || null,
+    campaignId:     row.campaign_id || null,
     imageFilename:  row.image_filename,
     status:         row.status,
     submittedAt:    row.submitted_at,
@@ -81,13 +83,15 @@ function init() {
 /**
  * 保存 WhatsApp 收到的图片，并写入一条 pending_review 记录
  *
- * @param {string} phone       - 发送方 WhatsApp 号码
- * @param {string} base64Data  - 图片 Base64 数据（不含 data:image/... 前缀）
- * @param {string} mimeType    - 图片 MIME 类型
- * @param {string} [ic]        - 用户身份证号（来自 session.ic）
+ * @param {string} phone         - 发送方 WhatsApp 号码
+ * @param {string} base64Data    - 图片 Base64 数据（不含 data:image/... 前缀）
+ * @param {string} mimeType      - 图片 MIME 类型
+ * @param {string} [ic]          - 用户身份证号（来自 session.ic）
+ * @param {string} [name]        - 消费者姓名（来自 session.name）
+ * @param {number} [campaignId]  - 当前活跃 Campaign ID（可为 null）
  * @returns {{ id: string, imageFilename: string }}
  */
-function addPendingReceipt(phone, base64Data, mimeType, ic = null) {
+function addPendingReceipt(phone, base64Data, mimeType, ic = null, name = null, campaignId = null) {
   ensureImagesDir();
 
   const id            = generateId();
@@ -99,9 +103,9 @@ function addPendingReceipt(phone, base64Data, mimeType, ic = null) {
   fs.writeFileSync(imagePath, Buffer.from(base64Data, "base64"));
 
   db.db.prepare(`
-    INSERT INTO receipts (id, phone, ic, image_filename, status, submitted_at)
-    VALUES (?, ?, ?, ?, 'pending_review', ?)
-  `).run(id, phone, ic, imageFilename, submittedAt);
+    INSERT INTO receipts (id, phone, name, ic, campaign_id, image_filename, status, submitted_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending_review', ?)
+  `).run(id, phone, name, ic, campaignId, imageFilename, submittedAt);
 
   return { id, imageFilename };
 }
@@ -184,6 +188,83 @@ function sendMessageToUser(id, message) {
 }
 
 /**
+ * 更新 Receipt 字段（Admin 手动编辑）
+ * @param {string} id        - Receipt ID
+ * @param {object} updates  - 要更新的字段（如 { ic, name, aiResult }）
+ * @param {string} modifiedBy - 修改人（Admin 用户名）
+ */
+function updateReceipt(id, updates, modifiedBy) {
+  db.init();
+  const row = db.db.prepare("SELECT * FROM receipts WHERE id = ?").get(id);
+  if (!row) throw new Error(`Receipt not found: ${id}`);
+
+  // 记录修改历史
+  for (const [field, newValue] of Object.entries(updates)) {
+    const oldValue = row[field] ?? null;
+    if (String(oldValue) !== String(newValue)) {
+      addModification(id, modifiedBy, field, oldValue, newValue);
+    }
+  }
+
+  // 更新字段
+  const setClauses = [];
+  const params = [];
+  for (const [field, value] of Object.entries(updates)) {
+    setClauses.push(`${field} = ?`);
+    params.push(value);
+  }
+  params.push(id);
+
+  db.db.prepare(`
+    UPDATE receipts SET ${setClauses.join(', ')} WHERE id = ?
+  `).run(...params);
+}
+
+/**
+ * 记录 Receipt 修改历史
+ * @param {string} receiptId   - Receipt ID
+ * @param {string} modifiedBy  - 修改人（Admin 用户名）
+ * @param {string} fieldName   - 修改的字段名
+ * @param {string} oldValue    - 修改前的值
+ * @param {string} newValue    - 修改后的值
+ */
+function addModification(receiptId, modifiedBy, fieldName, oldValue, newValue) {
+  db.init();
+  const id = generateId();
+  const modifiedAt = new Date().toISOString();
+
+  db.db.prepare(`
+    INSERT INTO receipt_modifications (id, receipt_id, modified_at, modified_by, field_name, old_value, new_value)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, receiptId, modifiedAt, modifiedBy, fieldName, oldValue, newValue);
+}
+
+/**
+ * 获取 Receipt 修改历史
+ * @param {string} receiptId - Receipt ID
+ * @returns {Array}
+ */
+function getModifications(receiptId) {
+  db.init();
+  const rows = db.db.prepare(
+    "SELECT * FROM receipt_modifications WHERE receipt_id = ? ORDER BY modified_at DESC"
+  ).all(receiptId);
+  return rows;
+}
+
+/**
+ * 获取当前活跃 Campaign ID
+ * @returns {number|null}
+ */
+async function getActiveCampaign() {
+  db.init();
+  const row = db.db.prepare(
+    "SELECT id FROM campaigns WHERE is_active = 1 AND start_date <= date('now') AND end_date >= date('now') LIMIT 1"
+  ).get();
+  return row ? row.id : null;
+}
+
+/**
  * 返回图片的绝对磁盘路径（供 Express res.sendFile 使用）
  */
 function getImagePath(filename) {
@@ -199,5 +280,7 @@ module.exports = {
   confirmReceipt,
   rejectReceipt,
   sendMessageToUser,
+  updateReceipt,
+  getModifications,
   getImagePath,
 };
