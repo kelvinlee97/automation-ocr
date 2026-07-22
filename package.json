@@ -1,7 +1,7 @@
 {
-  "name": "automation-ocr",
+  "name": "claimflow",
   "version": "1.0.0",
-  "description": "> 通过 WhatsApp 自动收集消费收据、OCR 识别验证资格、结果写入 Excel — 全程无需人工介入。",
+  "description": "WhatsApp-powered promotional claim management with AI-assisted receipt review.",
   "main": "index.js",
   "scripts": {
     "test": "cd wa-bot && npm test",
