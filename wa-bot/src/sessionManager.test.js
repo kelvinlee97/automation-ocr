@@ -26,7 +26,7 @@ jest.mock('./db', () => {
     run: jest.fn((...args) => {
       if (sql.includes('INSERT') || sql.includes('UPDATE')) {
         const phone = args[0];
-        sessions[phone] = { phone, ic: args[1], state: args[2], created_at: args[3], updated_at: args[4], receipt_count: args[5] || 0, receipt_count_date: args[6] };
+        sessions[phone] = { phone, name: args[1] || null, ic: args[2], state: args[3], created_at: args[4], updated_at: args[5], receipt_count: args[6] || 0, receipt_count_date: args[7] };
       }
     }),
     all: jest.fn(() => Object.values(sessions)),

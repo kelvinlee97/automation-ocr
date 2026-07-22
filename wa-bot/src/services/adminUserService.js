@@ -18,7 +18,7 @@ const db     = require("../db");
 const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
 const KEY_LEN       = 64;
 
-// ── 密码工具 ──────────────────────────────────────────────────────────────────
+// ── 密码工具 ──────────────────────────────────────────────────────────────
 
 /**
  * 生成含随机 salt 的 scrypt 哈希
@@ -47,7 +47,7 @@ function verifyPassword(password, storedHash) {
   }
 }
 
-// ── 对外接口 ──────────────────────────────────────────────────────────────────
+// ── 对外接口 ──────────────────────────────────────────────────────────────
 
 /**
  * 是否尚未创建任何用户（触发首次设置流程的依据）
@@ -68,22 +68,36 @@ function authenticate(username, password) {
   return verifyPassword(password, user.password_hash);
 }
 
+function isSuperAdmin(username) {
+  if (!username) return false;
+  db.init();
+  const user = db.db.prepare(
+    "SELECT is_super_admin FROM admin_users WHERE username = ?"
+  ).get(username);
+  return user?.is_super_admin === 1;
+}
+
 /**
  * 创建新用户
+ * 首个用户默认为 super admin（is_super_admin = 1）
  * @returns {{ ok: boolean, error?: string }}
  */
 function createUser(username, password) {
   if (!username || username.length < 3)  return { ok: false, error: "用户名至少 3 个字符" };
-  if (!password  || password.length  < 8) return { ok: false, error: "密码至少 8 个字符" };
+  if (!password  || password.length < 8) return { ok: false, error: "密码至少 8 个字符" };
   if (!/^[\w-]+$/.test(username))        return { ok: false, error: "用户名只允许字母、数字、下划线" };
 
   db.init();
   const existing = db.db.prepare("SELECT username FROM admin_users WHERE username = ?").get(username);
   if (existing) return { ok: false, error: "用户名已存在" };
 
+  // 首个用户默认为 super admin
+  const isEmpty = db.db.prepare("SELECT COUNT(*) as cnt FROM admin_users").get().cnt === 0;
+  const isSuperAdmin = isEmpty ? 1 : 0;
+
   db.db.prepare(
-    "INSERT INTO admin_users (username, password_hash, created_at) VALUES (?, ?, ?)"
-  ).run(username, hashPassword(password), new Date().toISOString());
+    "INSERT INTO admin_users (username, password_hash, is_super_admin, created_at) VALUES (?, ?, ?, ?)"
+  ).run(username, hashPassword(password), isSuperAdmin, new Date().toISOString());
 
   return { ok: true };
 }
@@ -112,6 +126,17 @@ function deleteUser(username, requestingUsername) {
   if (username === requestingUsername) return { ok: false, error: "不能删除当前登录账户" };
 
   db.init();
+  const target = db.db.prepare(
+    "SELECT is_super_admin FROM admin_users WHERE username = ?"
+  ).get(username);
+  if (!target) return { ok: false, error: "用户不存在" };
+  if (target.is_super_admin === 1) {
+    const count = db.db.prepare(
+      "SELECT COUNT(*) AS cnt FROM admin_users WHERE is_super_admin = 1"
+    ).get().cnt;
+    if (count <= 1) return { ok: false, error: "不能删除唯一的 Super Admin" };
+  }
+
   const info = db.db.prepare("DELETE FROM admin_users WHERE username = ?").run(username);
   if (info.changes === 0) return { ok: false, error: "用户不存在" };
   return { ok: true };
@@ -119,17 +144,18 @@ function deleteUser(username, requestingUsername) {
 
 /**
  * 获取所有用户列表（脱敏，不含密码哈希）
- * @returns {Array<{ username: string, createdAt: string }>}
+ * @returns {Array<{ username: string, isSuperAdmin: boolean, createdAt: string }>}
  */
 function listUsers() {
   db.init();
-  return db.db.prepare("SELECT username, created_at FROM admin_users").all()
-    .map(row => ({ username: row.username, createdAt: row.created_at }));
+  return db.db.prepare("SELECT username, is_super_admin, created_at FROM admin_users").all()
+    .map(row => ({ username: row.username, isSuperAdmin: row.is_super_admin === 1, createdAt: row.created_at }));
 }
 
 module.exports = {
   isEmpty,
   authenticate,
+  isSuperAdmin,
   createUser,
   resetPassword,
   deleteUser,

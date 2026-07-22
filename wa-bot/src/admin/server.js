@@ -39,6 +39,7 @@ module.exports = {
   setQR: state.setQR,
   setPairingCodeReady: state.setPairingCodeReady,
   setDisconnected: state.setDisconnected,
+  setBotError: state.setBotError,
   ...(process.env.NODE_ENV === 'test' && {
     _receiptsPage: receiptsPage,
     _usersPage: usersPage,

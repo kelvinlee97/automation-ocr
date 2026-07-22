@@ -49,7 +49,8 @@ function rowToSession(row) {
   if (!row) return null;
   return {
     phone:            row.phone,
-    ic:               row.ic,
+    name:             row.name || null,
+    ic:               row.ic || null,
     state:            row.state,
     createdAt:        row.created_at,
     updatedAt:        row.updated_at,
@@ -74,9 +75,10 @@ function _getSession(phone) {
 function _setSession(phone, session) {
   db.init();
   db.db.prepare(`
-    INSERT INTO sessions (phone, ic, state, created_at, updated_at, receipt_count, receipt_count_date)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO sessions (phone, name, ic, state, created_at, updated_at, receipt_count, receipt_count_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(phone) DO UPDATE SET
+      name               = excluded.name,
       ic                 = excluded.ic,
       state              = excluded.state,
       updated_at         = excluded.updated_at,
@@ -84,6 +86,7 @@ function _setSession(phone, session) {
       receipt_count_date = excluded.receipt_count_date
   `).run(
     session.phone,
+    session.name || null,
     session.ic,
     session.state,
     session.createdAt,
@@ -117,6 +120,7 @@ function getOrCreateSession(phone) {
 
   session = {
     phone,
+    name:              null,
     ic:               null,
     state:            SESSION_STATE.WAITING_IC,
     createdAt:        Date.now(),

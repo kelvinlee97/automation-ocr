@@ -2,7 +2,7 @@
 "use strict";
 
 module.exports = {
-  "admin_panel": "管理后台",
+  "admin_panel": "ClaimFlow 管理后台",
   "connected": "已连接",
   "disconnected": "未连接",
   "receipt_review": "收据审核",

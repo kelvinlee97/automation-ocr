@@ -30,6 +30,7 @@ jest.mock("../../services/receiptStore", () => ({
 jest.mock("../../services/adminUserService", () => ({
   isEmpty: jest.fn(() => false),    // 默认已有账户
   authenticate: jest.fn(() => false),
+  isSuperAdmin: jest.fn(() => false),
   createUser: jest.fn(() => ({ ok: true })),
   listUsers: jest.fn(() => []),
   deleteUser: jest.fn(() => ({ ok: true })),
@@ -97,6 +98,17 @@ describe("GET /health", () => {
     expect(res.body).toMatchObject({ status: "ok" });
     expect(res.body).toHaveProperty("whatsapp");
     expect(res.body).toHaveProperty("timestamp");
+  });
+
+  test("Bot 初始化失败时返回 503 degraded", async () => {
+    const state = require("../state");
+    state.setBotError("startup failed");
+    const app = buildApp();
+    const res = await request(app).get("/health");
+    state.clearBotError();
+
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ status: "degraded", whatsapp: "error" });
   });
 });
 
@@ -331,9 +343,19 @@ describe("GET /admin/setup（无账户时）", () => {
   });
 });
 
-describe("GET /admin/users（已登录）", () => {
-  test("返回 200 用户管理页", async () => {
+describe("GET /admin/users（权限分级）", () => {
+  test("普通管理员返回 403", async () => {
+    const app = buildApp();
+    const cookie = await getAuthCookie(app);
+    const res = await request(app)
+      .get("/admin/users")
+      .set("Cookie", cookie);
+    expect(res.status).toBe(403);
+  });
+
+  test("Super Admin 返回 200 用户管理页", async () => {
     const adminUserService = require("../../services/adminUserService");
+    adminUserService.isSuperAdmin.mockReturnValueOnce(true);
     adminUserService.listUsers.mockReturnValueOnce([]);
 
     const app = buildApp();

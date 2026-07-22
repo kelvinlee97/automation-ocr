@@ -2,7 +2,9 @@
 CREATE TABLE IF NOT EXISTS receipts (
   id               TEXT PRIMARY KEY,
   phone            TEXT NOT NULL,
+  name             TEXT,
   ic               TEXT,
+  campaign_id      INTEGER,
   image_filename   TEXT NOT NULL,
   status           TEXT NOT NULL DEFAULT 'pending_review',
   submitted_at     TEXT NOT NULL,
@@ -11,7 +13,8 @@ CREATE TABLE IF NOT EXISTS receipts (
   review_note      TEXT,
   sent_message     TEXT,
   sent_at          TEXT,
-  previous_status  TEXT
+  previous_status  TEXT,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_receipts_status       ON receipts(status);
@@ -21,6 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_receipts_phone        ON receipts(phone);
 -- sessions: 用户会话表
 CREATE TABLE IF NOT EXISTS sessions (
   phone              TEXT PRIMARY KEY,
+  name               TEXT,
   ic                 TEXT,
   state              TEXT NOT NULL,
   created_at         INTEGER NOT NULL,
@@ -31,9 +35,10 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 -- admin_users: 管理员账户表
 CREATE TABLE IF NOT EXISTS admin_users (
-  username      TEXT PRIMARY KEY,
-  password_hash TEXT NOT NULL,
-  created_at    TEXT NOT NULL
+  username       TEXT PRIMARY KEY,
+  password_hash  TEXT NOT NULL,
+  is_super_admin INTEGER NOT NULL DEFAULT 0,
+  created_at     TEXT NOT NULL
 );
 
 -- feedback: 开发者反馈表
@@ -56,3 +61,38 @@ CREATE TABLE IF NOT EXISTS feedback (
 CREATE INDEX IF NOT EXISTS idx_feedback_submitted_at ON feedback(submitted_at DESC);
 CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback(status);
 CREATE INDEX IF NOT EXISTS idx_feedback_type ON feedback(type);
+
+-- campaigns: 活动配置表
+CREATE TABLE IF NOT EXISTS campaigns (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  brand       TEXT NOT NULL,
+  start_date  TEXT NOT NULL,
+  end_date    TEXT NOT NULL,
+  min_amount  INTEGER NOT NULL DEFAULT 0,
+  is_active   INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_campaigns_active ON campaigns(is_active);
+CREATE INDEX IF NOT EXISTS idx_campaigns_dates ON campaigns(start_date, end_date);
+
+-- reject_templates: 拒绝消息模板表
+CREATE TABLE IF NOT EXISTS reject_templates (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  campaign_id INTEGER NOT NULL,
+  content     TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
+);
+
+-- receipt_modifications: 收据修改历史表
+CREATE TABLE IF NOT EXISTS receipt_modifications (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  receipt_id   TEXT NOT NULL,
+  modified_at  TEXT NOT NULL,
+  modified_by  TEXT NOT NULL,
+  field_name   TEXT NOT NULL,
+  old_value    TEXT,
+  new_value    TEXT,
+  FOREIGN KEY (receipt_id) REFERENCES receipts(id)
+);

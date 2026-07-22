@@ -7,7 +7,7 @@
 const { createBot } = require('./src/bot');
 const sessionManager = require('./src/sessionManager');
 const { initExcel } = require('./src/services/excelService');
-const { startAdminServer, setClient, setQR, setPairingCodeReady, setDisconnected } = require('./src/adminServer');
+const { startAdminServer, setClient, setQR, setPairingCodeReady, setDisconnected, setBotError } = require('./src/adminServer');
 const logger = require('./src/utils/logger');
 const db = require('./src/db');
 
@@ -58,17 +58,21 @@ async function main() {
         // 5. Express 立即启动
         startAdminServer();
 
-        // 6. Bot 初始化
-        await createBot({
-            onQR: (dataUri) => setQR(dataUri),
-            onReady: (client) => setClient(client),
-            // qr 事件触发后通知 adminServer：client 已进入认证窗口期，可接受配对码请求
-            onPairingCodeReady: () => setPairingCodeReady(true),
-            // disconnected 事件触发后通知 adminServer 重置连接状态，防止后台仍显示"已连接"
-            onDisconnected: () => setDisconnected(),
-        });
-
-        logger.info('Bot 已就绪，系统全面启动');
+        // 6. Bot 初始化（失败时不阻塞 Admin 后台）
+        try {
+            await createBot({
+                onQR: (dataUri) => setQR(dataUri),
+                onReady: (client) => setClient(client),
+                // qr 事件触发后通知 adminServer：client 已进入认证窗口期，可接受配对码请求
+                onPairingCodeReady: () => setPairingCodeReady(true),
+                // disconnected 事件触发后通知 adminServer 重置连接状态，防止后台仍显示"已连接"
+                onDisconnected: () => setDisconnected(),
+            });
+            logger.info('Bot 已就绪，系统全面启动');
+        } catch (botError) {
+            setBotError(botError.message);
+            logger.warn('Bot 初始化失败，Admin 后台仍可用', { error: botError.message });
+        }
 
         // 全局错误处理
         process.on('unhandledRejection', (reason) => {

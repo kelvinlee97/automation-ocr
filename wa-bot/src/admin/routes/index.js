@@ -11,9 +11,10 @@ const { registerFeedbackRoutes } = require("./feedback");
 
 function registerRoutes(app) {
   app.get("/health", (req, res) => {
-    res.json({
-      status: "ok",
-      whatsapp: state.isConnected() ? "connected" : "disconnected",
+    const botError = state.getBotError();
+    res.status(botError ? 503 : 200).json({
+      status: botError ? "degraded" : "ok",
+      whatsapp: botError ? "error" : (state.isConnected() ? "connected" : "disconnected"),
       timestamp: new Date().toISOString(),
     });
   });

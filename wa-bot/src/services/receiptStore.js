@@ -198,26 +198,27 @@ function updateReceipt(id, updates, modifiedBy) {
   const row = db.db.prepare("SELECT * FROM receipts WHERE id = ?").get(id);
   if (!row) throw new Error(`Receipt not found: ${id}`);
 
-  // 记录修改历史
-  for (const [field, newValue] of Object.entries(updates)) {
-    const oldValue = row[field] ?? null;
-    if (String(oldValue) !== String(newValue)) {
-      addModification(id, modifiedBy, field, oldValue, newValue);
+  const entries = Object.entries(updates);
+  const editableFields = new Set(["name", "ic", "campaign_id", "ai_result_json"]);
+  for (const [field] of entries) {
+    if (!editableFields.has(field)) throw new Error(`Field not editable: ${field}`);
+  }
+  if (entries.length === 0) return;
+
+  db.db.transaction(() => {
+    for (const [field, newValue] of entries) {
+      const oldValue = row[field] ?? null;
+      if (String(oldValue) !== String(newValue)) {
+        addModification(id, modifiedBy, field, oldValue, newValue);
+      }
     }
-  }
 
-  // 更新字段
-  const setClauses = [];
-  const params = [];
-  for (const [field, value] of Object.entries(updates)) {
-    setClauses.push(`${field} = ?`);
-    params.push(value);
-  }
-  params.push(id);
-
-  db.db.prepare(`
-    UPDATE receipts SET ${setClauses.join(', ')} WHERE id = ?
-  `).run(...params);
+    const setClauses = entries.map(([field]) => `${field} = ?`);
+    const params = entries.map(([, value]) => value);
+    db.db.prepare(`
+      UPDATE receipts SET ${setClauses.join(", ")} WHERE id = ?
+    `).run(...params, id);
+  })();
 }
 
 /**
@@ -230,13 +231,12 @@ function updateReceipt(id, updates, modifiedBy) {
  */
 function addModification(receiptId, modifiedBy, fieldName, oldValue, newValue) {
   db.init();
-  const id = generateId();
   const modifiedAt = new Date().toISOString();
 
   db.db.prepare(`
-    INSERT INTO receipt_modifications (id, receipt_id, modified_at, modified_by, field_name, old_value, new_value)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, receiptId, modifiedAt, modifiedBy, fieldName, oldValue, newValue);
+    INSERT INTO receipt_modifications (receipt_id, modified_at, modified_by, field_name, old_value, new_value)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(receiptId, modifiedAt, modifiedBy, fieldName, oldValue, newValue);
 }
 
 /**
@@ -282,5 +282,6 @@ module.exports = {
   sendMessageToUser,
   updateReceipt,
   getModifications,
+  getActiveCampaign,
   getImagePath,
 };

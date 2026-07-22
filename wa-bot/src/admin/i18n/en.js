@@ -2,7 +2,7 @@
 "use strict";
 
 module.exports = {
-  "admin_panel": "Admin Panel",
+  "admin_panel": "ClaimFlow Admin",
   "connected": "Connected",
   "disconnected": "Disconnected",
   "receipt_review": "Receipt Review",

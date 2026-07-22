@@ -27,6 +27,7 @@ jest.mock('./services/receiptStore', () => ({
   addPendingReceipt: jest.fn().mockReturnValue({ id: 'test-id-001', imageFilename: 'test-id-001.jpg' }),
   getAll:            jest.fn().mockReturnValue([]),
   getById:           jest.fn().mockReturnValue(null),
+  getActiveCampaign: jest.fn().mockReturnValue(null),
 }));
 
 // db mock：Phase 2 迁移后 sessionManager 依赖 SQLite，测试中替换为内存 mock
@@ -41,7 +42,7 @@ jest.mock('./db', () => {
     }),
     run: jest.fn((...args) => {
       if (sql.includes('INSERT') || sql.includes('UPDATE')) {
-        sessions[args[0]] = { phone: args[0], ic: args[1], state: args[2], created_at: args[3], updated_at: args[4], receipt_count: args[5] || 0, receipt_count_date: args[6] };
+        sessions[args[0]] = { phone: args[0], name: args[1] || null, ic: args[2], state: args[3], created_at: args[4], updated_at: args[5], receipt_count: args[6] || 0, receipt_count_date: args[7] };
       }
     }),
     all: jest.fn(() => Object.values(sessions)),
@@ -191,6 +192,8 @@ describe('用户流程模拟', () => {
         MOCK_RECEIPT_BASE64,
         'image/jpeg',
         VALID_IC,   // session.ic 应传入
+        null,       // name
+        null,       // campaignId
       );
     });
   });
@@ -210,6 +213,8 @@ describe('用户流程模拟', () => {
         MOCK_RECEIPT_BASE64,
         'image/jpeg',
         null,   // 未注册 IC，传 null
+        null,   // name
+        null,   // campaignId
       );
     });
   });

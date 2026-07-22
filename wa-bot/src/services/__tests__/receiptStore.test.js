@@ -179,6 +179,30 @@ describe("sendMessageToUser", () => {
   });
 });
 
+// ─── updateReceipt ───────────────────────────────────────────────────────────
+
+describe("updateReceipt", () => {
+  it("更新允许的字段并记录修改历史", () => {
+    const { id } = addOne({ ic: "880101-01-1234" });
+
+    store.updateReceipt(id, { name: "Kelvin", ic: "900202-02-2345" }, "admin");
+
+    const record = store.getById(id);
+    expect(record.name).toBe("Kelvin");
+    expect(record.ic).toBe("900202-02-2345");
+
+    const modifications = store.getModifications(id);
+    expect(modifications).toHaveLength(2);
+    expect(modifications.every(item => Number.isInteger(item.id))).toBe(true);
+  });
+
+  it("拒绝不在允许列表中的字段", () => {
+    const { id } = addOne();
+    expect(() => store.updateReceipt(id, { status: "confirmed" }, "admin"))
+      .toThrow("Field not editable: status");
+  });
+});
+
 // ─── getImagePath ─────────────────────────────────────────────────────────────
 
 describe("getImagePath", () => {
