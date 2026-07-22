@@ -68,11 +68,54 @@ jobs:
 
           # 执行部署命令
           ssh -i ~/.ssh/deploy_key -p 22 ${{ secrets.DO_SSH_USER }}@${{ secrets.DO_SSH_HOST }} <<'EOF'
+            set -euo pipefail
             cd /opt/claimflow
             git fetch origin main
             git reset --hard origin/main
             docker compose pull
+
+            had_running_bot=false
+            if [ -n "$(docker compose ps -q wa-bot)" ]; then
+              had_running_bot=true
+              docker compose stop wa-bot
+            fi
+
+            rollback() {
+              if [ "$had_running_bot" = true ]; then
+                docker compose start wa-bot || true
+              fi
+            }
+            trap rollback ERR
+
+            if [ -f data/app.db ]; then
+              docker compose run --rm --no-deps wa-bot \
+                node scripts/migrate-add-campaign-fields.js --apply
+            fi
+
             docker compose up -d --remove-orphans
+            trap - ERR
             docker image prune -f
             docker compose ps
+
+            health_status=$(docker compose exec -T wa-bot node -e '
+              const http = require("http");
+              const deadline = Date.now() + 60000;
+              function check() {
+                const req = http.get("http://127.0.0.1:3000/health", (res) => {
+                  if (res.statusCode === 200 || res.statusCode === 503) {
+                    process.stdout.write(String(res.statusCode));
+                    process.exit(0);
+                  }
+                  retry();
+                });
+                req.setTimeout(5000, () => req.destroy());
+                req.on("error", retry);
+              }
+              function retry() {
+                if (Date.now() >= deadline) process.exit(1);
+                setTimeout(check, 2000);
+              }
+              check();
+            ')
+            echo "ClaimFlow health endpoint returned HTTP ${health_status}"
           EOF
