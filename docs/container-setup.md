@@ -108,7 +108,7 @@ node index.js
 
 ### 前置条件
 
-- DigitalOcean Droplet（已配置：`159.65.136.11`，Ubuntu 24.04）
+- DigitalOcean Droplet（已配置：`<DROPLET_IP>`，Ubuntu 24.04）
 - 域名解析已配置（如 `kelvin.ink` → Droplet IP）
 - GitHub Secrets 已配置（见下方）
 
@@ -116,7 +116,7 @@ node index.js
 
 | Secret | 值 |
 |--------|-----|
-| `DO_SSH_HOST` | `159.65.136.11` |
+| `DO_SSH_HOST` | `<DROPLET_IP>` |
 | `DO_SSH_USER` | `deploy` |
 | `DO_SSH_KEY` | CI/CD ed25519 私钥 |
 | `GHCR_PAT` | GitHub PAT（read:packages） |
@@ -131,8 +131,8 @@ node index.js
 ### 手动部署（应急）
 
 ```bash
-ssh deploy@159.65.136.11
-cd /opt/automation-ocr
+ssh deploy@<DROPLET_IP>
+cd /opt/claimflow
 git pull origin main
 docker compose pull
 docker compose up -d --remove-orphans
@@ -142,8 +142,8 @@ docker image prune -f
 ### 查看日志
 
 ```bash
-ssh deploy@159.65.136.11
-cd /opt/automation-ocr
+ssh deploy@<DROPLET_IP>
+cd /opt/claimflow
 docker compose logs -f --tail=100 wa-bot
 ```
 
@@ -160,7 +160,7 @@ docker compose logs -f --tail=100 wa-bot
 | `GITHUB_TOKEN` | 可选 | 可选（可留空） | Feedback → GitHub Issues |
 | `SESSION_SECRET` | **必填** | 自动生成 | Session 加密密钥 |
 | `DOMAIN` | **必填** | 不需要 | Caddy 域名配置 |
-| `DATA_DIR` | `/opt/automation-ocr/data` | `./data` | 数据目录 |
+| `DATA_DIR` | `/opt/claimflow/data` | `./data` | 数据目录 |
 
 ### 端口映射
 
@@ -173,7 +173,7 @@ docker compose logs -f --tail=100 wa-bot
 
 | 环境 | 镜像来源 | 构建方式 |
 |------|----------|----------|
-| 生产 | `ghcr.io/kelvinlee97/automation-ocr:latest` | `wa-bot/Dockerfile`（含 Chromium） |
+| 生产 | `ghcr.io/kelvinlee97/claimflow:latest` | `wa-bot/Dockerfile`（含 Chromium） |
 | 本地 Beta | `docker.io/library/node:20-slim` | 官方镜像，容器内 `npm install` |
 
 ---
@@ -213,7 +213,7 @@ container build -t wa-bot:beta -f Dockerfile.beta .
 
 | 问题 | 排查命令 |
 |------|----------|
-| 网站无法访问 | `ssh deploy@159.65.136.11` → `docker compose ps` |
+| 网站无法访问 | `ssh deploy@<DROPLET_IP>` → `docker compose ps` |
 | HTTPS 证书失败 | `docker compose logs -f caddy` |
 | Bot 无法启动 | `docker compose logs -f wa-bot` |
 

@@ -8,7 +8,7 @@
 set -euo pipefail
 
 OLD_PATH="/app/data/excel/records.xlsx"
-NEW_DIR="${DATA_DIR:-/opt/automation-ocr/data}/excel"
+NEW_DIR="${DATA_DIR:-/opt/claimflow/data}/excel"
 NEW_PATH="${NEW_DIR}/records.xlsx"
 
 ACTION="${1:-}"

@@ -8,7 +8,7 @@
 #   bash scripts/docker.sh shell     # 进入容器内部排查
 #
 # 数据存放位置：
-#   - 收据图片 / Excel：宿主机 ./data/，容器内 /opt/automation-ocr/data/
+#   - 收据图片 / Excel：宿主机 ./data/，容器内 /opt/claimflow/data/
 #   - WhatsApp 登录凭据：./data/wwebjs_auth/（删除 = 强制重新扫码）
 
 set -e

@@ -20,6 +20,10 @@ data/uploads/
 data/images/
 data/pending_receipts.json
 data/sessions.json
+data/*.db*
+data/backup/
+data/admin_sessions/
+wa-bot/data/
 
 # ── 日志 ──────────────────────────────────────
 logs/*.log
@@ -53,3 +57,8 @@ gha-creds-*.json
 .codebuddy
 .workbuddy
 node_modules.mac/
+
+# ── 本地 Agent / 生成产物 ────────────────────────
+.agents/
+skills-lock.json
+docs/html/

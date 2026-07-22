@@ -10,7 +10,7 @@
  *   node wa-bot/scripts/seed-test-data.js --clean  # 清除已写入的测试数据
  *
  * 注意：
- *   - 脚本必须从项目根目录运行（automation-ocr/）
+ *   - 脚本必须从项目根目录运行（ClaimFlow/）
  *   - 写入的记录带 __seed: true 标记，--clean 仅删除带标记的记录
  */
 
@@ -22,8 +22,8 @@ const fs   = require('fs');
 // ─── 路径修正 ──────────────────────────────────────────────────────────────────
 //
 // receiptStore 默认的 DATA_DIR（从 wa-bot/src/services 向上 4 级）在本地开发时
-// 会解析到 automation-ocr 的父目录，与实际数据目录不一致。
-// 通过环境变量覆盖，统一指向 automation-ocr/data/
+// 会解析到 ClaimFlow 的父目录，与实际数据目录不一致。
+// 通过环境变量覆盖，统一指向 ClaimFlow/data/
 //
 const PROJECT_ROOT = path.resolve(__dirname, '../../');
 process.env.DATA_DIR = path.join(PROJECT_ROOT, 'data');

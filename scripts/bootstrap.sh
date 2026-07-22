@@ -18,10 +18,10 @@ set -e
 # ============================================================
 
 # 项目落地路径
-APP_DIR="/opt/automation-ocr"
+APP_DIR="/opt/claimflow"
 
 # 拉代码用的 SSH 仓库地址
-REPO_URL="git@github.com:kelvinlee97/automation-ocr.git"
+REPO_URL="git@github.com:kelvinlee97/ClaimFlow.git"
 
 # 部署用户名
 DEPLOY_USER="deploy"
@@ -162,7 +162,7 @@ do_deploy() {
   GEMINI_API_KEY=<你的 Gemini key>
   SESSION_SECRET=<任意长随机串，例如 openssl rand -hex 32>
   DOMAIN=<你的域名，例如 admin.example.com>
-  # 可选：IMAGE_URI=ghcr.io/kelvinlee97/automation-ocr:latest
+  # 可选：IMAGE_URI=ghcr.io/kelvinlee97/claimflow:latest
 EOF
     exit 1
   fi

@@ -14,7 +14,7 @@ function getEnv() {
   return {
     token: process.env.GITHUB_TOKEN,
     owner: process.env.GITHUB_REPO_OWNER || "kelvinlee97",
-    name: process.env.GITHUB_REPO_NAME || "automation-ocr",
+    name: process.env.GITHUB_REPO_NAME || "ClaimFlow",
   };
 }
 
@@ -40,7 +40,7 @@ async function getOctokit() {
   octokitPromise = import("@octokit/rest").then(({ Octokit }) => {
     octokit = new Octokit({
       auth: env.token,
-      userAgent: "automation-ocr-feedback",
+      userAgent: "claimflow-feedback",
     });
     return octokit;
   });

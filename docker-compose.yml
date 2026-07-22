@@ -16,18 +16,18 @@ services:
       - wa-bot
 
   wa-bot:
-    image: ${IMAGE_URI:-ghcr.io/kelvinlee97/automation-ocr:latest}
+    image: ${IMAGE_URI:-ghcr.io/kelvinlee97/claimflow:latest}
     container_name: wa-bot
     restart: always
     environment:
       - NODE_ENV=production
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - DATA_DIR=/opt/automation-ocr/data
+      - DATA_DIR=/opt/claimflow/data
       - SESSION_SECRET=${SESSION_SECRET}
     volumes:
       - ./config:/app/config:ro
-      - ./data:/opt/automation-ocr/data
+      - ./data:/opt/claimflow/data
       - ./data/wwebjs_auth:/app/.wwebjs_auth
     logging:
       driver: "json-file"

@@ -25,7 +25,7 @@
  *   group-ignored   模拟群组消息（应被静默忽略，不写任何数据）
  *
  * 注意：
- *   - 必须从项目根目录运行（automation-ocr/）
+ *   - 必须从项目根目录运行（ClaimFlow/）
  *   - 模拟记录带 __simulate: true 标记，--clean 仅删带标记的记录
  */
 
@@ -36,7 +36,7 @@ const fs   = require('fs');
 
 // ─── 路径修正（必须在 require 业务模块之前）────────────────────────────────────
 // receiptStore 默认 DATA_DIR 从 wa-bot/src/services 向上 4 级，本地会解析到
-// automation-ocr 的父目录。通过 DATA_DIR 覆盖，统一指向 automation-ocr/data/
+// ClaimFlow 的父目录。通过 DATA_DIR 覆盖，统一指向 ClaimFlow/data/
 const PROJECT_ROOT = path.resolve(__dirname, '../../');
 process.env.DATA_DIR = path.join(PROJECT_ROOT, 'data');
 

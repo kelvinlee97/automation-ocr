@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- **Droplet IP**: `159.65.136.11`（Singapore, sgp1）
+- **Droplet IP**: `<DROPLET_IP>`（Singapore, sgp1）
 - **域名**: `kelvin.ink`（HTTPS，Let's Encrypt，有效期至 2026-09-05）
 - **管理后台**: `https://kelvin.ink/admin/login`（用户名 `kelvin` / 密码 `kelvin`）
 - **迁移完成时间**: 2026-06-07
@@ -12,7 +12,7 @@
 ```
 GitHub Actions (CI/CD)
   │  push main
-  │  ssh → deploy@159.65.136.11
+  │  ssh → deploy@<DROPLET_IP>
   ▼
 Droplet (Ubuntu 24.04)
   ├── Caddy (reverse proxy + TLS)
@@ -21,8 +21,8 @@ Droplet (Ubuntu 24.04)
 ```
 
 - CI Deploy 用原生 `ssh` 命令（不用 `appleboy/ssh-action`）
-- 镜像从 GHCR 拉取（`ghcr.io/kelvinlee97/automation-ocr:main`）
-- 运行时数据在 `/opt/automation-ocr/data`（Docker volume）
+- 镜像从 GHCR 拉取（`ghcr.io/kelvinlee97/claimflow:latest`）
+- 运行时数据在 `/opt/claimflow/data`（Docker volume）
 
 ## Droplet 规格
 
@@ -46,7 +46,7 @@ Droplet (Ubuntu 24.04)
 
 | Secret | 值 |
 |--------|-----|
-| `DO_SSH_HOST` | `159.65.136.11` |
+| `DO_SSH_HOST` | `<DROPLET_IP>` |
 | `DO_SSH_USER` | `deploy` |
 | `DO_SSH_KEY` | CI/CD ed25519 私钥 |
 | `GHCR_PAT` | GitHub PAT（read:packages） |
@@ -56,8 +56,8 @@ Droplet (Ubuntu 24.04)
 ## 手动部署（应急）
 
 ```bash
-ssh deploy@159.65.136.11
-cd /opt/automation-ocr
+ssh deploy@<DROPLET_IP>
+cd /opt/claimflow
 git pull origin main          # 如果 .env / docker-compose.yml 有改动
 docker compose pull
 docker compose up -d --remove-orphans
@@ -67,12 +67,12 @@ docker image prune -f
 ## 日志查看
 
 ```bash
-ssh deploy@159.65.136.11
-cd /opt/automation-ocr
+ssh deploy@<DROPLET_IP>
+cd /opt/claimflow
 docker compose logs -f --tail=100 wa-bot
 ```
 
 ## AWS 已清理
 
-- CloudFormation stack `automation-ocr` 已删除（2026-06-07）
+- CloudFormation stack `claimflow` 已删除（2026-06-07）
 - GitHub AWS 相关 secret 已删除
