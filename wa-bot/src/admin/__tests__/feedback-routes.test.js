@@ -7,6 +7,11 @@
 const request = require("supertest");
 const session = require("express-session");
 
+// These tests always inject MemoryStore. Avoid reloading FileStore and other
+// export-only dependencies on every reset because their transitive modules
+// register process exit listeners.
+jest.mock("session-file-store", () => () => class TestFileStore {});
+
 // Mock 工厂函数
 function createMocks() {
   return {
@@ -33,6 +38,9 @@ function createMocks() {
       createIssue: jest.fn(),
       getIssue: jest.fn(),
       syncIssueStatus: jest.fn(),
+    },
+    excelService: {
+      getExcelPath: jest.fn(() => "/fake/export.xlsx"),
     },
     logger: {
       info: jest.fn(),
@@ -85,6 +93,7 @@ beforeEach(() => {
   jest.doMock("../../services/adminUserService", () => mocks.adminUserService);
   jest.doMock("../../services/feedbackStore", () => mocks.feedbackStore);
   jest.doMock("../../services/githubService", () => mocks.githubService);
+  jest.doMock("../../services/excelService", () => mocks.excelService);
   jest.doMock("../../utils/logger", () => mocks.logger);
   jest.doMock("../i18n", () => mocks.i18n);
   jest.doMock("../../bot", () => mocks.bot);
