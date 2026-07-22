@@ -62,11 +62,11 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: 构建 Docker 镜像
-        run: docker compose build wa-bot
+        run: docker build -t claimflow-ci ./wa-bot
 
       - name: 验证镜像启动（smoke test）
         run: |
-          docker compose run --rm \
+          docker run --rm \
             -e GEMINI_API_KEY=test-placeholder \
             -e NODE_ENV=test \
-            wa-bot node -e "console.log('smoke ok')"
+            claimflow-ci node -e "console.log('smoke ok')"
