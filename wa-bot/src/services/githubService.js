@@ -1,15 +1,15 @@
 "use strict";
 
 /**
- * githubService.js — GitHub API 集成服务
+ * githubService.js — GitHub API integration service
  *
- * 职责：与 GitHub Issues API 交互，创建和同步反馈问题。
- * 使用 @octokit/rest (官方 GitHub SDK)。
+ * Responsibilities: Interact with the GitHub Issues API to create and synchronize feedback issues.
+ * Use @octokit/rest (official GitHub SDK).
  */
 
 const logger = require("../utils/logger");
 
-// 环境变量在运行时读取（支持测试时动态修改）
+// Environment variables are read at runtime (support dynamic modification during testing)
 function getEnv() {
   return {
     token: process.env.GITHUB_TOKEN,
@@ -18,11 +18,11 @@ function getEnv() {
   };
 }
 
-// Octokit 实例（懒加载，因为 @octokit/rest 是 ESM 模块）
+// Octokit instance (lazy loading because @octokit/rest is an ESM module)
 let octokit = null;
 let octokitPromise = null;
 
-// 用于测试的注入实例
+// Injection example for testing
 let injectedOctokit = null;
 
 function setTestOctokit(instance) {
@@ -30,7 +30,7 @@ function setTestOctokit(instance) {
 }
 
 async function getOctokit() {
-  // 测试注入：如果设置了测试实例，直接返回
+  // Test injection: If a test instance is set, return directly
   if (injectedOctokit) return injectedOctokit;
 
   if (octokit) return octokit;
@@ -49,7 +49,7 @@ async function getOctokit() {
 }
 
 /**
- * 创建 GitHub Issue
+ * Create a GitHub Issue
  *
  * @param {object} feedbackData - { id, title, type, description, screenshotUrl, submittedBy, submittedAt }
  * @returns {{ issueId: number, issueUrl: string }}
@@ -58,7 +58,7 @@ async function createIssue(feedbackData) {
   const env = getEnv();
 
   if (!env.token) {
-    throw new Error("GITHUB_TOKEN 未配置");
+    throw new Error("GITHUB_TOKEN not configured");
   }
 
   const { id, title, type, description, screenshotUrl, submittedBy, submittedAt } = feedbackData;
@@ -77,7 +77,7 @@ async function createIssue(feedbackData) {
       labels,
     });
 
-    logger.info("GitHub Issue 创建成功", {
+    logger.info("GitHub Issue created successfully", {
       issueId: response.data.id,
       issueNumber: response.data.number,
       issueUrl: response.data.html_url,
@@ -88,25 +88,25 @@ async function createIssue(feedbackData) {
       issueUrl: response.data.html_url,
     };
   } catch (error) {
-    logger.error("GitHub Issue 创建失败", {
+    logger.error("GitHub Issue creation failed", {
       error: error.message,
       response: error.response?.data,
     });
-    throw new Error(`GitHub API 错误: ${error.response?.data?.message || error.message}`);
+    throw new Error(`GitHub API error: ${error.response?.data?.message || error.message}`);
   }
 }
 
 /**
- * 获取 GitHub Issue 详情
+ * Get GitHub Issue details
  *
- * @param {number} issueNumber - Issue 编号
+ * @param {number} issueNumber - Issue number
  * @returns {{ state: string, labels: Array }}
  */
 async function getIssue(issueNumber) {
   const env = getEnv();
 
   if (!env.token) {
-    throw new Error("GITHUB_TOKEN 未配置");
+    throw new Error("GITHUB_TOKEN not configured");
   }
 
   try {
@@ -122,23 +122,23 @@ async function getIssue(issueNumber) {
       labels: response.data.labels.map(l => l.name),
     };
   } catch (error) {
-    logger.error("获取 GitHub Issue 失败", {
+    logger.error("Failed to get GitHub Issue", {
       issueNumber,
       error: error.message,
     });
-    throw new Error(`GitHub API 错误: ${error.response?.data?.message || error.message}`);
+    throw new Error(`GitHub API error: ${error.response?.data?.message || error.message}`);
   }
 }
 
 /**
- * 同步单个 Issue 状态
+ * Synchronize single issue status
  *
  * @param {object} feedback - { id, githubIssueId }
  * @returns {{ status: string, githubIssueState: string }}
  */
 async function syncIssueStatus(feedback) {
   if (!feedback.githubIssueId) {
-    throw new Error("反馈未关联 GitHub Issue");
+    throw new Error("Feedback is not associated with a GitHub Issue");
   }
 
   const issue = await getIssue(feedback.githubIssueId);
@@ -153,7 +153,7 @@ async function syncIssueStatus(feedback) {
 }
 
 /**
- * 构建 Issue Body（Markdown 格式）
+ * Build Issue Body (Markdown format)
  */
 function buildIssueBody({ description, screenshotUrl, submittedBy, submittedAt, id }) {
   let body = "## Feedback Details\n\n";

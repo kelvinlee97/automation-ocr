@@ -25,7 +25,7 @@ module.exports = {
     'object-shorthand': 'error',
     'quote-props': ['error', 'as-needed'],
   },
-  // 测试文件单独覆盖：注入 jest 全局变量（describe/test/expect 等）
+  // Test files are covered individually: inject jest global variables (describe/test/expect, etc.)
   overrides: [
     {
       files: ['**/*.test.js'],

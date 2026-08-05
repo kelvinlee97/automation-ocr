@@ -1,13 +1,13 @@
 "use strict";
 
 /**
- * db.test.js — SQLite 数据层并发写测试
+ * db.test.js — SQLite data layer concurrent writing test
  *
- * 策略：用 worker_threads 模拟 100 个并发写入，
- * 验证 WAL 模式下不丢数据。
+ * Strategy: Use worker_threads to simulate 100 concurrent writes,
+ * Verify that no data is lost in WAL mode.
  *
- * 注意：better-sqlite3 的同步 API 在单线程中串行执行，
- * 多 worker 通过独立的 DB 连接并发写入同一 SQLite 文件。
+ * Note: better-sqlite3’s synchronization API is executed serially in a single thread.
+ * Multiple workers write concurrently to the same SQLite file via independent DB connections.
  */
 
 const os     = require("os");
@@ -15,13 +15,13 @@ const fs     = require("fs");
 const path   = require("path");
 const { Worker, isMainThread, workerData } = require("worker_threads");
 
-// 使用临时目录，保证测试隔离
+// Use temporary directories to ensure test isolation
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "db-concurrency-"));
 process.env.DATA_DIR = DATA_DIR;
 
 if (!isMainThread) {
-  // ── Worker 线程代码 ────────────────────────────────────────────────────────
-  // 每个 worker 独立 require db（获得独立连接），执行一次 INSERT
+  // ── Worker thread code ────────────────────────────────────────────────────
+  // Each worker requires db independently (obtains an independent connection) and executes INSERT once
   const { workerId } = workerData;
   process.env.DATA_DIR = workerData.dataDir;
   const dbModule = require("../../db");
@@ -38,11 +38,11 @@ if (!isMainThread) {
   dbModule.close();
   process.exit(0);
 } else {
-  // ── 主线程（Jest 测试）─────────────────────────────────────────────────────
+  // ── Main thread (Jest test)──────────────────────────────────────────────────
   const dbModule = require("../../db");
 
   beforeAll(() => {
-    dbModule._reset(); // 确保使用当前 DATA_DIR
+    dbModule._reset(); // Make sure to use the current DATA_DIR
     process.env.DATA_DIR = DATA_DIR;
     dbModule.init();
   });
@@ -54,7 +54,7 @@ if (!isMainThread) {
 
   const WORKER_COUNT = 100;
 
-  test(`${WORKER_COUNT} 个并发 worker 写入后数据不丢失`, done => {
+  test(`No data loss after writing by ${WORKER_COUNT} concurrent workers`, done => {
     let finished = 0;
     let errors   = 0;
 
@@ -68,7 +68,7 @@ if (!isMainThread) {
         if (finished === WORKER_COUNT) {
           try {
             expect(errors).toBe(0);
-            // 重新打开连接读取数据（worker 已关闭各自连接）
+            // Reopen the connection to read data (workers have closed their respective connections)
             dbModule._reset();
             dbModule.init();
             const count = dbModule.db.prepare(
@@ -82,5 +82,5 @@ if (!isMainThread) {
         }
       });
     }
-  }, 30000); // 30s 超时
+  }, 30000); // 30s timeout
 }

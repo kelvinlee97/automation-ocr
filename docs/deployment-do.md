@@ -1,13 +1,13 @@
-# DigitalOcean 部署架构
+# DigitalOcean deployment architecture
 
-## 当前状态
+## Current status
 
-- **Droplet IP**: `<DROPLET_IP>`（Singapore, sgp1）
-- **域名**: `kelvin.ink`（HTTPS，Let's Encrypt，有效期至 2026-09-05）
-- **管理后台**: `https://kelvin.ink/admin/login`（用户名 `kelvin` / 密码 `kelvin`）
-- **迁移完成时间**: 2026-06-07
+- **Droplet IP**: `<DROPLET_IP>` (Singapore, sgp1)
+- **Domain name**: `kelvin.ink` (HTTPS, Let's Encrypt, valid until 2026-09-05)
+- **admin panel**: `https://kelvin.ink/admin/login` (username `kelvin` / password `kelvin`)
+- **Migration completion time**: 2026-06-07
 
-## 架构
+## Architecture
 
 ```
 GitHub Actions (CI/CD)
@@ -20,51 +20,51 @@ Droplet (Ubuntu 24.04)
         └── data/ (volume: app.db + images/)
 ```
 
-- CI Deploy 用原生 `ssh` 命令（不用 `appleboy/ssh-action`）
-- 镜像从 GHCR 拉取（`ghcr.io/kelvinlee97/claimflow:latest`）
-- 运行时数据在 `/opt/claimflow/data`（Docker volume）
+- CI Deploy uses native `ssh` command (without `appleboy/ssh-action`)
+- Image pulled from GHCR (`ghcr.io/kelvinlee97/claimflow:latest`)
+- Runtime data is in `/opt/claimflow/data` (Docker volume)
 
-## Droplet 规格
+## Droplet specifications
 
-| 项目 | 值 |
+| project | value |
 |------|-----|
 | Region | Singapore (sgp1) |
 | Image | Ubuntu 24.04 LTS |
 | Size | 1 vCPU / 2GB / 50GB SSD |
-| 用户 | `deploy`（CI/CD 用） + `root`（管理） |
+| user | `deploy` (for CI/CD) + `root` (management) |
 
-## DigitalOcean 云端防火墙
+## DigitalOcean Cloud Firewall
 
-| 协议 | 端口 | 来源 | 用途 |
+| protocol | port | source | use |
 |------|------|------|------|
-| TCP  | 22   | All IPv4 + All IPv6 | SSH（GitHub Actions 需要） |
-| TCP  | 80   | All IPv4 + All IPv6 | HTTP（Let's Encrypt challenge） |
+| TCP | 22 | All IPv4 + All IPv6 | SSH (required by GitHub Actions) |
+| TCP  | 80   | All IPv4 + All IPv6 | HTTP (Let's Encrypt challenge) |
 | TCP  | 443  | All IPv4 + All IPv6 | HTTPS |
 | UDP  | 443  | All IPv4 + All IPv6 | HTTP/3 |
 
 ## GitHub Secrets
 
-| Secret | 值 |
+| Secret | value |
 |--------|-----|
 | `DO_SSH_HOST` | `<DROPLET_IP>` |
 | `DO_SSH_USER` | `deploy` |
-| `DO_SSH_KEY` | CI/CD ed25519 私钥 |
-| `GHCR_PAT` | GitHub PAT（read:packages） |
+| `DO_SSH_KEY` | CI/CD ed25519 private key |
+| `GHCR_PAT` | GitHub PAT (read:packages) |
 
-`DO_SSH_PORT` 已删除（hardcode 22 在 yml 里）。`AWS_DEPLOY_ROLE_ARN` 已删除。
+`DO_SSH_PORT` has been removed (hardcode 22 in yml). `AWS_DEPLOY_ROLE_ARN` has been removed.
 
-## 手动部署（应急）
+## Manual deployment (emergency)
 
 ```bash
 ssh deploy@<DROPLET_IP>
 cd /opt/claimflow
-git pull origin main          # 如果 .env / docker-compose.yml 有改动
+git pull origin main # If there are changes in .env / docker-compose.yml
 docker compose pull
 docker compose up -d --remove-orphans
 docker image prune -f
 ```
 
-## 日志查看
+## Log view
 
 ```bash
 ssh deploy@<DROPLET_IP>
@@ -72,7 +72,7 @@ cd /opt/claimflow
 docker compose logs -f --tail=100 wa-bot
 ```
 
-## AWS 已清理
+## AWS Cleaned
 
-- CloudFormation stack `claimflow` 已删除（2026-06-07）
-- GitHub AWS 相关 secret 已删除
+- CloudFormation stack `claimflow` deleted (2026-06-07)
+- GitHub AWS related secret has been deleted

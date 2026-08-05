@@ -13,18 +13,18 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: 设置 Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: wa-bot/package-lock.json
 
-      - name: 安装依赖
+      - name: Install dependencies
         working-directory: wa-bot
         run: npm ci
 
-      - name: 运行 Lint
+      - name: Run lint
         working-directory: wa-bot
         run: npm run lint
 
@@ -34,37 +34,37 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: 设置 Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: wa-bot/package-lock.json
 
-      - name: 安装依赖
+      - name: Install dependencies
         working-directory: wa-bot
         run: npm ci
 
-      - name: 运行测试
+      - name: Run tests
         working-directory: wa-bot
         run: npm test
         env:
-          # 测试环境不需要真实 key，geminiService 在测试中会被 mock
+          # The test environment does not require real keys, geminiService will be mocked during testing
           GEMINI_API_KEY: test-placeholder
           NODE_ENV: test
 
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
-    # 仅在 lint 和 test 通过后才验证构建，避免浪费构建时间
+    # Only verify the build after lint and test pass to avoid wasting build time
     needs: [lint, test]
     steps:
       - uses: actions/checkout@v6
 
-      - name: 构建 Docker 镜像
+      - name: Build Docker image
         run: docker build -t claimflow-ci ./wa-bot
 
-      - name: 验证镜像启动（smoke test）
+      - name: Verify image startup (smoke test)
         run: |
           docker run --rm \
             -e GEMINI_API_KEY=test-placeholder \

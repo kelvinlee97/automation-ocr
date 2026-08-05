@@ -10,7 +10,7 @@ const { t } = require("../i18n");
 const { htmlLayout } = require("./layout");
 const { escapeHtml } = require("./escapeHtml");
 
-function feedbackDetailPage(feedback, lang = "zh") {
+function feedbackDetailPage(feedback, lang = "en") {
   const title = t("feedback_detail_title", lang) || "Feedback Detail";
 
   const typeLabel = feedback.type === "bug"
@@ -24,7 +24,7 @@ function feedbackDetailPage(feedback, lang = "zh") {
   const statusClass = feedback.status === "open" ? "status-open" : "status-resolved";
 
   const submittedAt = new Date(feedback.submittedAt).toLocaleString(
-    lang === "zh" ? "zh-CN" : "en-US"
+    "en-US"
   );
 
   const content = `

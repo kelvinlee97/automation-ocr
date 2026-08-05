@@ -3,19 +3,19 @@
 /**
  * excelService.test.js
  *
- * 覆盖重点：
- *   1. DATA_DIR 路径策略（环境变量优先）
- *   2. getExcelPath 返回正确绝对路径
- *   3. initExcel / addRegistration / addReceipt / updateReviewStatus 行为
+ * Key points covered:
+ *   1. DATA_DIR path strategy (environment variables take precedence)
+ *   2. getExcelPath returns the correct absolute path
+ *   3. initExcel / addRegistration / addReceipt / updateReviewStatus behavior
  *
- * ExcelJS 读写真实文件（使用 OS 临时目录），不 mock ExcelJS。
+ * ExcelJS reads and writes real files (using OS temporary directories), does not mock ExcelJS.
  */
 
 const os   = require("os");
 const fs   = require("fs");
 const path = require("path");
 
-describe("excelService — DATA_DIR 路径策略", () => {
+describe("excelService — DATA_DIR path strategy", () => {
   const origEnv = process.env.DATA_DIR;
 
   afterEach(() => {
@@ -24,14 +24,14 @@ describe("excelService — DATA_DIR 路径策略", () => {
     jest.resetModules();
   });
 
-  it("设置 DATA_DIR 时，getExcelPath 使用该目录", () => {
+  it("When DATA_DIR is set, getExcelPath uses this directory", () => {
     process.env.DATA_DIR = "/custom/data";
     jest.resetModules();
     const { getExcelPath } = require("../excelService");
     expect(getExcelPath()).toBe("/custom/data/excel/records.xlsx");
   });
 
-  it("未设置 DATA_DIR 时，getExcelPath 回退到相对路径（含 /data/excel/）", () => {
+  it("When DATA_DIR is not set, getExcelPath falls back to relative paths (including /data/excel/)", () => {
     delete process.env.DATA_DIR;
     jest.resetModules();
     const { getExcelPath } = require("../excelService");
@@ -39,7 +39,7 @@ describe("excelService — DATA_DIR 路径策略", () => {
   });
 });
 
-describe("excelService — Excel 功能", () => {
+describe("excelService — Excel functions", () => {
   let tmpDir;
   let svc;
 
@@ -58,29 +58,29 @@ describe("excelService — Excel 功能", () => {
 
   // ── initExcel ──────────────────────────────────────────────────────────────
 
-  it("initExcel 创建 Excel 文件", () => {
+  it("initExcel creates Excel files", () => {
     const excelPath = svc.getExcelPath();
     expect(fs.existsSync(excelPath)).toBe(true);
   });
 
-  it("initExcel 幂等：重复调用不抛错", async () => {
+  it("initExcel is idempotent: repeated calls do not throw errors", async () => {
     await expect(svc.initExcel()).resolves.not.toThrow();
   });
 
   // ── addRegistration ────────────────────────────────────────────────────────
 
-  it("addRegistration 新用户成功写入，返回 { success: true }", async () => {
+  it("addRegistration The new user is successfully written and returns { success: true }", async () => {
     const result = await svc.addRegistration("60123456789@c.us", "880101-01-1234");
     expect(result).toEqual({ success: true });
   });
 
-  it("addRegistration 同 IC 重复注册返回 { success: false, duplicate: true }", async () => {
+  it("addRegistration returns { success: false, duplicate: true } for repeated registration with IC", async () => {
     await svc.addRegistration("60123456789@c.us", "880101-01-1234");
     const dup = await svc.addRegistration("60199999999@c.us", "880101-01-1234");
     expect(dup).toEqual({ success: false, duplicate: true });
   });
 
-  it("addRegistration 后 getRegistrations 能读回记录", async () => {
+  it("After addRegistration getRegistrations can read back the records", async () => {
     await svc.addRegistration("60123456789@c.us", "880101-01-1234");
     const rows = await svc.getRegistrations();
     expect(rows.length).toBe(1);
@@ -89,7 +89,7 @@ describe("excelService — Excel 功能", () => {
 
   // ── addReceipt ─────────────────────────────────────────────────────────────
 
-  it("addReceipt 写入一行，getReceipts 能读回", async () => {
+  it("addReceipt writes a line, getReceipts can read it back", async () => {
     await svc.addReceipt({
       phone:            "60123456789@c.us",
       ic:               "880101-01-1234",
@@ -109,7 +109,7 @@ describe("excelService — Excel 功能", () => {
 
   // ── updateReviewStatus ─────────────────────────────────────────────────────
 
-  it("updateReviewStatus 更新指定行的审核状态", async () => {
+  it("updateReviewStatus updates the review status of the specified row", async () => {
     await svc.addReceipt({
       phone:            "60123456789@c.us",
       ic:               "880101-01-1234",
@@ -125,7 +125,7 @@ describe("excelService — Excel 功能", () => {
     const rowNo = rows[0].rowNo;
 
     const info = await svc.updateReviewStatus(rowNo, "approved", "OK");
-    expect(info.phone).toBe("60123456789"); // stripWaId 去掉 @c.us
+    expect(info.phone).toBe("60123456789"); // stripWaId remove @c.us
     expect(info.receipt_no).toBe("RC-002");
 
     const updated = await svc.getReceipts();

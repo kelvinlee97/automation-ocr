@@ -1,10 +1,10 @@
 "use strict";
 
 /**
- * feedbackStore.js — 反馈数据层（SQLite 实现）
+ * feedbackStore.js — feedback data layer (SQLite implementation)
  *
- * 职责：管理 feedback 表的读写。
- * 对外 API 提供反馈的 CRUD 操作。
+ * Responsibility: Manage the reading and writing of feedback tables.
+ * CRUD operations that provide feedback to external APIs.
  */
 
 const db = require("../db");
@@ -19,7 +19,7 @@ function ensureUploadsDir() {
 }
 
 /**
- * 生成 UUID v4
+ * Generate UUID v4
  */
 function generateId() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
@@ -29,7 +29,7 @@ function generateId() {
   });
 }
 
-/** 将 DB 行转换为对外对象（snake_case → camelCase） */
+/** Convert DB rows to external objects (snake_case → camelCase) */
 function rowToRecord(row) {
   if (!row) return null;
   return {
@@ -50,11 +50,11 @@ function rowToRecord(row) {
 }
 
 // ─────────────────────────────────────────────
-// 对外接口
+// External interface
 // ─────────────────────────────────────────────
 
 /**
- * 初始化数据层（幂等，可重复调用）
+ * Initialize the data layer (idempotent, callable repeatedly)
  */
 function init() {
   ensureUploadsDir();
@@ -62,7 +62,7 @@ function init() {
 }
 
 /**
- * 创建新反馈
+ * Create new feedback
  *
  * @param {object} feedbackData - { title, type, description, screenshotUrl, submittedBy }
  * @returns {{ id: string }}
@@ -81,7 +81,7 @@ function create(feedbackData) {
 }
 
 /**
- * 获取全部反馈（按 submittedAt 倒序）
+ * Get all feedback (in reverse order by submittedAt)
  * @param {object} filters - { status, type, q }
  * @param {object} pagination - { page, limit }
  * @returns {{ items: Array, total: number }}
@@ -108,11 +108,11 @@ function getAll(filters = {}, pagination = { page: 1, limit: 20 }) {
     params.push(searchTerm, searchTerm);
   }
 
-  // 获取总数
+  // Get total
   const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as count");
   const total = db.db.prepare(countQuery).get(...params).count;
 
-  // 分页
+  // Pagination
   const offset = (pagination.page - 1) * pagination.limit;
   query += " ORDER BY submitted_at DESC LIMIT ? OFFSET ?";
   params.push(pagination.limit, offset);
@@ -125,7 +125,7 @@ function getAll(filters = {}, pagination = { page: 1, limit: 20 }) {
 }
 
 /**
- * 获取反馈统计信息（高效 COUNT 查询）
+ * Get feedback statistics (efficient COUNT query)
  * @returns {{ total: number, open: number, resolved: number }}
  */
 function getStats() {
@@ -144,7 +144,7 @@ function getStats() {
 }
 
 /**
- * 按 ID 查询单条反馈
+ * Query single feedback by ID
  * @param {string} id
  * @returns {object|null}
  */
@@ -155,7 +155,7 @@ function getById(id) {
 }
 
 /**
- * 更新反馈状态
+ * Update feedback status
  * @param {string} id
  * @param {string} status - "open" | "resolved"
  * @param {string} githubIssueState - "open" | "closed"
@@ -173,7 +173,7 @@ function updateStatus(id, status, githubIssueState) {
 }
 
 /**
- * 更新 GitHub Issue 信息
+ * Update GitHub Issue information
  * @param {string} id
  * @param {number} githubIssueId
  * @param {string} githubIssueUrl
@@ -191,7 +191,7 @@ function updateGitHubInfo(id, githubIssueId, githubIssueUrl) {
 }
 
 /**
- * 获取截图文件的绝对路径
+ * Get the absolute path of the screenshot file
  * @param {string} filename
  * @returns {string}
  */
@@ -200,7 +200,7 @@ function getScreenshotPath(filename) {
 }
 
 /**
- * 更新反馈的截图 URL
+ * Update feedback screenshot URL
  * @param {string} id
  * @param {string} screenshotUrl
  */

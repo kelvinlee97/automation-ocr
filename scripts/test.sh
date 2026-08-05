@@ -1,48 +1,48 @@
 #!/usr/bin/env bash
-# test.sh —— 测试相关命令
-# 用法:
-#   bash scripts/test.sh             # 跑全部测试（80 个用例，约 1 秒）
-#   bash scripts/test.sh watch       # 监听文件变更自动重跑
-#   bash scripts/test.sh coverage    # 生成覆盖率报告（输出到 coverage/）
-#   bash scripts/test.sh file <路径> # 只跑某个测试文件
-#   bash scripts/test.sh name <关键词> # 按名字过滤用例
-#   bash scripts/test.sh verbose     # 详细输出
+# test.sh - test related commands
+# usage:
+#   bash scripts/test.sh #Run all tests (80 test cases, about 1 second)
+#   bash scripts/test.sh watch # Monitor file changes and automatically rerun
+#   bash scripts/test.sh coverage # Generate coverage report (output to coverage/)
+#   bash scripts/test.sh file <path> # Only run a certain test file
+#   bash scripts/test.sh name <keyword> # Filter use cases by name
+#   bash scripts/test.sh verbose # Verbose output
 #
-# 注意：所有测试都用 mock，不需要真实的网络/数据库/WhatsApp 账号。
+# NOTE: All tests are done using mocks, no real network/database/WhatsApp account is required.
 
 set -e
 
-# 切到 wa-bot/ 子项目目录（根目录跑不了）
+# Switch to the wa-bot/ sub-project directory (the root directory cannot be run)
 cd "$(dirname "$0")/../wa-bot"
 
 case "${1:-}" in
   "")
-    # 默认：跑全部测试
+    # Default: run all tests
     npm test
     ;;
   watch)
-    # 监听文件变更自动重跑（开发时常开一个终端）
+    # Monitor file changes and automatically rerun (always open a terminal during development)
     npm run test:watch
     ;;
   coverage)
-    # 生成测试覆盖率报告（报告位于 wa-bot/coverage/）
+    # Generate test coverage report (report located in wa-bot/coverage/)
     npm run test:coverage
     ;;
   file)
-    # 只跑指定路径的测试文件，调试单个测试时用
+    # Only run test files in the specified path, used when debugging a single test
     npx jest "$2"
     ;;
   name)
-    # 按用例名字关键词过滤
+    # Filter by use case name keywords
     npx jest -t "$2"
     ;;
   verbose)
-    # 输出更详细的测试信息
+    # Output more detailed test information
     npx jest --verbose
     ;;
   *)
-    echo "未知子命令: $1"
-    echo "可用: (空) | watch | coverage | file <路径> | name <关键词> | verbose"
+    echo "Unknown subcommand: $1"
+    echo "Available: (null) | watch | coverage | file <path> | name <keyword> | verbose"
     exit 1
     ;;
 esac

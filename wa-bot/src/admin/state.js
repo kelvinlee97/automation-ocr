@@ -15,7 +15,7 @@ function setClient(client) {
   _qrBase64 = null;
   _pairingCodeReady = false;
   _botError = null;
-  logger.info("WhatsApp client 已注入管理后台");
+  logger.info("WhatsApp client has been injected into the admin panel");
 }
 
 function setQR(base64DataUri) {
@@ -49,14 +49,14 @@ function setDisconnected() {
   _waConnected = false;
   _client = null;
   _pairingCodeReady = false;
-  logger.info("WhatsApp 已断线，连接状态重置");
+  logger.info("WhatsApp has been disconnected and the connection status has been reset.");
 
   if (_sessionStore) {
     _sessionStore.clear((err) => {
       if (err) {
-        logger.error("断线后清空 admin sessions 失败", { error: String(err) });
+        logger.error("Failed to clear admin sessions after disconnection", { error: String(err) });
       } else {
-        logger.info("已清空所有 admin sessions（WA 断线触发）");
+        logger.info("All admin sessions have been cleared (triggered by WA disconnection)");
       }
     });
   }

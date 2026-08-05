@@ -1,5 +1,5 @@
 /**
- * sessionManager 单元测试
+ * sessionManager unit test
  */
 
 jest.mock('fs');
@@ -12,7 +12,7 @@ jest.mock('./utils/logger', () => ({
   error: jest.fn(),
 }));
 
-// db mock：Phase 2 迁移后 sessionManager 依赖 SQLite，测试中替换为内存 mock
+// db mock: After Phase 2 migration, sessionManager depends on SQLite and is replaced with memory mock during testing.
 jest.mock('./db', () => {
   const sessions = {};
   const stmt = (sql) => ({
@@ -60,7 +60,7 @@ describe('sessionManager', () => {
     Object.keys(mockFiles).forEach((k) => delete mockFiles[k]);
     mockDirs.clear();
 
-    // 初始化 mock 数据
+    // Initialize mock data
     mockDirs.add(`${PROJECT_ROOT}/data`);
     mockDirs.add(`${PROJECT_ROOT}/config`);
     mockFiles[`${PROJECT_ROOT}/data/sessions.json`] = '{}';
@@ -68,7 +68,7 @@ describe('sessionManager', () => {
   });
 
   describe('SESSION_STATE', () => {
-    test('状态常量存在', () => {
+    test('Status constant exists', () => {
       const { SESSION_STATE } = require('./sessionManager');
       expect(SESSION_STATE.WAITING_IC).toBe('WAITING_IC');
       expect(SESSION_STATE.WAITING_RECEIPT).toBe('WAITING_RECEIPT');
@@ -77,24 +77,24 @@ describe('sessionManager', () => {
   });
 
   describe('getOrCreateSession', () => {
-    test('创建新会话返回正确属性', () => {
+    test('Creating a new session returns the correct properties', () => {
       const { getOrCreateSession } = require('./sessionManager');
       const session = getOrCreateSession('60123456789');
       expect(session.phone).toBe('60123456789');
       expect(session.state).toBe('WAITING_IC');
     });
 
-    test('重复调用返回同一会话', () => {
+    test('Repeated calls return the same session', () => {
       const { getOrCreateSession } = require('./sessionManager');
       const s1 = getOrCreateSession('60123456789');
       const s2 = getOrCreateSession('60123456789');
-      // SQLite 实现每次从 DB 读取返回新对象，内容相等即可（不要求同一引用）
+      // SQLite implements returning a new object every time it is read from DB, as long as the contents are equal (the same reference is not required)
       expect(s1).toStrictEqual(s2);
     });
   });
 
   describe('updateSession', () => {
-    test('更新已有会话', () => {
+    test('Update existing session', () => {
       const { getOrCreateSession, updateSession } = require('./sessionManager');
       getOrCreateSession('60123456789');
       updateSession('60123456789', { ic: '930101-01-1234' });
@@ -102,27 +102,27 @@ describe('sessionManager', () => {
       expect(session.ic).toBe('930101-01-1234');
     });
 
-    test('更新不存在的会话抛出错误', () => {
+    test('Updating non-existing session throws error', () => {
       const { updateSession } = require('./sessionManager');
-      expect(() => updateSession('60199999999', {})).toThrow('会话不存在');
+      expect(() => updateSession('60199999999', {})).toThrow('Session does not exist');
     });
   });
 
   describe('checkReceiptLimit', () => {
-    test('首次请求允许', () => {
+    test('First request for permission', () => {
       const { getOrCreateSession, checkReceiptLimit } = require('./sessionManager');
       getOrCreateSession('60123456789');
       expect(checkReceiptLimit('60123456789').allowed).toBe(true);
     });
 
-    test('会话不存在返回拒绝', () => {
+    test('Session does not exist and returns reject', () => {
       const { checkReceiptLimit } = require('./sessionManager');
       expect(checkReceiptLimit('60199999999').allowed).toBe(false);
     });
   });
 
   describe('incrementReceiptCount', () => {
-    test('递增计数', () => {
+    test('Count up', () => {
       const { getOrCreateSession, incrementReceiptCount } = require('./sessionManager');
       getOrCreateSession('60123456789');
       incrementReceiptCount('60123456789');

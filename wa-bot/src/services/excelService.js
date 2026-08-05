@@ -2,35 +2,35 @@ const ExcelJS = require("exceljs");
 const fs = require("fs");
 const path = require("path");
 
-// 优先使用环境变量 DATA_DIR（生产容器通过 docker-compose 注入）
-// 回退到相对路径供本地开发：__dirname(/app/src/services) 向上四级 = 项目根目录/data
-// 与 receiptStore.js 保持路径策略一致，确保写入挂载卷路径
+// Prefer the environment variable DATA_DIR (the production container is injected through docker-compose)
+// Fall back to relative paths for local development: __dirname(/app/src/services) up four levels = project root directory/data
+// Keep the path policy consistent with receiptStore.js and ensure that the mounted volume path is written
 const DATA_DIR   = process.env.DATA_DIR || path.resolve(__dirname, "../../../../data");
 const EXCEL_DIR  = path.join(DATA_DIR, "excel");
 const EXCEL_PATH = path.join(EXCEL_DIR, "records.xlsx");
 
-// 马来西亚时区（UTC+8），Excel 时间列对业务人员可读
+// Malaysia time zone (UTC+8), Excel time column is readable by business personnel
 const MY_TIMEZONE = "Asia/Kuala_Lumpur";
 
 /**
- * 返回当前马来西亚本地时间字符串，格式：YYYY-MM-DD HH:mm:ss
- * sv-SE locale 恰好输出该格式，无需手动拼接
+ * Returns the current Malaysian local time string, format: YYYY-MM-DD HH:mm:ss
+ * sv-SE locale outputs exactly this format, no need for manual splicing
  */
 function nowMY() {
   return new Date().toLocaleString("sv-SE", { timeZone: MY_TIMEZONE });
 }
 
 /**
- * 去除 WhatsApp 手机号的 "@c.us" 后缀
- * 写入 Excel 时只保留纯数字号码，方便阅读和导出使用
+ * Remove "@c.us" suffix from WhatsApp phone number
+ * When writing to Excel, only pure numeric numbers are retained for easy reading and exporting.
  */
 function stripWaId(phone) {
   return phone ? phone.replace(/@c\.us$/, "") : phone;
 }
 
-// 写操作互斥锁：防止并发"读取→修改→写回"导致后写覆盖先写（TOCTOU race condition）
-// 原理：每次写操作都追加到上一次的 Promise 尾部，形成串行执行链
-// catch 吞掉错误是故意的：避免单次失败导致整个队列永久卡死
+// Write operation mutex: prevent concurrent "read → modify → write back" from causing later writes to overwrite first writes (TOCTOU race condition)
+// Principle: Each write operation is appended to the end of the previous Promise to form a serial execution chain
+// catch swallows errors on purpose: to avoid a single failure causing the entire queue to become permanently stuck.
 let writeQueue = Promise.resolve();
 function withExcelLock(fn) {
   const result = writeQueue.then(() => fn());
@@ -38,7 +38,7 @@ function withExcelLock(fn) {
   return result;
 }
 
-// 确保 Excel 文件存在并初始化表头（含审核列）
+// Ensure that the Excel file exists and initialize the header (including audit columns)
 async function initExcel() {
   if (!fs.existsSync(EXCEL_DIR)) {
     fs.mkdirSync(EXCEL_DIR, { recursive: true });
@@ -47,7 +47,7 @@ async function initExcel() {
   const workbook = new ExcelJS.Workbook();
 
   if (!fs.existsSync(EXCEL_PATH)) {
-    // 文件不存在：全新创建，包含所有列
+    // File does not exist: Create fresh, including all columns
     const regSheet = workbook.addWorksheet("Registrations");
     regSheet.columns = [
       { header: "No", key: "no", width: 5 },
@@ -76,18 +76,18 @@ async function initExcel() {
 
     await workbook.xlsx.writeFile(EXCEL_PATH);
   } else {
-    // 文件已存在：检查是否缺少审核列，若缺则追加
+    // The file already exists: check if the audit column is missing, and append it if it is missing
     await workbook.xlsx.readFile(EXCEL_PATH);
     const recSheet = workbook.getWorksheet("Receipts");
 
-    // 用表头行检测审核列是否已存在
+    // Use the header row to detect whether the audit column already exists
     const headerRow = recSheet.getRow(1);
     const headers = [];
     headerRow.eachCell((cell) => headers.push(cell.value));
 
     const needsMigration = !headers.includes("Review Status");
     if (needsMigration) {
-      // 获取当前最大列号，追加 3 列
+      // Get the current maximum column number and add 3 columns
       const lastCol = recSheet.columnCount;
       recSheet.getColumn(lastCol + 1).header = "Review Status";
       recSheet.getColumn(lastCol + 1).key = "review_status";
@@ -105,7 +105,7 @@ async function initExcel() {
 }
 
 /**
- * 记录注册信息
+ * Record registration information
  */
 async function addRegistration(phone, ic) {
   return withExcelLock(async () => {
@@ -113,10 +113,10 @@ async function addRegistration(phone, ic) {
     await workbook.xlsx.readFile(EXCEL_PATH);
     const sheet = workbook.getWorksheet("Registrations");
 
-    // 检查重复（必须在锁内执行，确保读取到最新状态）
-    // 注意：ExcelJS 从磁盘读取 xlsx 后不恢复 column key 元数据，
-    // 通过表头字符串动态定位列号，与 updateReviewStatus 保持一致风格，
-    // 避免硬编码列位置——列顺序调整时能自动适应。
+    // Check for duplicates (must be performed within the lock to ensure the latest status is read)
+    // Note: ExcelJS does not restore column key metadata after reading xlsx from disk.
+    // Dynamically locate the column number through the header string, maintaining the same style as updateReviewStatus.
+    // Avoid hard-coding column positions—column order automatically adapts when adjusted.
     const headerRow = sheet.getRow(1);
     const colIndex = {};
     headerRow.eachCell((cell, colNumber) => {
@@ -126,15 +126,15 @@ async function addRegistration(phone, ic) {
 
     let isDuplicate = false;
     sheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return; // 跳过表头
+      if (rowNumber === 1) return; // skip header
       if (icColNum && row.getCell(icColNum).value === ic) isDuplicate = true;
     });
 
     if (isDuplicate) return { success: false, duplicate: true };
 
-    // addRow 用数组形式，避免 key 不存在时静默写入空行
+    // addRow uses array form to avoid silently writing blank lines when the key does not exist.
     sheet.addRow([
-      sheet.rowCount, // No（含表头行）
+      sheet.rowCount, // No (including header row)
       nowMY(),
       stripWaId(phone),
       ic,
@@ -147,7 +147,7 @@ async function addRegistration(phone, ic) {
 }
 
 /**
- * 记录收据识别结果，初始审核状态为 pending
+ * Record the receipt recognition result, the initial review status is pending
  */
 async function addReceipt(data) {
   return withExcelLock(async () => {
@@ -155,8 +155,8 @@ async function addReceipt(data) {
     await workbook.xlsx.readFile(EXCEL_PATH);
     const sheet = workbook.getWorksheet("Receipts");
 
-    // addRow 用数组形式（按列顺序），避免 key 不持久化导致写入空行
-    // 列顺序：No, Time, Phone, IC Number, Receipt No, Brand, Amount, Qualified,
+    // addRow uses array form (in column order) to avoid writing empty rows due to non-persistent keys.
+    // Column order: No, Time, Phone, IC Number, Receipt No, Brand, Amount, Qualified,
     //         Reason, Confidence, Review Status, Reviewer Note, Reviewed At
     sheet.addRow([
       sheet.rowCount,
@@ -179,8 +179,8 @@ async function addReceipt(data) {
 }
 
 /**
- * 读取所有收据行，返回 JSON 数组（供管理后台使用）
- * rowNo 从 2 开始（第 1 行为表头），与 Excel 实际行号对应，用于后续 updateReviewStatus 定位
+ * Read all receipt lines and return a JSON array (for use by the management backend)
+ * rowNo starts from 2 (the first row is the header), corresponds to the actual row number of Excel, and is used for subsequent updateReviewStatus positioning
  */
 async function getReceipts() {
   const workbook = new ExcelJS.Workbook();
@@ -188,7 +188,7 @@ async function getReceipts() {
   const sheet = workbook.getWorksheet("Receipts");
 
   const receipts = [];
-  // 获取表头映射：列号 -> key
+  // Get header mapping: column number -> key
   const headerRow = sheet.getRow(1);
   const colKeyMap = {};
   headerRow.eachCell((cell, colNumber) => {
@@ -196,7 +196,7 @@ async function getReceipts() {
   });
 
   sheet.eachRow((row, rowNumber) => {
-    // 跳过表头行
+    // Skip header row
     if (rowNumber === 1) return;
 
     const record = { rowNo: rowNumber };
@@ -211,7 +211,7 @@ async function getReceipts() {
 }
 
 /**
- * 读取所有注册用户行，返回 JSON 数组（供管理后台使用）
+ * Read all registered user rows and return a JSON array (for use by the admin panel)
  */
 async function getRegistrations() {
   const workbook = new ExcelJS.Workbook();
@@ -240,10 +240,10 @@ async function getRegistrations() {
 }
 
 /**
- * 更新指定行的审核状态
- * @param {number} rowNo - Excel 实际行号（从 2 起，1 为表头）
+ * Update the review status of the specified row
+ * @param {number} rowNo - Excel actual row number (starting from 2, 1 is the header)
  * @param {string} status - 'approved' | 'rejected'
- * @param {string} note   - 审核备注
+ * @param {string} note - review notes
  */
 async function updateReviewStatus(rowNo, status, note) {
   return withExcelLock(async () => {
@@ -253,16 +253,16 @@ async function updateReviewStatus(rowNo, status, note) {
 
     const row = sheet.getRow(rowNo);
 
-    // 找到各列索引（通过表头动态查找，避免硬编码列号）
+    // Find the index of each column (dynamic search through the table header to avoid hard-coded column numbers)
     const headerRow = sheet.getRow(1);
     const colIndex = {};
     headerRow.eachCell((cell, colNumber) => {
       colIndex[cell.value] = colNumber;
     });
 
-    // 审核列必须存在
+    // Audit column must exist
     if (!colIndex["Review Status"]) {
-      throw new Error("Receipts sheet 缺少 Review Status 列，请重新初始化 Excel");
+      throw new Error("Receipts sheet is missing the Review Status column, please reinitialize Excel");
     }
 
     row.getCell(colIndex["Review Status"]).value = status;
@@ -272,7 +272,7 @@ async function updateReviewStatus(rowNo, status, note) {
 
     await workbook.xlsx.writeFile(EXCEL_PATH);
 
-    // 返回该行关键信息，供发送 WhatsApp 通知使用
+    // Return key information for this row for sending WhatsApp notifications
     return {
       phone: row.getCell(colIndex["Phone"]).value,
       ic: row.getCell(colIndex["IC Number"]).value,
@@ -284,7 +284,7 @@ async function updateReviewStatus(rowNo, status, note) {
 }
 
 /**
- * 返回 Excel 文件的绝对路径（供下载路由使用）
+ * Returns the absolute path to the Excel file (used by download routing)
  */
 function getExcelPath() {
   return EXCEL_PATH;

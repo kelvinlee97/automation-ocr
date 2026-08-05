@@ -1,4 +1,4 @@
--- receipts: 收据主表
+-- receipts: main receipt table
 CREATE TABLE IF NOT EXISTS receipts (
   id               TEXT PRIMARY KEY,
   phone            TEXT NOT NULL,
@@ -21,7 +21,7 @@ CREATE INDEX IF NOT EXISTS idx_receipts_status       ON receipts(status);
 CREATE INDEX IF NOT EXISTS idx_receipts_submitted_at ON receipts(submitted_at DESC);
 CREATE INDEX IF NOT EXISTS idx_receipts_phone        ON receipts(phone);
 
--- sessions: 用户会话表
+-- sessions: user session table
 CREATE TABLE IF NOT EXISTS sessions (
   phone              TEXT PRIMARY KEY,
   name               TEXT,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   receipt_count_date TEXT NOT NULL
 );
 
--- admin_users: 管理员账户表
+-- admin_users: Administrator account table
 CREATE TABLE IF NOT EXISTS admin_users (
   username       TEXT PRIMARY KEY,
   password_hash  TEXT NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS admin_users (
   created_at     TEXT NOT NULL
 );
 
--- feedback: 开发者反馈表
+-- feedback: developer feedback form
 CREATE TABLE IF NOT EXISTS feedback (
   id                  TEXT PRIMARY KEY,
   github_issue_id     INTEGER,
@@ -62,7 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_feedback_submitted_at ON feedback(submitted_at DE
 CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback(status);
 CREATE INDEX IF NOT EXISTS idx_feedback_type ON feedback(type);
 
--- campaigns: 活动配置表
+-- campaigns: activity configuration table
 CREATE TABLE IF NOT EXISTS campaigns (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   brand       TEXT NOT NULL,
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
 CREATE INDEX IF NOT EXISTS idx_campaigns_active ON campaigns(is_active);
 CREATE INDEX IF NOT EXISTS idx_campaigns_dates ON campaigns(start_date, end_date);
 
--- reject_templates: 拒绝消息模板表
+-- reject_templates: reject message template table
 CREATE TABLE IF NOT EXISTS reject_templates (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   campaign_id INTEGER NOT NULL,
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS reject_templates (
   FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
 );
 
--- receipt_modifications: 收据修改历史表
+-- receipt_modifications: receipt modification history table
 CREATE TABLE IF NOT EXISTS receipt_modifications (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   receipt_id   TEXT NOT NULL,

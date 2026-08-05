@@ -1,130 +1,130 @@
-# 本地 Beta 测试环境（Apple Container）
+# Local Beta Testing Environment (Apple Container)
 
-## 为什么需要两套容器配置？
+## Why do we need two sets of container configurations?
 
-| | 生产部署（DO） | 本地 Beta 测试（macOS） |
+|  | Production Deployment (DO) | Local beta testing (macOS) |
 |---|---|---|
-| 工具 | Docker Compose | Apple Container（`container` CLI） |
-| 镜像 | 自建（`docker build`） | 官方 `node:20-slim` |
-| `node_modules` | 在镜像内 `npm ci` | 挂载本地目录，容器内重新 `npm install` |
-| 端口 | 80/443（Caddy 代理） | 3000（直接访问） |
-| SQLite 数据 | `/opt/claimflow/data` | `wa-bot/data/`（挂载） |
-| Chromium/Puppeteer | 镜像内安装（`apt-get`） | ❌ 暂不启用（Bot 功能不需要 beta 测试） |
+| tool | Docker Compose | Apple Container (`container` CLI) |
+| mirror | Self-build (`docker build`) | Official `node:20-slim` |
+| `node_modules` | In the image `npm ci` | Mount the local directory and re-run `npm install` in the container |
+| port | 80/443 (Caddy agent) | 3000 (direct access) |
+| SQLite data | `/opt/claimflow/data` | `wa-bot/data/` (mount) |
+| Chromium/Puppeteer | Install within the image (`apt-get`) | ❌ Not enabled yet (Bot function does not require beta testing) |
 
-**核心差异**：生产环境用多阶段 `Dockerfile` 构建含 Chromium 的镜像；本地 beta 测试只需要能跑 Express Admin 后台，不需要 Chromium，也不需要 Caddy。
+**Core difference**: The production environment uses a multi-stage `Dockerfile` to build an image containing Chromium; the local beta test only needs to be able to run the Express Admin backend, and does not require Chromium or Caddy.
 
 ---
 
-## 快速启动
+## quick start
 
 ```bash
 bash scripts/beta-local.sh
 ```
 
-首次运行会自动：
-1. 检查 Apple Container 是否已安装（`brew install container`）
-2. 备份 macOS 原生 `node_modules` → `node_modules.mac`
-3. 拉取 `docker.io/library/node:20-slim` 镜像（约 200MB）
-4. 在容器内 `npm install`（编译 Linux 版本的原生模块）
-5. 等待 `localhost:3000` 返回 HTTP 状态码，然后打印访问地址
+The first run will automatically:
+1. Check if Apple Container is installed (`brew install container`)
+2. Backup macOS native `node_modules` → `node_modules.mac`
+3. Pull the `docker.io/library/node:20-slim` image (about 200MB)
+4. `npm install` inside the container (compile the Linux version of the native module)
+5. Wait for `localhost:3000` to return the HTTP status code, then print the access address
 
-**首次访问**：`<a href="http://localhost:3000/admin/setup">http://localhost:3000/admin/setup</a>` 创建 admin 账号。
+**First visit**: `<a href="http://localhost:3000/admin/setup">http://localhost:3000/admin/setup</a>` Create an admin account.
 
 ---
 
-## 常见错误与解决方案
+## Common errors and solutions
 
 ### 1. `Error: /app/node_modules/better-sqlite3/build/Release/better_sqlite3.node: invalid ELF header`
 
-**原因**：`node_modules/` 里 `better-sqlite3` 的 `.node` 文件是 macOS Mach-O 格式，容器是 Linux。
+**Reason**: The `.node` file of `better-sqlite3` in `node_modules/` is in macOS Mach-O format, and the container is Linux.
 
-**解决**：脚本会自动把 `node_modules` 重命名为 `node_modules.mac`，让容器内重新 `npm install` 生成 Linux 版本。
+**Solution**: The script will automatically rename `node_modules` to `node_modules.mac`, allowing `npm install` to regenerate the Linux version in the container.
 
-如果手动处理：
+If done manually:
 ```bash
 mv wa-bot/node_modules wa-bot/node_modules.mac
 bash scripts/beta-local.sh
 ```
 
-### 2. `bind: Address already in use`（端口 3000 被占用）
+### 2. `bind: Address already in use` (port 3000 is occupied)
 
-**原因**：有另一个 Node 进程在跑 3000 端口。
+**Cause**: There is another Node process running port 3000.
 
-**解决**：
+**solve**:
 ```bash
-lsof -i :3000 | grep LISTEN   # 找到 PID
-kill -9 <PID>                      # 杀掉
+lsof -i :3000 | grep LISTEN # Find PID
+kill -9 <PID> # kill
 bash scripts/beta-local.sh
 ```
 
-### 3. Puppeteer/Chromium 启动失败（不影响 beta 测试）
+### 3. Puppeteer/Chromium fails to start (does not affect beta testing)
 
-**现象**：容器日志显示 `Failed to launch the browser process`，但 `管理后台已启动，监听端口 3000`。
+**Phenomenon**: The container log shows `Failed to launch the browser process`, but the `admin panel has been started, listening on port 3000`.
 
-**原因**：本地 beta 测试没安装 Chromium（`node:20-slim` 镜像不含 Chromium 依赖）。
+**Cause**: Chromium is not installed in the local beta test (the `node:20-slim` image does not contain Chromium dependencies).
 
-**影响范围**：仅影响 AI 自动识别收据金额功能；Admin 后台、feedback 页面完全正常。
+**Scope of impact**: Only the AI automatic recognition function of receipt amount is affected; the Admin background and feedback page are completely normal.
 
-**如果确实需要 Puppeteer**：改用完整 `node:20` 镜像（约 1GB+），并在 `container run` 时加 `--cap-add=SYS_PTRACE` 等参数。
+**If you really need Puppeteer**: Use the complete `node:20` image (about 1GB+) instead, and add `--cap-add=SYS_PTRACE` and other parameters when `container run`.
 
-### 4. 修改代码后如何重启？
+### 4. How to restart after modifying the code?
 
 ```bash
-bash scripts/beta-local.sh --stop   # 停容器
-bash scripts/beta-local.sh             # 重新启动（代码是挂载的，修改即时生效）
+bash scripts/beta-local.sh --stop # Stop the container
+bash scripts/beta-local.sh # Restart (the code is mounted, and the modification takes effect immediately)
 ```
 
-> ⚠️ 如果修改了 `package.json`，需要删掉容器内的 `node_modules` 重新安装。最干净的方式：
+> ⚠️ If you modify `package.json`, you need to delete `node_modules` in the container and reinstall it. Cleanest way:
 > ```bash
-> bash scripts/beta-local.sh --clean   # 停容器 + 删 node_modules
-> bash scripts/beta-local.sh                  # 重新安装依赖 + 启动
+> bash scripts/beta-local.sh --clean # Stop container + delete node_modules
+> bash scripts/beta-local.sh # Reinstall dependencies + start
 > ```
 
 ---
 
-## 与生产部署的切换
+## Switching to production deployment
 
-| 操作 | 生产（DO） | 本地 Beta |
+| operate | Production(DO) | Local Beta |
 |---|---|---|
-| 启动 | `ssh root@<DROPLET_IP>` → `cd /opt/claimflow && docker compose up -d` | `bash scripts/beta-local.sh` |
-| 查看日志 | `docker compose logs -f` | `bash scripts/beta-local.sh --logs` |
-| 停止 | `docker compose down` | `bash scripts/beta-local.sh --stop` |
-| 重建 | 推送代码 → GitHub Actions 自动 CI/CD | `bash scripts/beta-local.sh --clean` |
+| start up | `ssh root@<DROPLET_IP>` → `cd /opt/claimflow && docker compose up -d` | `bash scripts/beta-local.sh` |
+| View log | `docker compose logs -f` | `bash scripts/beta-local.sh --logs` |
+| stop | `docker compose down` | `bash scripts/beta-local.sh --stop` |
+| reconstruction | Push code → GitHub Actions Automated CI/CD | `bash scripts/beta-local.sh --clean` |
 
-**数据隔离**：本地 beta 使用 `wa-bot/data/` 下的 SQLite 文件；生产环境使用 Droplet 上 `/opt/claimflow/data/` 的挂载卷。两者互不影响。
+**Data Isolation**: The local beta uses SQLite files under `wa-bot/data/`; the production environment uses the mounted volume on `/opt/claimflow/data/` on the Droplet. The two have no influence on each other.
 
 ---
 
-## 文件清单
+## Document list
 
 ```
 ClaimFlow/
-├── docker-compose.yml          # 生产部署（DO）
+├── docker-compose.yml # Production deployment (DO)
 ├── wa-bot/
-│   ├── Dockerfile                # 生产镜像（含 Chromium）
-│   ├── .env                      # 生产环境变量（Git 不跟踪）
-│   └── data/                    # 本地 beta 测试数据（SQLite）
+│ ├── Dockerfile # Production image (including Chromium)
+│ ├── .env # Production environment variables (not tracked by Git)
+│ └── data/ # Local beta test data (SQLite)
 ├── scripts/
-│   ├── docker.sh                # 生产：远程服务器拉镜像 + 启动
-│   ├── setup.sh                # 生产：远程服务器初始化
-│   └── beta-local.sh           # 本地：Apple Container 一键启动 ⬅ 新增
+│ ├── docker.sh # Production: pull image from remote server + start
+│ ├── setup.sh # Production: remote server initialization
+│ └── beta-local.sh # Local: Apple Container one-click startup ⬅ New
 └── docs/
-    └── beta-local.md           # 本文档 ⬅ 新增
+    └── beta-local.md # This document ⬅ New
 ```
 
 ---
 
-## 恢复宿主机开发环境
+## Restore the host development environment
 
-beta 测试完成后，如果想恢复宿主机直接 `node index.js` 开发：
+After the beta test is completed, if you want to restore the host machine, develop `node index.js` directly:
 
 ```bash
-# 恢复 macOS 原生 node_modules
+# Restore macOS native node_modules
 cd wa-bot/
 mv node_modules.mac node_modules
 
-# 宿主机直接启动
+# Host starts directly
 node index.js
 ```
 
-脚本不会删除 `node_modules.mac`，除非你手动运行 `--clean`。
+The script will not delete `node_modules.mac` unless you run `--clean` manually.

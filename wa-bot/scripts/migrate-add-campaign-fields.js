@@ -2,18 +2,18 @@
 /**
  * migrate-add-campaign-fields.js
  *
- * 数据库迁移脚本：添加 Campaign 功能所需的新表和字段
+ * Database migration script: Add new tables and fields required for Campaign functionality
  *
- * 使用方式：
- *   node wa-bot/scripts/migrate-add-campaign-fields.js --dry-run   # 仅打印，不执行
- *   node wa-bot/scripts/migrate-add-campaign-fields.js --apply    # 执行迁移（自动备份）
+ * How to use:
+ *   node wa-bot/scripts/migrate-add-campaign-fields.js --dry-run # Only print, not execute
+ *   node wa-bot/scripts/migrate-add-campaign-fields.js --apply #Execute migration (automatic backup)
  *
- * 迁移内容：
- *   1. receipts 表：新增 name 字段（加在 ic 前面）、campaign_id 字段
- *   2. admin_users 表：新增 is_super_admin 字段（默认 0）
- *   3. 新增 campaigns 表
- *   4. 新增 reject_templates 表
- *   5. 新增 receipt_modifications 表
+ * Migrate content:
+ *   1. receipts table: add name field (added in front of ic) and campaign_id field
+ *   2. admin_users table: Added is_super_admin field (default 0)
+ *   3. Add campaigns table
+ *   4. Add reject_templates table
+ *   5. Add receipt_modifications table
  */
 
 "use strict";
@@ -25,7 +25,7 @@ const db   = require("../src/db");
 const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, "../../../data");
 const BACKUP_DIR = path.join(DATA_DIR, "backup");
 
-// ── 工具函数 ──────────────────────────────────────────────────────────────────
+// ──Utility functions ────────────────────────────────────────────────────────────
 
 function ensureBackupDir() {
   if (!fs.existsSync(BACKUP_DIR)) {
@@ -40,33 +40,33 @@ function timestamp() {
 async function backupDatabase() {
   const dbPath = path.join(DATA_DIR, "app.db");
   if (!fs.existsSync(dbPath)) {
-    console.log("⚠️  数据库文件不存在，跳过备份");
+    console.log("⚠️ Database file does not exist, skip backup");
     return null;
   }
 
   ensureBackupDir();
   const backupPath = path.join(BACKUP_DIR, `app-${timestamp()}.db`);
   await db.db.backup(backupPath);
-  console.log(`✅ 数据库已备份到：${backupPath}`);
+  console.log(`✅ The database has been backed up to: ${backupPath}`);
   return backupPath;
 }
 
-// ── 迁移逻辑 ──────────────────────────────────────────────────────────────────
+// ──Migration logic────────────────────────────────────────────────────────────
 
 function dryRun() {
-  console.log("🔍 Dry run 模式——仅打印迁移步骤，不执行\n");
+  console.log("🔍 Dry run mode - only prints the migration steps and does not execute them\\n");
 
-  console.log("步骤 1：检查 receipts 表是否需要新增 name 字段");
+  console.log("Step 1: Check whether the receipts table needs to add a name field");
   console.log("  ALTER TABLE receipts ADD COLUMN name TEXT;");
 
-  console.log("\n步骤 2：检查 receipts 表是否需要新增 campaign_id 字段");
+  console.log("\\nStep 2: Check whether the campaign_id field needs to be added to the receipts table");
   console.log("  ALTER TABLE receipts ADD COLUMN campaign_id INTEGER;");
   console.log("  CREATE INDEX IF NOT EXISTS idx_receipts_campaign_id ON receipts(campaign_id);");
 
-  console.log("\n步骤 3：检查 admin_users 表是否需要新增 is_super_admin 字段");
+  console.log("\\nStep 3: Check whether the admin_users table needs to add the is_super_admin field");
   console.log("  ALTER TABLE admin_users ADD COLUMN is_super_admin INTEGER NOT NULL DEFAULT 0;");
 
-  console.log("\n步骤 4：检查 campaigns 表是否存在");
+  console.log("\\nStep 4: Check if campaigns table exists");
   console.log(`  CREATE TABLE IF NOT EXISTS campaigns (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     brand       TEXT NOT NULL,
@@ -79,7 +79,7 @@ function dryRun() {
   console.log("  CREATE INDEX IF NOT EXISTS idx_campaigns_active ON campaigns(is_active);");
   console.log("  CREATE INDEX IF NOT EXISTS idx_campaigns_dates ON campaigns(start_date, end_date);");
 
-  console.log("\n步骤 5：检查 reject_templates 表是否存在");
+  console.log("\\nStep 5: Check if the reject_templates table exists");
   console.log(`  CREATE TABLE IF NOT EXISTS reject_templates (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     campaign_id INTEGER NOT NULL,
@@ -88,7 +88,7 @@ function dryRun() {
     FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
   );`);
 
-  console.log("\n步骤 6：检查 receipt_modifications 表是否存在");
+  console.log("\\nStep 6: Check if the receipt_modifications table exists");
   console.log(`  CREATE TABLE IF NOT EXISTS receipt_modifications (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     receipt_id   TEXT NOT NULL,
@@ -100,51 +100,51 @@ function dryRun() {
     FOREIGN KEY (receipt_id) REFERENCES receipts(id)
   );`);
 
-  console.log("\n✅ Dry run 完成——以上步骤将在 --apply 模式下执行");
+  console.log("\\n✅ Dry run completed - the above steps will be executed in --apply mode");
 }
 
 function migrateDatabase(database) {
   const migrate = database.transaction(() => {
 
-  // 步骤 1：receipts 表新增 name 字段
-  console.log("步骤 1：receipts 表新增 name 字段...");
+  // Step 1: Add a name field to the receipts table
+  console.log("Step 1: Add a name field to the receipts table...");
   const hasNameColumn = database.prepare(
     "SELECT COUNT(*) as cnt FROM pragma_table_info('receipts') WHERE name = 'name'"
   ).get().cnt > 0;
 
   if (!hasNameColumn) {
-    // SQLite 不支持指定列位置，name 会加在最后（不影响功能）
+    // SQLite does not support specifying column positions, name will be added at the end (does not affect functionality)
     database.prepare("ALTER TABLE receipts ADD COLUMN name TEXT").run();
-    console.log("  ✅ name 字段已添加");
+    console.log("✅ name field has been added");
   } else {
-    console.log("  ⚠️  name 字段已存在，跳过");
+    console.log("⚠️ name field already exists, skip");
   }
 
-  // 步骤 2：receipts 表新增 campaign_id 字段
-  console.log("\n步骤 2：receipts 表新增 campaign_id 字段...");
+  // Step 2: Add campaign_id field to the receipts table
+  console.log("\\nStep 2: Add campaign_id field to the receipts table...");
   const hasCampaignIdColumn = database.prepare(
     "SELECT COUNT(*) as cnt FROM pragma_table_info('receipts') WHERE name = 'campaign_id'"
   ).get().cnt > 0;
 
   if (!hasCampaignIdColumn) {
     database.prepare("ALTER TABLE receipts ADD COLUMN campaign_id INTEGER").run();
-    console.log("  ✅ campaign_id 字段已添加");
+    console.log("✅ campaign_id field has been added");
   } else {
-    console.log("  ⚠️  campaign_id 字段已存在，跳过");
+    console.log("⚠️ campaign_id field already exists, skip");
   }
   database.prepare("CREATE INDEX IF NOT EXISTS idx_receipts_campaign_id ON receipts(campaign_id)").run();
 
-  // 步骤 3：admin_users 表新增 is_super_admin 字段
-  console.log("\n步骤 3：admin_users 表新增 is_super_admin 字段...");
+  // Step 3: Add the is_super_admin field to the admin_users table
+  console.log("\\nStep 3: Add the is_super_admin field to the admin_users table...");
   const hasSuperAdminColumn = database.prepare(
     "SELECT COUNT(*) as cnt FROM pragma_table_info('admin_users') WHERE name = 'is_super_admin'"
   ).get().cnt > 0;
 
   if (!hasSuperAdminColumn) {
     database.prepare("ALTER TABLE admin_users ADD COLUMN is_super_admin INTEGER NOT NULL DEFAULT 0").run();
-    console.log("  ✅ is_super_admin 字段已添加（默认 0 = 普通 Admin）");
+    console.log("✅ is_super_admin field added (default 0 = normal Admin)");
   } else {
-    console.log("  ⚠️  is_super_admin 字段已存在，跳过");
+    console.log("⚠️ The is_super_admin field already exists, skip");
   }
 
   const superAdminCount = database.prepare(
@@ -158,11 +158,11 @@ function migrateDatabase(database) {
         SELECT username FROM admin_users ORDER BY created_at ASC, rowid ASC LIMIT 1
       )
     `).run();
-    if (info.changes > 0) console.log("  ✅ 最早创建的管理员已提升为 Super Admin");
+    if (info.changes > 0) console.log("✅ The earliest created administrator has been promoted to Super Admin");
   }
 
-  // 步骤 4：创建 campaigns 表
-  console.log("\n步骤 4：创建 campaigns 表...");
+  // Step 4: Create campaigns table
+  console.log("\\nStep 4: Create campaigns table...");
   database.prepare(`
     CREATE TABLE IF NOT EXISTS campaigns (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -177,10 +177,10 @@ function migrateDatabase(database) {
 
   database.prepare("CREATE INDEX IF NOT EXISTS idx_campaigns_active ON campaigns(is_active)").run();
   database.prepare("CREATE INDEX IF NOT EXISTS idx_campaigns_dates ON campaigns(start_date, end_date)").run();
-  console.log("  ✅ campaigns 表已创建（如不存在）");
+  console.log("✅ campaigns table has been created (if it does not exist)");
 
-  // 步骤 5：创建 reject_templates 表
-  console.log("\n步骤 5：创建 reject_templates 表...");
+  // Step 5: Create the reject_templates table
+  console.log("\\nStep 5: Create the reject_templates table...");
   database.prepare(`
     CREATE TABLE IF NOT EXISTS reject_templates (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -190,10 +190,10 @@ function migrateDatabase(database) {
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
     )
   `).run();
-  console.log("  ✅ reject_templates 表已创建（如不存在）");
+  console.log("✅ reject_templates table has been created (if it does not exist)");
 
-  // 步骤 6：创建 receipt_modifications 表
-  console.log("\n步骤 6：创建 receipt_modifications 表...");
+  // Step 6: Create receipt_modifications table
+  console.log("\\nStep 6: Create receipt_modifications table...");
   database.prepare(`
     CREATE TABLE IF NOT EXISTS receipt_modifications (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -206,7 +206,7 @@ function migrateDatabase(database) {
       FOREIGN KEY (receipt_id) REFERENCES receipts(id)
     )
   `).run();
-  console.log("  ✅ receipt_modifications 表已创建（如不存在）");
+  console.log("✅ receipt_modifications table has been created (if it does not exist)");
 
   });
 
@@ -214,26 +214,26 @@ function migrateDatabase(database) {
 }
 
 async function apply() {
-  console.log("🚀 开始执行迁移...\n");
+  console.log("🚀Start migration...\\n");
 
   const dbPath = path.join(DATA_DIR, "app.db");
   const isExistingDatabase = fs.existsSync(dbPath);
   const backupPath = isExistingDatabase ? await backupDatabase() : null;
   if (!isExistingDatabase) {
     db.init();
-    console.log("✅ 数据库不存在，已按最新 schema 初始化");
+    console.log("✅ The database does not exist and has been initialized according to the latest schema.");
   }
   console.log("");
 
   migrateDatabase(db.db);
 
-  console.log("\n🎉 迁移完成！");
+  console.log("\\n🎉 Migration completed!");
   if (backupPath) {
-    console.log(`📦 数据库备份位于：${backupPath}`);
+    console.log(`📦 Database backup is located at: ${backupPath}`);
   }
 }
 
-// ── 主流程 ──────────────────────────────────────────────────────────────────
+// ── Main process ────────────────────────────────────────────────────────────
 
 if (require.main === module) {
   const args = process.argv.slice(2);
@@ -241,15 +241,15 @@ if (require.main === module) {
   const isApply  = args.includes("--apply");
 
   if (!isDryRun && !isApply) {
-    console.log("使用方式：");
-    console.log("  node migrate-add-campaign-fields.js --dry-run   # 仅打印，不执行");
-    console.log("  node migrate-add-campaign-fields.js --apply    # 执行迁移（自动备份）");
+    console.log("How to use:");
+    console.log("node migrate-add-campaign-fields.js --dry-run # Only print, do not execute");
+    console.log("node migrate-add-campaign-fields.js --apply #Execute migration (automatic backup)");
     process.exitCode = 1;
   } else if (isDryRun) {
     dryRun();
   } else {
     apply().catch((err) => {
-      console.error("❌ 迁移失败，事务已回滚：", err.message);
+      console.error("❌ Migration failed and the transaction was rolled back:", err.message);
       process.exitCode = 1;
     });
   }

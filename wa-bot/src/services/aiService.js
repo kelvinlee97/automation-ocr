@@ -1,20 +1,20 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { z } = require("zod");
 
-// 初始化 Gemini（通过环境变量获取 API KEY）
+// Initialize Gemini (obtain API KEY through environment variables)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
 /**
- * Gemini 响应校验 Schema
+ * Gemini response verification Schema
  *
- * 为什么需要校验：
- * - Gemini 可能返回非 JSON 内容（图片无法识别时输出自然语言）
- * - amount 有时被返回为字符串（"1269.23" 而非 1269.23）
- * - confidence 可能超出 0-1 范围
- * - 字段可能缺失
+ * Why verification is needed:
+ * - Gemini may return non-JSON content (output natural language when the image cannot be recognized)
+ * - amount was sometimes returned as a string ("1269.23" instead of 1269.23)
+ * - confidence may be outside the 0-1 range
+ * - Fields may be missing
  *
- * 校验失败 = 非重试型错误（retryable: false），因为重试不会改变结果
+ * Validation failure = non-retry error (retryable: false), because retrying will not change the result
  */
 const aiResponseSchema = z.object({
   amount: z
@@ -25,7 +25,7 @@ const aiResponseSchema = z.object({
       const parsed = parseFloat(v);
       return Number.isFinite(parsed) ? parsed : null;
     }),
-  summary: z.string().min(1, "summary 不能为空字符串"),
+  summary: z.string().min(1, "summary cannot be an empty string"),
   confidence: z
     .number()
     .min(0)
@@ -34,10 +34,10 @@ const aiResponseSchema = z.object({
 });
 
 /**
- * 判断错误是否值得重试
+ * Determine whether an error is worth retrying
  *
- * 重试型：网络超时、服务端 5xx、限流 429
- * 非重试型：JSON 解析失败、Schema 校验失败、业务逻辑错误
+ * Retry type: network timeout, server 5xx, current limit 429
+ * Non-retry type: JSON parsing failure, Schema verification failure, business logic error
  */
 function isRetryableError(error) {
   if (error.code === "ETIMEDOUT" || error.code === "ECONNRESET" || error.code === "ENOTFOUND") {
@@ -58,11 +58,11 @@ function isRetryableError(error) {
 }
 
 /**
- * 调用 Gemini 识别收据/订单截图
- * 只提取金额和图片摘要，资格判定由人工审核决定
+ * Call Gemini to identify receipt/order screenshots
+ * Only the amount and image summary are extracted, and the qualification determination is determined by manual review.
  *
- * @param {string} base64Image 图片数据（Base64）
- * @param {string} [mimeType]  图片 MIME 类型，默认 image/jpeg
+ * @param {string} base64Image image data (Base64)
+ * @param {string} [mimeType] Image MIME type, default image/jpeg
  * @returns {Promise<{ success: boolean, amount: number|null, summary: string, confidence: number }>}
  */
 async function processReceipt(base64Image, mimeType = "image/jpeg") {
@@ -110,17 +110,17 @@ async function processReceipt(base64Image, mimeType = "image/jpeg") {
       return {
         success: false,
         retryable: false,
-        message: `AI 返回内容无法解析为 JSON: ${text.slice(0, 100)}`,
+        message: `The content returned by AI cannot be parsed as JSON: ${text.slice(0, 100)}`,
       };
     }
 
     const validated = aiResponseSchema.safeParse(raw);
     if (!validated.success) {
-      // 校验失败 = 字段缺失或类型错误，重试同样不会改变结果
+      // Validation failed = field is missing or of wrong type. Trying again will not change the result.
       return {
         success: false,
         retryable: false,
-        message: `AI 响应格式异常: ${validated.error.issues.map((e) => e.message).join(", ")}`,
+        message: `AI response format exception: ${validated.error.issues.map((e) => e.message).join(", ")}`,
       };
     }
 
@@ -130,7 +130,7 @@ async function processReceipt(base64Image, mimeType = "image/jpeg") {
     return {
       success: false,
       retryable,
-      message: retryable ? "AI 识别服务暂时不可用，请稍后重试" : error.message || "AI 识别失败",
+      message: retryable ? "The AI recognition service is temporarily unavailable, please try again later." : error.message || "AI recognition failed",
     };
   }
 }

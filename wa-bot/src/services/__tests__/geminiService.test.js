@@ -1,6 +1,6 @@
 'use strict';
 
-// mock 必须在 require 之前声明，Jest 会自动提升到文件顶部
+// mock must be declared before require, Jest will automatically be promoted to the top of the file
 const mockGenerateContent = jest.fn();
 
 jest.mock('@google/generative-ai', () => {
@@ -15,17 +15,17 @@ jest.mock('@google/generative-ai', () => {
 
 const { processReceipt } = require('../aiService');
 
-describe('aiService - Gemini API 封装', () => {
+describe('aiService - Gemini API package', () => {
   beforeEach(() => {
     mockGenerateContent.mockReset();
   });
 
-  test('API 返回有效数据时，解析为标准结构', async () => {
+  test('When the API returns valid data, it is parsed into a standard structure', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => JSON.stringify({
           amount: 88.50,
-          summary: '测试超市收据',
+          summary: 'Test supermarket receipt',
           confidence: 0.95,
         }),
       },
@@ -38,7 +38,7 @@ describe('aiService - Gemini API 封装', () => {
     expect(result.confidence).toBe(0.95);
   });
 
-  test('网络超时时，返回 retryable: true', async () => {
+  test('When the network times out, return retryable: true', async () => {
     const timeoutError = new Error('Request timeout');
     timeoutError.code = 'ETIMEDOUT';
     mockGenerateContent.mockRejectedValue(timeoutError);
@@ -49,11 +49,11 @@ describe('aiService - Gemini API 封装', () => {
     expect(result.retryable).toBe(true);
   });
 
-  test('API 返回无法解析的内容时，返回 retryable: false', async () => {
+  test('When the API returns content that cannot be parsed, return retryable: false', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
-        // 模拟 Gemini 返回非 JSON 的情况（图片无法识别）
-        text: () => '无法识别该收据图片',
+        // Simulate the situation where Gemini returns non-JSON (pictures cannot be recognized)
+        text: () => 'The receipt image is not recognized',
       },
     });
 
@@ -63,7 +63,7 @@ describe('aiService - Gemini API 封装', () => {
     expect(result.retryable).toBe(false);
   });
 
-  test('amount 为字符串时，自动转换为数字', async () => {
+  test('When amount is a string, it is automatically converted to a number.', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => JSON.stringify({
@@ -81,12 +81,12 @@ describe('aiService - Gemini API 封装', () => {
     expect(typeof result.amount).toBe('number');
   });
 
-  test('amount 为 null 时，保持 null', async () => {
+  test('When amount is null, keep it null', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => JSON.stringify({
           amount: null,
-          summary: '模糊图片，无法识别金额',
+          summary: 'Blurred picture, unable to identify the amount',
           confidence: 0.3,
         }),
       },
@@ -98,7 +98,7 @@ describe('aiService - Gemini API 封装', () => {
     expect(result.amount).toBeNull();
   });
 
-  test('confidence 超出范围时，校验失败', async () => {
+  test('When confidence exceeds the range, verification fails', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => JSON.stringify({
@@ -116,7 +116,7 @@ describe('aiService - Gemini API 封装', () => {
     expect(result.message).toContain('Too big');
   });
 
-  test('缺少 summary 字段时，校验失败', async () => {
+  test('Verification fails when summary field is missing', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => JSON.stringify({
@@ -133,7 +133,7 @@ describe('aiService - Gemini API 封装', () => {
     expect(result.message).toContain('undefined');
   });
 
-  test('响应含 markdown 代码块时，正确剥离', async () => {
+  test('When responding to markdown code blocks, strip them correctly', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '```json\n{"amount": 500, "summary": "Test", "confidence": 0.9}\n```',
@@ -146,7 +146,7 @@ describe('aiService - Gemini API 封装', () => {
     expect(result.amount).toBe(500);
   });
 
-  test('502 错误时，返回 retryable: true', async () => {
+  test('In case of 502 error, return retryable: true', async () => {
     const badGatewayError = new Error('Bad Gateway');
     badGatewayError.message = '502 Bad Gateway';
     mockGenerateContent.mockRejectedValue(badGatewayError);

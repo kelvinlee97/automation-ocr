@@ -1,11 +1,11 @@
 /**
- * sessionManager.js — 用户会话状态机（SQLite 实现）
+ * sessionManager.js — User session state machine (SQLite implementation)
  *
- * 状态流转：WAITING_IC → WAITING_RECEIPT → DONE
- * 对外 API 与原 JSON 版本完全兼容，调用方零改动。
+ * Status flow: WAITING_IC → WAITING_RECEIPT → DONE
+ * The external API is fully compatible with the original JSON version, with zero changes to the caller.
  *
- * 修复：原版模块级缓存（sessionsCache）导致多进程或热重载后与磁盘不同步；
- *       SQLite 单文件天然解决并发写竞态。
+ * Fix: The original module-level cache (sessionsCache) caused multi-process or hot reload to become out of sync with the disk;
+ *       SQLite single file naturally solves concurrent write race conditions.
  */
 
 "use strict";
@@ -44,7 +44,7 @@ function _today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** DB 行 → session 对象 */
+/** DB row → session object */
 function rowToSession(row) {
   if (!row) return null;
   return {
@@ -107,14 +107,14 @@ function _maskPhone(phone) {
 }
 
 // ─────────────────────────────────────────────
-// 对外接口
+// External interface
 // ─────────────────────────────────────────────
 
 function getOrCreateSession(phone) {
   let session = _getSession(phone);
 
   if (session) {
-    logger.debug("获取已有会话", { phone: _maskPhone(phone), state: session.state });
+    logger.debug("Get existing sessions", { phone: _maskPhone(phone), state: session.state });
     return session;
   }
 
@@ -130,23 +130,23 @@ function getOrCreateSession(phone) {
   };
 
   _setSession(phone, session);
-  logger.info("新建会话", { phone: _maskPhone(phone), state: session.state });
+  logger.info("New session", { phone: _maskPhone(phone), state: session.state });
   return session;
 }
 
 function updateSession(phone, updates) {
   const session = _getSession(phone);
-  if (!session) throw new Error(`会话不存在: ${phone}`);
+  if (!session) throw new Error(`Session does not exist: ${phone}`);
 
   Object.assign(session, updates, { updatedAt: Date.now() });
   _setSession(phone, session);
-  logger.debug("会话更新", { phone: _maskPhone(phone), updates });
+  logger.debug("session update", { phone: _maskPhone(phone), updates });
 }
 
 function checkReceiptLimit(phone) {
   const maxPerDay = _getMaxPerDay();
   const session   = _getSession(phone);
-  if (!session) return { allowed: false, reason: "会话不存在" };
+  if (!session) return { allowed: false, reason: "Session does not exist" };
 
   if (session.receiptCountDate !== _today()) {
     session.receiptCount     = 0;
@@ -155,7 +155,7 @@ function checkReceiptLimit(phone) {
   }
 
   if (session.receiptCount >= maxPerDay) {
-    return { allowed: false, reason: `今日已达最大提交次数（${maxPerDay}次）` };
+    return { allowed: false, reason: `The maximum number of submissions has been reached today (${maxPerDay} times)` };
   }
 
   return { allowed: true };
@@ -182,7 +182,7 @@ function getAllSessions() {
 
 function init() {
   db.init();
-  logger.info("SessionManager 初始化", { mode: "sqlite" });
+  logger.info("SessionManager initialization", { mode: "sqlite" });
 }
 
 module.exports = {

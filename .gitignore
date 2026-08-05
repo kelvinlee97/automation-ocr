@@ -1,4 +1,4 @@
-# ── 依赖和运行时 ──────────────────────────────
+# ── Dependencies and runtime ─────────────────────────────
 node_modules/
 __pycache__/
 *.pyc
@@ -9,11 +9,11 @@ venv/
 # ── Playwright MCP ─────────────────────────────
 .playwright-mcp/
 
-# ── WhatsApp session（含登录凭证）────────────────
+# ── WhatsApp session (with login credentials)────────────────
 wa-bot/.wwebjs_auth/
 wa-bot/.wwebjs_cache/
 
-# ── 业务数据（运行时产生，不入版本控制）─────────
+# ──Business data (generated at runtime, not included in version control)─────────
 data/excel/*.xlsx
 data/receipts/
 data/uploads/
@@ -25,30 +25,30 @@ data/backup/
 data/admin_sessions/
 wa-bot/data/
 
-# ── 日志 ──────────────────────────────────────
+# ── Log ─────────────────────────────────────
 logs/*.log
 
-# ── 测试覆盖率产物 ────────────────────────────
+# ── Test coverage products ────────────────────────────
 wa-bot/coverage/
 
-# ── 系统 / 环境 ────────────────────────────────
+# ── System/Environment ─────────────────────────────
 .DS_Store
 *.env
 
-# ── CI/CD 临时文件 ─────────────────────────────
+# ── CI/CD temporary files ─────────────────────────────
 .gemini/
 gha-creds-*.json
 
 # ── Git worktrees ──────────────────────────────
 .worktrees/
 
-# ── IDE / 编辑器 ───────────────────────────────
+# ── IDE / Editor ─────────────────────────────
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# ── 根目录开发文件（仅本地测试用）───────────────
+# ── Root directory development files (for local testing only)───────────────
 /package.json
 /package-lock.json
 !wa-bot/package.json
@@ -58,7 +58,7 @@ gha-creds-*.json
 .workbuddy
 node_modules.mac/
 
-# ── 本地 Agent / 生成产物 ────────────────────────
+# ── Local Agent / Generated product ────────────────────────
 .agents/
 skills-lock.json
 docs/html/

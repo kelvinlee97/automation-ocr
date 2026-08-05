@@ -5,7 +5,7 @@ const rateLimit = require("express-rate-limit");
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  message: { error: "尝试次数过多，请 15 分钟后重试" },
+  message: { error: "Too many attempts, please try again in 15 minutes" },
   standardHeaders: true,
   legacyHeaders: false,
 });

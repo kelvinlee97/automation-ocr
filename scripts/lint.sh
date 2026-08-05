@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
-# lint.sh —— 代码风格检查
-# 用法:
-#   bash scripts/lint.sh        # 检查代码风格（无输出 = 通过）
-#   bash scripts/lint.sh fix    # 自动修复能修的部分
+# lint.sh - code style checking
+# usage:
+#   bash scripts/lint.sh # Check code style (no output = pass)
+#   bash scripts/lint.sh fix # Automatically repair the repairable parts
 
 set -e
 
-# 切到 wa-bot/ 子项目目录
+# Switch to the wa-bot/ subproject directory
 cd "$(dirname "$0")/../wa-bot"
 
 case "${1:-}" in
   "")
-    # 仅检查，不修改文件
+    # Only checks, does not modify files
     npm run lint
     ;;
   fix)
-    # 自动修复能修的部分（剩下的看报错信息手动改）
+    # Automatically repair the repairable parts (the rest can be modified manually according to the error message)
     npx eslint src --ext .js --fix
     ;;
   *)
-    echo "未知子命令: $1"
-    echo "可用: (空) | fix"
+    echo "Unknown subcommand: $1"
+    echo "Available: (null) | fix"
     exit 1
     ;;
 esac

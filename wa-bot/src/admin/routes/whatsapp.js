@@ -23,7 +23,7 @@ function registerWhatsappRoutes(app) {
 
     if (!phone || !/^\d{10,15}$/.test(phone)) {
       return res.status(400).json({
-        error: "手机号格式错误，请输入含区号的纯数字（如 601234567890）",
+        error: "The mobile phone number format is wrong, please enter a pure number including the area code (such as 601234567890)",
       });
     }
 
@@ -40,11 +40,11 @@ function registerWhatsappRoutes(app) {
     try {
       const { requestPairingCode } = require("../../bot");
       const code = await requestPairingCode(phone);
-      logger.info("配对码已生成", { phone: phone.slice(0, 5) + "****" });
+      logger.info("Pairing code has been generated", { phone: phone.slice(0, 5) + "****" });
       res.json({ code });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error("请求配对码失败", { error: errMsg, stack: err?.stack });
+      logger.error("Failed to request pairing code", { error: errMsg, stack: err?.stack });
       res.status(500).json({ error: errMsg });
     }
   });

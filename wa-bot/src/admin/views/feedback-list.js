@@ -10,7 +10,7 @@ const { t } = require("../i18n");
 const { htmlLayout } = require("./layout");
 const { escapeHtml } = require("./escapeHtml");
 
-function feedbackListPage(items, stats, lang = "zh", page = 1, totalPages = 1, searchQuery = "", statusFilter = "", typeFilter = "") {
+function feedbackListPage(items, stats, lang = "en", page = 1, totalPages = 1, searchQuery = "", statusFilter = "", typeFilter = "") {
   const title = t("feedback_title", lang) || "Feedback";
 
   let content = "";
@@ -78,7 +78,7 @@ function feedbackListPage(items, stats, lang = "zh", page = 1, totalPages = 1, s
       const typeIcon = item.type === "bug" ? "⬤" : "◯";
       const typeLabel = item.type === "bug" ? t("feedback_type_bug", lang) : t("feedback_type_improvement", lang);
       const statusLabel = item.status === "open" ? t("feedback_status_open", lang) : t("feedback_status_resolved", lang);
-      const submittedAt = new Date(item.submittedAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US");
+      const submittedAt = new Date(item.submittedAt).toLocaleString("en-US");
 
       content += `
         <tr>

@@ -1,23 +1,23 @@
-/* ── 字体引入（Google Fonts CDN） ── */
+/* ── Font introduction (Google Fonts CDN) ── */
     @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
-    /* ── 色彩系统：所有颜色通过 CSS 变量统一管理，方便后续调整 ── */
+    /* ── Color system: All colors are managed uniformly through CSS variables to facilitate subsequent adjustments── */
     :root {
-      --bg-base:        #0F172A;  /* 深板岩底色 */
-      --bg-surface:     #1E293B;  /* 卡片/表格背景 */
-      --bg-surface-2:   #263549;  /* 表头/行悬停 */
-      --border:         #334155;  /* 边界线 */
-      --text-primary:   #E2E8F0;  /* 主文字 */
-      --text-secondary: #94A3B8;  /* 次级文字 */
-      --text-muted:     #64748B;  /* 弱化文字（表头标签等） */
-      --accent-primary: #6366F1;  /* 靛蓝主色（导航线/按钮/悬停条） */
-      --accent-emerald: #10B981;  /* 翠绿（已确认/发送成功） */
-      --accent-amber:   #F59E0B;  /* 琥珀（待提取/待审核） */
-      --accent-blue:    #3B82F6;  /* 蓝（AI 已提取） */
-      --accent-rose:    #F43F5E;  /* 玫红（已拒绝/错误） */
+      --bg-base: #0F172A; /* Dark slate background color */
+      --bg-surface: #1E293B; /* Card/table background */
+      --bg-surface-2: #263549; /* Header/row hover */
+      --border: #334155; /* border line */
+      --text-primary: #E2E8F0; /* Primary text */
+      --text-secondary: #94A3B8; /* Secondary text */
+      --text-muted: #64748B; /* Weaken text (header labels, etc.) */
+      --accent-primary: #6366F1; /* Indigo primary color (navigation line/button/hover bar) */
+      --accent-emerald: #10B981; /* Emerald (confirmed/sent successfully) */
+      --accent-amber: #F59E0B; /* Amber (to be extracted/to be reviewed) */
+      --accent-blue: #3B82F6; /* blue (AI extracted) */
+      --accent-rose: #F43F5E; /* rose red (rejected/error) */
     }
 
-    /* ── 亮色主题：覆盖所有颜色变量，强调色保持不变以维持品牌一致性 ── */
+    /* ── Bright color theme: Covers all color variables, and the accent color remains unchanged to maintain brand consistency ── */
     [data-theme="light"] {
       --bg-base:        #F8FAFC;
       --bg-surface:     #FFFFFF;
@@ -28,30 +28,30 @@
       --text-muted:     #94A3B8;
     }
 
-    /* 亮色下导航背景需单独覆盖（暗色用了 rgba 半透明） */
+    /* The navigation background needs to be covered separately in bright colors (rgba translucency is used in dark colors) */
     [data-theme="light"] nav {
       background: rgba(248, 250, 252, 0.92);
       box-shadow: 0 1px 0 var(--border);
     }
 
-    /* 亮色下徽标发光降低以避免在白底上过亮 */
+    /* Logo luminescence is reduced in bright colors to avoid being too bright on a white background */
     [data-theme="light"] .badge-pending_review { box-shadow: 0 0 6px rgba(245,158,11,0.15); }
     [data-theme="light"] .badge-ai_extracted   { box-shadow: 0 0 6px rgba(59,130,246,0.15); }
     [data-theme="light"] .badge-confirmed      { box-shadow: 0 0 6px rgba(16,185,129,0.15); }
     [data-theme="light"] .badge-rejected       { box-shadow: 0 0 6px rgba(244,63,94,0.12);  }
     [data-theme="light"] .badge-waiting_user_reply { box-shadow: 0 0 6px rgba(139,92,246,0.15); }
 
-    /* 主题切换时所有颜色平滑过渡 */
+    /* All colors transition smoothly when switching themes */
     *, *::before, *::after {
       transition: background-color .25s ease, border-color .25s ease, color .2s ease,
                   box-shadow .25s ease;
     }
-    /* 排除动画元素避免过渡干扰 */
+    /* Exclude animated elements to avoid transition interference */
     .status-dot, .btn, nav a { transition: none; }
     .btn { transition: opacity .15s, transform .1s; }
     nav a { transition: color .15s; }
 
-    /* ── 主题切换按钮 ── */
+    /* ──Theme switching button── */
     .theme-toggle {
       width: 32px; height: 32px; border-radius: 8px;
       background: transparent;
@@ -67,23 +67,6 @@
       transform: rotate(20deg);
     }
 
-    /* ── 语言切换按钮 ── */
-    .lang-toggle {
-      min-width: 40px; height: 32px; border-radius: 8px;
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text-secondary);
-      cursor: pointer; display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 600; padding: 0 8px;
-      transition: background .15s, border-color .15s, transform .1s !important;
-      letter-spacing: .5px;
-    }
-    .lang-toggle:hover {
-      background: var(--bg-surface-2);
-      border-color: var(--text-muted);
-      transform: scale(1.05);
-    }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -93,7 +76,7 @@
       min-height: 100vh;
     }
 
-    /* ── 导航：玻璃态背景 + 顶部靛蓝边界线（品牌记忆点） ── */
+    /* ── Navigation: glassy background + top indigo border line (brand memory point) ── */
     nav {
       background: rgba(15, 23, 42, 0.92);
       backdrop-filter: blur(12px);
@@ -142,7 +125,7 @@
       margin-bottom: 20px;
     }
 
-    /* ── 表格：暗色背景 + 行悬停左侧彩条（视觉焦点引导） ── */
+    /* ── Table: dark background + color bar on the left side of row hover (visual focus guidance) ── */
     table {
       width: 100%;
       border-collapse: collapse;
@@ -175,7 +158,7 @@
       background: var(--bg-surface-2);
     }
 
-    /* ── 状态徽标：宝石色系 + 微发光阴影（暗色背景下可感知） ── */
+    /* ── Status Logo: Jewel Tone + Microluminous Shade (Perceivable on Dark Backgrounds) ── */
     .badge {
       display: inline-block;
       padding: 3px 9px;
@@ -208,7 +191,7 @@
       border: 1px solid rgba(244, 63, 94, 0.3);
       box-shadow: 0 0 8px rgba(244, 63, 94, 0.15);
     }
-    /* 紫色系，区分已完成（绿）和待处理（橙/蓝）的过渡状态 */
+    /* Purple series, distinguishing between completed (green) and pending (orange/blue) transition states */
     .badge-waiting_user_reply {
       background: rgba(139, 92, 246, 0.15);
       color: #a78bfa;
@@ -216,7 +199,7 @@
       box-shadow: 0 0 8px rgba(139, 92, 246, 0.2);
     }
 
-    /* ── 按钮系统 ── */
+    /* ──Button system── */
     .btn {
       display: inline-block;
       padding: 5px 12px;
@@ -243,7 +226,7 @@
     .btn-logout:hover { color: var(--text-primary); border-color: var(--text-secondary); }
     .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
 
-    /* ── 表单辅助元素 ── */
+    /* ── Form auxiliary elements ── */
     .reject-form { margin-top: 6px; display: flex; gap: 6px; align-items: center; }
     .reject-form input {
       flex: 1; padding: 4px 8px;
@@ -257,7 +240,7 @@
     .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
     .empty { text-align: center; padding: 40px; color: var(--text-muted); font-size: 14px; }
 
-    /* ── 统计卡片 ── */
+    /* ── Statistical cards ── */
     .stats-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px; }
     .stat-card { background: var(--bg-surface); padding: 16px; border-radius: 8px; text-align: center; }
     .stat-label { color: var(--text-muted); font-size: 12px; margin-bottom: 4px; }
@@ -268,17 +251,17 @@
     .stat-rejected .stat-value { color: var(--accent-rose); }
     .stat-waiting .stat-value { color: #a78bfa; }
 
-    /* ── 表格横向滚动 ── */
+    /* ── Horizontal scrolling of table ── */
     .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    /* 限定只影响收据表格，避免污染其他页面的 table */
+    /* Limit the effect to only the receipt table to avoid contaminating tables on other pages. */
     .table-wrapper table { min-width: 900px; }
 
-    /* ── 按钮触控优化（仅移动端） ── */
+    /* ── Button touch optimization (mobile version only) ── */
     @media (max-width: 768px) {
       .btn { min-height: 44px; padding: 10px 16px; }
     }
 
-    /* ── 响应式布局 ── */
+    /* ── Responsive layout ── */
     @media (max-width: 768px) {
       nav { flex-wrap: wrap; gap: 8px; padding: 12px; }
       nav .nav-right { flex-wrap: wrap; }
@@ -287,7 +270,7 @@
       .toolbar input, .toolbar select { max-width: 100% !important; }
     }
 
-    /* ── 行内发送表单 ── */
+    /* ── Send form within the line ── */
     td .send-form { display: flex; flex-direction: column; gap: 4px; }
     td .send-form textarea {
       width: 100%; min-height: 48px; max-height: 80px; resize: vertical;
@@ -299,14 +282,14 @@
     td .send-form textarea:focus { border-color: var(--accent-primary); }
     td .send-form .btn-send { align-self: flex-start; padding: 5px 12px; font-size: 12px; }
 
-    /* ── 图片缩略图 ── */
+    /* ── Image thumbnail ── */
     .thumb {
       width: 56px; height: 56px; object-fit: cover; border-radius: 6px;
       cursor: pointer; border: 1px solid var(--border); transition: transform .15s;
     }
     .thumb:hover { transform: scale(1.08); }
 
-    /* ── 图片灯箱 ── */
+    /* ── Picture lightbox ── */
     #lightbox {
       display: none; position: fixed; inset: 0;
       background: rgba(0, 0, 0, .85);
@@ -322,11 +305,11 @@
       color: #fff; cursor: pointer; line-height: 1;
     }
 
-    /* ── AI 结果展示 ── */
+    /* ── AI result display ── */
     .ai-result { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
     .ai-result strong { color: var(--text-primary); }
 
-    /* ── 发送消息表单 ── */
+    /* ──Send message form── */
     .send-form { display: flex; gap: 6px; align-items: flex-start; flex-direction: column; }
     .send-form textarea {
       width: 200px; font-size: 12px; padding: 6px 8px;
@@ -339,7 +322,7 @@
     }
     .send-form textarea:focus { outline: none; border-color: var(--accent-emerald); }
 
-    /* ── 已发送记录 ── */
+    /* ──Sent record── */
     .sent-record { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
     .sent-record .sent-msg {
       background: rgba(16, 185, 129, 0.08);
@@ -350,10 +333,10 @@
     }
     .sent-record .sent-time { color: var(--text-muted); font-size: 10px; }
 
-    /* ── 等宽数据字段（手机号、IC 号） ── */
+    /* ── Equal-width data fields (mobile phone number, IC number) ── */
     .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .5px; }
 
-    /* ── Toast 通知系统 ── */
+    /* ── Toast notification system ── */
     #toast-container {
       position: fixed; top: 64px; right: 24px; z-index: 10000;
       display: flex; flex-direction: column; gap: 8px; pointer-events: none;
@@ -373,7 +356,7 @@
     @keyframes toast-in  { to { transform: translateX(0); opacity: 1; } }
     @keyframes toast-out { to { transform: translateX(120%); opacity: 0; } }
 
-    /* ── 行展开面板 ── */
+    /* ──Row expansion panel── */
     .expand-row { display: none; }
     .expand-row.visible { display: table-row; }
     .expand-panel {
@@ -395,7 +378,7 @@
     tr.group-row.expandable { cursor: pointer; }
     tr.group-row.expandable:hover td { background: var(--bg-surface-2); }
 
-    /* ── 分页按钮 ── */
+    /* ── Paging button ── */
     .btn-page {
       padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;
       border: 1px solid var(--border); background: var(--bg-surface);
@@ -406,7 +389,7 @@
     .btn-page:disabled { opacity: .4; cursor: not-allowed; }
     .btn-page.active { background: var(--accent-primary); color: #fff; border-color: var(--accent-primary); }
 
-    /* ── Toast 通知 ── */
+    /* ── Toast notification ── */
     #toast-container {
       position: fixed;
       top: 20px;

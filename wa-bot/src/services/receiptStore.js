@@ -1,14 +1,14 @@
 "use strict";
 
 /**
- * receiptStore.js — 收据数据层（SQLite 实现）
+ * receiptStore.js — receipt data layer (SQLite implementation)
  *
- * 职责：管理 receipts 表与 data/images/ 的读写。
- * 对外 API 签名与原 JSON 版本完全兼容，调用方零改动。
+ * Responsibility: Manage the reading and writing of receipts table and data/images/.
+ * The external API signature is fully compatible with the original JSON version, with zero changes to the caller.
  *
- * 状态流转：
+ * Status flow:
  *   pending_review  ─┐
- *   ai_extracted    ─┼──[发消息]──→ waiting_user_reply
+ *   ai_extracted ─┼──[Send message]──→ waiting_user_reply
  *   confirmed       ─┤
  *   rejected        ─┘
  *
@@ -28,8 +28,8 @@ function ensureImagesDir() {
 }
 
 /**
- * 生成唯一 ID：时间戳 + 4 位随机数
- * 格式：1714000000000-0042
+ * Generate unique ID: timestamp + 4-digit random number
+ * Format: 1714000000000-0042
  */
 function generateId() {
   const rand = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
@@ -37,7 +37,7 @@ function generateId() {
 }
 
 /**
- * 根据 MIME 类型推断扩展名
+ * Infer extension based on MIME type
  */
 function extFromMime(mimeType) {
   if (!mimeType) return "jpg";
@@ -46,7 +46,7 @@ function extFromMime(mimeType) {
   return "jpg";
 }
 
-/** 将 DB 行转换为对外对象（snake_case → camelCase，aiResult JSON 反序列化） */
+/** Convert DB rows to external objects (snake_case → camelCase, aiResult JSON deserialization) */
 function rowToRecord(row) {
   if (!row) return null;
   return {
@@ -68,12 +68,12 @@ function rowToRecord(row) {
 }
 
 // ─────────────────────────────────────────────
-// 对外接口
+// External interface
 // ─────────────────────────────────────────────
 
 /**
- * 初始化数据层（幂等，可重复调用）
- * 由 index.js 在启动时调用；也可手动调用用于测试。
+ * Initialize the data layer (idempotent, callable repeatedly)
+ * Called by index.js on startup; can also be called manually for testing.
  */
 function init() {
   ensureImagesDir();
@@ -81,14 +81,14 @@ function init() {
 }
 
 /**
- * 保存 WhatsApp 收到的图片，并写入一条 pending_review 记录
+ * Save the image received by WhatsApp and write a pending_review record
  *
- * @param {string} phone         - 发送方 WhatsApp 号码
- * @param {string} base64Data    - 图片 Base64 数据（不含 data:image/... 前缀）
- * @param {string} mimeType      - 图片 MIME 类型
- * @param {string} [ic]          - 用户身份证号（来自 session.ic）
- * @param {string} [name]        - 消费者姓名（来自 session.name）
- * @param {number} [campaignId]  - 当前活跃 Campaign ID（可为 null）
+ * @param {string} phone - Sender WhatsApp number
+ * @param {string} base64Data - Image Base64 data (without data:image/... prefix)
+ * @param {string} mimeType - Image MIME type
+ * @param {string} [ic] - User ID number (from session.ic)
+ * @param {string} [name] - Consumer name (from session.name)
+ * @param {number} [campaignId] - Currently active Campaign ID (can be null)
  * @returns {{ id: string, imageFilename: string }}
  */
 function addPendingReceipt(phone, base64Data, mimeType, ic = null, name = null, campaignId = null) {
@@ -111,7 +111,7 @@ function addPendingReceipt(phone, base64Data, mimeType, ic = null, name = null, 
 }
 
 /**
- * 获取全部记录（按 submittedAt 倒序）
+ * Get all records (in reverse order by submittedAt)
  * @returns {Array}
  */
 function getAll() {
@@ -123,7 +123,7 @@ function getAll() {
 }
 
 /**
- * 按 ID 查询单条记录
+ * Query a single record by ID
  * @param {string} id
  * @returns {object|null}
  */
@@ -134,7 +134,7 @@ function getById(id) {
 }
 
 /**
- * 保存 AI 提取结果，状态流转为 ai_extracted
+ * Save the AI extraction result and the status flow is ai_extracted
  */
 function saveAiResult(id, aiResult) {
   db.init();
@@ -146,7 +146,7 @@ function saveAiResult(id, aiResult) {
 }
 
 /**
- * 人工确认收据，状态流转为 confirmed
+ * Manually confirm the receipt, and the status will change to confirmed
  */
 function confirmReceipt(id, note = "") {
   db.init();
@@ -158,7 +158,7 @@ function confirmReceipt(id, note = "") {
 }
 
 /**
- * 人工拒绝收据，状态流转为 rejected
+ * If the receipt is manually rejected, the status will change to rejected.
  */
 function rejectReceipt(id, note = "") {
   db.init();
@@ -170,7 +170,7 @@ function rejectReceipt(id, note = "") {
 }
 
 /**
- * 人工主动向用户发消息，状态流转为 waiting_user_reply
+ * Manually proactively send messages to users, and the status flow changes to waiting_user_reply
  */
 function sendMessageToUser(id, message) {
   db.init();
@@ -188,10 +188,10 @@ function sendMessageToUser(id, message) {
 }
 
 /**
- * 更新 Receipt 字段（Admin 手动编辑）
+ * Update the Receipt field (Admin manual editing)
  * @param {string} id        - Receipt ID
- * @param {object} updates  - 要更新的字段（如 { ic, name, aiResult }）
- * @param {string} modifiedBy - 修改人（Admin 用户名）
+ * @param {object} updates - the field to update (e.g. { ic, name, aiResult })
+ * @param {string} modifiedBy - Modifier (Admin username)
  */
 function updateReceipt(id, updates, modifiedBy) {
   db.init();
@@ -222,12 +222,12 @@ function updateReceipt(id, updates, modifiedBy) {
 }
 
 /**
- * 记录 Receipt 修改历史
+ * Record Receipt modification history
  * @param {string} receiptId   - Receipt ID
- * @param {string} modifiedBy  - 修改人（Admin 用户名）
- * @param {string} fieldName   - 修改的字段名
- * @param {string} oldValue    - 修改前的值
- * @param {string} newValue    - 修改后的值
+ * @param {string} modifiedBy - Modifier (Admin username)
+ * @param {string} fieldName - modified field name
+ * @param {string} oldValue - the value before modification
+ * @param {string} newValue - modified value
  */
 function addModification(receiptId, modifiedBy, fieldName, oldValue, newValue) {
   db.init();
@@ -240,7 +240,7 @@ function addModification(receiptId, modifiedBy, fieldName, oldValue, newValue) {
 }
 
 /**
- * 获取 Receipt 修改历史
+ * Get Receipt modification history
  * @param {string} receiptId - Receipt ID
  * @returns {Array}
  */
@@ -253,7 +253,7 @@ function getModifications(receiptId) {
 }
 
 /**
- * 获取当前活跃 Campaign ID
+ * Get the currently active Campaign ID
  * @returns {number|null}
  */
 async function getActiveCampaign() {
@@ -265,7 +265,7 @@ async function getActiveCampaign() {
 }
 
 /**
- * 返回图片的绝对磁盘路径（供 Express res.sendFile 使用）
+ * Returns the absolute disk path to the image (for use by Express res.sendFile)
  */
 function getImagePath(filename) {
   return path.join(IMAGES_DIR, filename);

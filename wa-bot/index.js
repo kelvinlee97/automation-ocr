@@ -1,7 +1,7 @@
 /**
- * WhatsApp Bot 入口
- * 启动顺序：Express 先起（立即可访问 /admin/qr），Bot 后初始化
- * 通过回调注入 QR 和 client，避免阻塞 HTTP 服务
+ * WhatsApp Bot entrance
+ * Startup sequence: Express first (/admin/qr can be accessed immediately), followed by Bot.
+ * Inject QR and client through callbacks to avoid blocking the HTTP service
  */
 
 const { createBot } = require('./src/bot');
@@ -27,54 +27,54 @@ async function tryMigrateFromJson() {
     const existingUsers    = db.db.prepare('SELECT COUNT(*) as c FROM admin_users').get().c;
     if (existingReceipts > 0 || existingSessions > 0 || existingUsers > 0) return;
 
-    logger.info('检测到旧 JSON 数据，自动触发迁移...');
-    // 在子进程中运行迁移脚本，避免污染当前进程的模块缓存
+    logger.info('Old JSON data detected, migration automatically triggered...');
+    // Run the migration script in a child process to avoid polluting the module cache of the current process
     const { execFileSync } = require('child_process');
     execFileSync(process.execPath, [
         path.join(__dirname, 'scripts/migrate-json-to-sqlite.js'), '--apply',
     ], { stdio: 'inherit', env: process.env });
-    logger.info('JSON → SQLite 迁移完成');
+    logger.info('JSON → SQLite migration completed');
 }
 
 async function main() {
-    logger.info('启动 WhatsApp Bot (AI 版)...');
+    logger.info('Launch WhatsApp Bot (AI version)...');
 
     try {
-        // 1. 初始化 SQLite 数据库
+        // 1. Initialize SQLite database
         db.init();
-        logger.info('SQLite 数据库初始化完成');
+        logger.info('SQLite database initialization completed');
 
-        // 2. 幂等自动迁移：若存在旧 JSON 且 DB 为空，则迁移
+        // 2. Idempotent automatic migration: If old JSON exists and DB is empty, migrate
         await tryMigrateFromJson();
 
-        // 3. 初始化会话存储
+        // 3. Initialize session storage
         sessionManager.init();
-        logger.info('会话存储初始化完成');
+        logger.info('Session storage initialization completed');
 
-        // 4. 初始化 Excel 文件
+        // 4. Initialize Excel file
         await initExcel();
-        logger.info('Excel 文件初始化完成');
+        logger.info('Excel file initialization completed');
 
-        // 5. Express 立即启动
+        // 5. Express starts immediately
         startAdminServer();
 
-        // 6. Bot 初始化（失败时不阻塞 Admin 后台）
+        // 6. Bot initialization (does not block the Admin background when it fails)
         try {
             await createBot({
                 onQR: (dataUri) => setQR(dataUri),
                 onReady: (client) => setClient(client),
-                // qr 事件触发后通知 adminServer：client 已进入认证窗口期，可接受配对码请求
+                // After the qr event is triggered, the adminServer is notified: the client has entered the authentication window period and can accept pairing code requests.
                 onPairingCodeReady: () => setPairingCodeReady(true),
-                // disconnected 事件触发后通知 adminServer 重置连接状态，防止后台仍显示"已连接"
+                // After the disconnected event is triggered, the adminServer is notified to reset the connection status to prevent "Connected" from still being displayed in the background.
                 onDisconnected: () => setDisconnected(),
             });
-            logger.info('Bot 已就绪，系统全面启动');
+            logger.info('Bot is ready and the system is fully started');
         } catch (botError) {
             setBotError(botError.message);
-            logger.warn('Bot 初始化失败，Admin 后台仍可用', { error: botError.message });
+            logger.warn('Bot initialization failed; the admin panel is still available', { error: botError.message });
         }
 
-        // 全局错误处理
+        // Global error handling
         process.on('unhandledRejection', (reason) => {
             logger.error('Unhandled Rejection', { reason: reason?.stack || reason });
         });
@@ -84,7 +84,7 @@ async function main() {
         });
 
     } catch (error) {
-        logger.error('启动失败:', error);
+        logger.error('Startup failed:', error);
         process.exit(1);
     }
 }

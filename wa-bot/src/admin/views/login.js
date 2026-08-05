@@ -2,7 +2,7 @@
 
 const { t } = require("../i18n");
 
-function loginPage(errorMsg = "", lang = "zh", showSetupLink = false) {
+function loginPage(errorMsg = "", lang = "en", showSetupLink = false) {
   const bottomLinks = `
     <div class="card-footer">
       ${showSetupLink ? `<a href="/admin/setup" class="footer-link setup-link">🚀 ${t('first_time_setup_link', lang)}</a>` : ""}
@@ -30,7 +30,7 @@ function loginPage(errorMsg = "", lang = "zh", showSetupLink = false) {
       overflow: hidden;
     }
 
-    /* 背景装饰：微弱网格 */
+    /* Background Decoration: Faint Grid */
     body::before {
       content: '';
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -41,7 +41,7 @@ function loginPage(errorMsg = "", lang = "zh", showSetupLink = false) {
       pointer-events: none;
     }
 
-    /* 背景装饰：顶部光晕 */
+    /* Background decoration: top halo */
     body::after {
       content: '';
       position: fixed; top: -30%; left: 50%; transform: translateX(-50%);
@@ -70,7 +70,7 @@ function loginPage(errorMsg = "", lang = "zh", showSetupLink = false) {
       to   { opacity: 1; transform: translateY(0) scale(1); }
     }
 
-    /* 卡片顶部微光边框 */
+    /* Glimmer border on top of card */
     .card::before {
       content: '';
       position: absolute; top: 0; left: 20%; right: 20%; height: 1px;
@@ -160,7 +160,7 @@ function loginPage(errorMsg = "", lang = "zh", showSetupLink = false) {
 </html>`;
 }
 
-function setupPage(errorMsg = "", lang = "zh") {
+function setupPage(errorMsg = "", lang = "en") {
   return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>

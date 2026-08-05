@@ -1,15 +1,15 @@
 "use strict";
 
 /**
- * db/index.js — SQLite 单例
+ * db/index.js — SQLite singleton
  *
- * 使用 better-sqlite3（同步 API）避免回调地狱。
- * PRAGMA WAL：多进程并发读不阻塞写，适合 WhatsApp Bot 场景。
- * PRAGMA foreign_keys：强制外键约束（当前 schema 无外键，为未来扩展预留）。
+ * Use better-sqlite3 (synchronous API) to avoid callback hell.
+ * PRAGMA WAL: Multi-process concurrent reading without blocking writing, suitable for WhatsApp Bot scenarios.
+ * PRAGMA foreign_keys: enforces foreign key constraints (current schema has no foreign keys, reserved for future expansion).
  *
- * 导出：
- *   init()  — 创建表、建索引（幂等，可重复调用）
- *   get db  — better-sqlite3 Database 实例（供各 store 使用）
+ * Export:
+ *   init() — create tables and indexes (idempotent, can be called repeatedly)
+ *   get db — better-sqlite3 Database instance (for use by each store)
  */
 
 const Database = require("better-sqlite3");
@@ -24,7 +24,7 @@ const SCHEMA = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf-8");
 let _db = null;
 
 /**
- * 返回已初始化的 DB 实例（懒创建）
+ * Returns the initialized DB instance (lazy creation)
  * @returns {import('better-sqlite3').Database}
  */
 function getDb() {
@@ -40,8 +40,8 @@ function getDb() {
 }
 
 /**
- * 创建所有表和索引（幂等）
- * 在应用启动时调用一次即可。
+ * Create all tables and indexes (idempotent)
+ * Just call it once when the application starts.
  */
 function init() {
   const db = getDb();
@@ -49,7 +49,7 @@ function init() {
 }
 
 /**
- * 关闭数据库连接（测试时用）
+ * Close the database connection (for testing)
  */
 function close() {
   if (_db) {
@@ -59,7 +59,7 @@ function close() {
 }
 
 /**
- * 重置单例（测试时用，允许更换 DATA_DIR 后重建）
+ * Reset singleton (used for testing, allowing DATA_DIR to be replaced and then rebuilt)
  */
 function _reset() {
   close();

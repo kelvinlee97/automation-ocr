@@ -1,45 +1,45 @@
 #!/usr/bin/env bash
-# docker.sh —— Docker 容器操作（在项目根目录执行）
-# 用法:
-#   bash scripts/docker.sh up        # 拉镜像 + 后台启动容器
-#   bash scripts/docker.sh logs      # 看实时日志
-#   bash scripts/docker.sh down      # 停掉容器
-#   bash scripts/docker.sh restart   # 拉新镜像并重启（pull && up -d，连贯执行不拆）
-#   bash scripts/docker.sh shell     # 进入容器内部排查
+# docker.sh - Docker container operation (executed in the project root directory)
+# usage:
+#   bash scripts/docker.sh up # Pull image + start container in background
+#   bash scripts/docker.sh logs # View real-time logs
+#   bash scripts/docker.sh down # Stop the container
+#   bash scripts/docker.sh restart # Pull a new image and restart (pull && up -d, continuous execution without tearing down)
+#   bash scripts/docker.sh shell # Enter the container to troubleshoot
 #
-# 数据存放位置：
-#   - 收据图片 / Excel：宿主机 ./data/，容器内 /opt/claimflow/data/
-#   - WhatsApp 登录凭据：./data/wwebjs_auth/（删除 = 强制重新扫码）
+# Data storage location:
+#   - Receipt image / Excel: host ./data/, container /opt/claimflow/data/
+#   - WhatsApp login credentials: ./data/wwebjs_auth/ (delete = force re-scan)
 
 set -e
 
-# 切到项目根目录（docker compose 必须在根目录跑，不是 wa-bot/）
+# Switch to the project root directory (docker compose must be run in the root directory, not wa-bot/)
 cd "$(dirname "$0")/.."
 
 case "${1:-}" in
   up)
-    # 拉镜像 + 后台启动
+    # Pull image + start in background
     docker compose up -d
     ;;
   logs)
-    # 跟随查看 wa-bot 服务日志
+    # Follow to view wa-bot service log
     docker compose logs -f wa-bot
     ;;
   down)
-    # 停止并移除容器
+    # Stop and remove the container
     docker compose down
     ;;
   restart)
-    # 拉最新镜像并重启容器（连贯命令，必须用 && 一气呵成）
+    # Pull the latest image and restart the container (consecutive commands must be completed in one go with &&)
     docker compose pull && docker compose up -d
     ;;
   shell)
-    # 进入容器内部 shell
+    # Enter the shell inside the container
     docker compose exec wa-bot sh
     ;;
   *)
-    echo "未知子命令: $1"
-    echo "可用: up | logs | down | restart | shell"
+    echo "Unknown subcommand: $1"
+    echo "Available: up | logs | down | restart | shell"
     exit 1
     ;;
 esac

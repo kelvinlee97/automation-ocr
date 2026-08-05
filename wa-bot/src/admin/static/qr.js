@@ -73,7 +73,7 @@
         return;
       }
     } catch (_err) {
-      // 网络异常静默处理，下次继续轮询。
+      // Network exceptions are handled silently and polling will continue next time.
     }
 
     setTimeout(checkStatus, CHECK_INTERVAL);

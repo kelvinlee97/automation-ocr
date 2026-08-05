@@ -23,7 +23,7 @@ function registerAuthRoutes(app) {
     const result = adminUserService.createUser(username, password);
     if (!result.ok) return res.send(setupPage(result.error, lang));
 
-    logger.info("首次设置完成，管理员账号已创建", { username });
+    logger.info("Initial setup completed; the administrator account was created.", { username });
     res.redirect("/admin/login");
   });
 
@@ -42,7 +42,7 @@ function registerAuthRoutes(app) {
       req.session.username = username;
       req.session.save((err) => {
         if (err) {
-          logger.error("session 写入失败", { error: String(err) });
+          logger.error("session write failed", { error: String(err) });
           return res.send(loginPage(t('login_fail', lang), lang));
         }
         res.redirect("/admin");
@@ -55,7 +55,7 @@ function registerAuthRoutes(app) {
   app.post("/admin/logout", (req, res) => {
     req.session.destroy((err) => {
       if (err) {
-        logger.error("session 销毁失败（登出）", { error: String(err) });
+        logger.error("Session destruction failed (logout)", { error: String(err) });
       }
       res.redirect("/admin/login");
     });

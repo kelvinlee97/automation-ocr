@@ -1,6 +1,6 @@
 /**
- * WhatsApp Bot 初始化模块
- * 封装 whatsapp-web.js 的初始化、QR 码展示、断线重连逻辑
+ * WhatsApp Bot initialization module
+ * Encapsulates the initialization, QR code display, disconnection and reconnection logic of whatsapp-web.js
  */
 
 const fs = require('fs');
@@ -9,25 +9,25 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const { handleMessage } = require('./messageHandler');
 const logger = require('./utils/logger');
 
-// 断线后最大重连次数
+// Maximum number of reconnections after disconnection
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 5000;
 
-// Chromium user data 目录，与 LocalAuth dataPath 保持一致
+// Chromium user data directory, consistent with LocalAuth dataPath
 const AUTH_DATA_PATH = '.wwebjs_auth';
 
 /**
- * 清理 Chromium 遗留的 Singleton 锁文件
- * 容器重启后旧的 SingletonLock/SingletonCookie/SingletonSocket 仍残留在
- * 持久化 volume 中，导致新进程认为 profile 已被其他主机占用而拒绝启动。
+ * Clean up Chromium’s legacy Singleton lock files
+ * The old SingletonLock/SingletonCookie/SingletonSocket still remains after the container is restarted.
+ * In the persistent volume, the new process will think that the profile is occupied by other hosts and refuse to start.
  *
- * LocalAuth 目录结构：
- *   未设 clientId：<dataPath>/session/
- *   设了 clientId：<dataPath>/session-<clientId>/
- * 本项目未设 clientId，因此实际路径为 .wwebjs_auth/session/
+ * LocalAuth directory structure:
+ *   clientId not set: <dataPath>/session/
+ *   Set clientId: <dataPath>/session-<clientId>/
+ * This project does not set a clientId, so the actual path is .wwebjs_auth/session/
  */
 function clearChromiumSingletonLocks() {
-	// 未设 clientId 时 LocalAuth 使用 "session" 目录（无后缀）
+	// When clientId is not set, LocalAuth uses the "session" directory (no suffix)
 	const sessionDir = path.join(AUTH_DATA_PATH, 'session');
 	const lockPatterns = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
 
@@ -35,31 +35,31 @@ function clearChromiumSingletonLocks() {
 		const lockPath = path.join(sessionDir, name);
 		try {
 			fs.unlinkSync(lockPath);
-			logger.info(`已清理 Chromium 锁文件: ${lockPath}`);
+			logger.info(`Cleaned Chromium lock file: ${lockPath}`);
 		} catch (err) {
-			// ENOENT 表示文件不存在，属于正常情况（首次启动或已清理），不需要记录
+			// ENOENT indicates that the file does not exist, which is a normal situation (first startup or has been cleaned) and does not need to be recorded.
 			if (err.code !== 'ENOENT') {
-				logger.warn(`清理锁文件失败: ${lockPath}`, { error: err.message });
+				logger.warn(`Failed to clean lock file: ${lockPath}`, { error: err.message });
 			}
 		}
 	}
 }
 
 
-// 模块级 client 引用，供 requestPairingCode 使用
-// 不直接导出 client，避免外部持有引用造成生命周期混乱
+// Module-level client reference, used by requestPairingCode
+// Do not export the client directly to avoid life cycle confusion caused by external references.
 let _activeClient = null;
 
 /**
- * 创建并启动 WhatsApp Bot
- * 使用 LocalAuth 持久化 session，重启后无需重新扫码
+ * Create and launch WhatsApp Bot
+ * Use LocalAuth to persist the session, and there is no need to re-scan the code after restarting
  * @param {Object} callbacks
- * @param {Function} [callbacks.onQR]               - QR 码刷新时回调，参数为 base64 data URI
- * @param {Function} [callbacks.onReady]             - Bot 就绪时回调，参数为 client 实例
- * @param {Function} [callbacks.onPairingCodeReady]  - client 进入可请求配对码状态时回调（qr 事件触发后）
+ * @param {Function} [callbacks.onQR] - callback when the QR code is refreshed, the parameter is base64 data URI
+ * @param {Function} [callbacks.onReady] - Callback when Bot is ready, the parameter is the client instance
+ * @param {Function} [callbacks.onPairingCodeReady] - callback when the client enters the state where the pairing code can be requested (after the qr event is triggered)
  */
 async function createBot({ onQR, onReady, onPairingCodeReady, onDisconnected } = {}) {
-	// 每次启动前清理残留锁文件，防止容器重启后 Chromium 因 profile 被"占用"而无法启动
+	// Clean up the residual lock files before each startup to prevent Chromium from being unable to start due to the profile being "occupied" after the container is restarted.
 	clearChromiumSingletonLocks();
 
 	const client = new Client({
@@ -69,20 +69,20 @@ async function createBot({ onQR, onReady, onPairingCodeReady, onDisconnected } =
 		puppeteer: {
 			headless: true,
 			args: [
-				// ── 安全 / 沙盒（容器环境必需）──────────────────────────
+				// ── Security/Sandbox (required for container environment)─────────────────────────
 				'--no-sandbox',
 				'--disable-setuid-sandbox',
 
-				// ── 内存优化（914MB 低内存机器）────────────────────────
-				// /dev/shm 在 Docker 中默认只有 64MB，改用 /tmp 避免共享内存不足崩溃
+				// ── Memory optimization (914MB low memory machine)───────────────────────
+				// /dev/shm is only 64MB by default in Docker. Use /tmp instead to avoid crashes due to insufficient shared memory.
 				'--disable-dev-shm-usage',
-				// 禁用 GPU 进程，无头模式不需要，可节省 ~40MB
+				// Disable GPU process, not needed in headless mode, save ~40MB
 				'--disable-gpu',
-				// 限制 V8 老生代堆上限，WhatsApp Web 正常运行无需超过此值
+				// Limit the upper limit of V8 old generation heap. WhatsApp Web does not need to exceed this value for normal operation.
 				'--js-flags=--max-old-space-size=128',
-				// 只保留一个 renderer 进程，避免多 tab 时内存倍增
+				// Keep only one renderer process to avoid doubling the memory when there are multiple tabs
 				'--renderer-process-limit=1',
-				// 禁用不必要的后台功能，减少后台内存占用
+				// Disable unnecessary background functions to reduce background memory usage
 				'--disable-background-networking',
 				'--disable-default-apps',
 				'--disable-extensions',
@@ -93,166 +93,166 @@ async function createBot({ onQR, onReady, onPairingCodeReady, onDisconnected } =
 		},
 	});
 
-	// 保存到模块级，供 requestPairingCode 在 qr 事件后使用
+	// Save to module level for requestPairingCode to use after qr event
 	_activeClient = client;
 
 	let reconnectAttempts = 0;
 	let isReconnecting = false;
 
-	// QR 码扫码（首次登录或 session 失效时触发）
+	// QR code scanning (triggered when logging in for the first time or session expires)
 	client.on('qr', async (qr) => {
-		logger.info('请扫描二维码登录 WhatsApp');
-		// SSH 场景下可将此字符串复制到 QR 生成工具（如 qr.io）扫码
+		logger.info('Please scan the QR code to log in to WhatsApp');
+		// In the SSH scenario, you can copy this string to a QR generation tool (such as qr.io) and scan the code
 		logger.debug('QR data: %s', qr);
-		// 将 QR 转为 base64 data URI 注入管理后台 Web 页面
+		// Convert QR to base64 data URI and inject it into the management backend web page
 		if (onQR) {
 			try {
 				const QRCode = require('qrcode');
 				const dataUri = await QRCode.toDataURL(qr);
 				onQR(dataUri);
 			} catch (err) {
-				logger.error('QR 码转 base64 失败', { error: err.message });
+				logger.error('QR code conversion to base64 failed', { error: err.message });
 			}
 		}
 
-		// qr 事件触发说明 client 已初始化且进入认证窗口期，此时可调用 requestPairingCode
-		// 通知 adminServer：现在可以接受配对码请求了
+		// The qr event trigger indicates that the client has been initialized and entered the authentication window period. At this time, requestPairingCode can be called.
+		// Notify adminServer: Pairing code requests can now be accepted
 		if (onPairingCodeReady) onPairingCodeReady();
 	});
 
-	// 登录成功：此时才注册消息监听，避免处理 ready 之前同步的离线积压消息
+	// Login successful: Only register message monitoring at this time to avoid processing offline backlog messages synchronized before ready
 	client.on('ready', () => {
 		reconnectAttempts = 0;
-		logger.info('WhatsApp Bot 已就绪');
+		logger.info('WhatsApp Bot is ready');
 
-		// 记录就绪时间戳，用于过滤 ready 后仍陆续到达的旧消息
+		// Record the ready timestamp, used to filter old messages that still arrive after ready
 		const readyTimestamp = Date.now() / 1000;
 
-		// 先移除旧的监听器（断线重连时 ready 会再次触发），防止重复注册
+		// Remove the old listener first (ready will be triggered again when disconnected and reconnected) to prevent repeated registration
 		client.removeAllListeners('message');
 		client.on('message', async (message) => {
 			if (message.fromMe) return;
 			if (!message.timestamp || message.timestamp < readyTimestamp) return;
 
-			// 通过 Contact 对象获取真实手机号，避免 LID（@lid）导致号码不可读
-			// 多层 fallback 策略，逐层尝试获取真实手机号
+			// Obtain the real mobile phone number through the Contact object to avoid the LID (@lid) causing the number to be unreadable
+			// Multi-layer fallback strategy, trying to obtain the real mobile phone number layer by layer
 			let realPhone = message.from;
 			try {
 				const contact = await message.getContact();
 
-				// Layer 1: 直接使用 contact.number（最可靠）
+				// Layer 1: Use contact.number directly (most reliable)
 				if (contact?.number) {
 					realPhone = contact.number;
 				}
-				// Layer 2: contact.id._serialized 为 @c.us 格式（真实手机号）
+				// Layer 2: contact.id._serialized is in @c.us format (real mobile phone number)
 				else if (contact?.id?._serialized && contact.id._serialized.endsWith('@c.us')) {
 					realPhone = contact.id._serialized.replace('@c.us', '');
-					logger.debug('从 contact.id 解析到真实手机号', { from: message.from, resolved: realPhone });
+					logger.debug('Resolved real phone number from contact.id', { from: message.from, resolved: realPhone });
 				}
-				// Layer 3: 尝试通过 client.getContactById 再次查询
+				// Layer 3: Try to query again via client.getContactById
 				else if (client && typeof client.getContactById === 'function') {
 					const contactById = await client.getContactById(message.from);
 					if (contactById?.number) {
 						realPhone = contactById.number;
-						logger.debug('从 getContactById 解析到真实手机号', { from: message.from, resolved: realPhone });
+						logger.debug('Resolved real phone number from getContactById', { from: message.from, resolved: realPhone });
 					} else if (contactById?.id?._serialized && contactById.id._serialized.endsWith('@c.us')) {
 						realPhone = contactById.id._serialized.replace('@c.us', '');
-						logger.debug('从 getContactById.id 解析到真实手机号', { from: message.from, resolved: realPhone });
+						logger.debug('Resolved real phone number from getContactById.id', { from: message.from, resolved: realPhone });
 					}
 				}
 			} catch (err) {
-				logger.warn('获取真实手机号失败，回退到 message.from', { error: err.message });
+				logger.warn('Failed to obtain the real mobile phone number, falling back to message.from', { error: err.message });
 			}
 
-			// 最终检查：如果仍是 @lid 格式，保留完整后缀以便后台识别
-			// 不裁剪 @lid，让 adminServer 能区分 LID 和真实手机号
+			// Final check: If it is still in @lid format, keep the complete suffix for background recognition
+			// Do not clip @lid so that adminServer can distinguish between LID and real mobile phone number
 			if (!realPhone.includes('@')) {
-				// 纯数字（已解析到真实手机号），补充 @c.us 后缀保持统一格式
+				// Pure numbers (parsed to real mobile phone numbers), add @c.us suffix to maintain a unified format
 				realPhone = `${realPhone}@c.us`;
 			}
 
 			await handleMessage(message, realPhone);
 		});
 
-		// 通知外部（adminServer）client 已就绪
+		// Notify external (adminServer) client that client is ready
 		if (onReady) onReady(client);
 	});
 
-	// 认证失败
+	// Authentication failed
 	client.on('authenticated', () => {
-                logger.info('WhatsApp 认证成功');
+                logger.info('WhatsApp authentication successful');
         });
 
-        // 认证失败
+        // Authentication failed
         client.on('auth_failure', (msg) => {
-		logger.error('WhatsApp 认证失败，请删除 .wwebjs_auth 目录后重新扫码', { msg });
+		logger.error('WhatsApp authentication failed, please delete the .wwebjs_auth directory and scan the code again', { msg });
 	});
 
-	// 断线处理：指数退避重连
+	// Disconnection handling: exponential backoff reconnection
 	client.on('disconnected', async (reason) => {
-		logger.warn('WhatsApp 已断线', { reason, reconnectAttempts });
+		logger.warn('WhatsApp disconnected', { reason, reconnectAttempts });
 
-		// 立即通知 adminServer 重置连接状态，确保后台不再显示"已连接"
+		// Immediately notify adminServer to reset the connection status and ensure that "Connected" is no longer displayed in the background
 		if (onDisconnected) onDisconnected();
 
-		// 防止 disconnected 事件多次触发导致并发重连
+		// Prevent the disconnected event from being triggered multiple times causing concurrent reconnection
 		if (isReconnecting) {
-			logger.warn('已有重连任务进行中，跳过本次触发');
+			logger.warn('A reconnection is already in progress; skipping this event');
 			return;
 		}
 
 		if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-			logger.error('达到最大重连次数，请手动重启服务');
+			logger.error('The maximum number of reconnections has been reached. Please restart the service manually.');
 			process.exit(1);
 		}
 
 		const delay = RECONNECT_DELAY_MS * Math.pow(2, reconnectAttempts);
 		reconnectAttempts++;
 		isReconnecting = true;
-		logger.info(`${delay / 1000} 秒后尝试第 ${reconnectAttempts} 次重连...`);
+		logger.info(`Attempting reconnect ${reconnectAttempts} in ${delay / 1000} seconds...`);
 
 		setTimeout(async () => {
 			try {
-				// 断线重连前同样需要清理锁文件，防止 Chromium 异常退出后残留锁导致重连失败
+				// You also need to clean up the lock file before disconnecting and reconnecting to prevent residual locks from causing reconnection failure after Chromium exits abnormally.
 				clearChromiumSingletonLocks();
 				await client.initialize();
 			} catch (err) {
-				logger.error('重连失败', { error: err.message });
+				logger.error('Reconnection failed', { error: err.message });
 			} finally {
 				isReconnecting = false;
 			}
 		}, delay);
 	});
 
-	// 启动 WhatsApp 连接，触发 QR 码生成
+	// Start a WhatsApp connection, triggering QR code generation
 	await client.initialize();
 
 	return client;
 }
 
 /**
- * 向已连接的 WhatsApp 客户端请求配对码
- * 必须在 qr 事件触发后（client 已初始化但未认证）调用
- * @param {string} phone - 含国际区号的纯数字手机号，如 "601234567890"
- * @returns {Promise<string>} 8 位配对码，如 "WXYZ-ABCD"
+ * Request a pairing code from the connected WhatsApp client
+ * Must be called after the qr event is triggered (the client has been initialized but not authenticated)
+ * @param {string} phone - a purely numeric mobile phone number including international area code, such as "601234567890"
+ * @returns {Promise<string>} 8-digit matching code, such as "WXYZ-ABCD"
  */
 async function requestPairingCode(phone) {
 	if (!_activeClient) {
-		throw new Error('WhatsApp client 尚未初始化');
+		throw new Error('WhatsApp client has not been initialized yet');
 	}
 
 	const page = _activeClient.pupPage;
 
-	// whatsapp-web.js 的 requestPairingCode() 在 page.evaluate() 中调用
-	// window.onCodeReceivedEvent(code)，并直接 return 其返回值作为配对码。
-	// QR 模式启动时该函数未被注册，必须在调用前手动注入。
+	// requestPairingCode() of whatsapp-web.js is called in page.evaluate()
+	// window.onCodeReceivedEvent(code), and directly return its return value as the pairing code.
+	// This function is not registered when QR mode is started and must be manually injected before calling.
 	//
-	// 不使用 page.exposeFunction()：它依赖 CDP binding，注入的函数在浏览器侧
-	// 是异步的（返回 Promise），而库代码 `return window.onCodeReceivedEvent(...)`
-	// 期望同步返回值，两者不兼容。
+	// Do not use page.exposeFunction(): it relies on CDP binding, and the injected function is on the browser side
+	// is asynchronous (returns a Promise), whereas the library code `return window.onCodeReceivedEvent(...)`
+	// Expects synchronous return values, the two are incompatible.
 	//
-	// 用 page.evaluate() 直接在浏览器侧赋值：纯浏览器 JS 执行，
-	// 函数同步返回 code，与库的调用约定完全一致。
+	// Use page.evaluate() to assign values directly on the browser side: pure browser JS execution,
+	// The function returns code synchronously, which is completely consistent with the library's calling convention.
 	/* eslint-env browser */
 	await page.evaluate(() => {
 		if (typeof window.onCodeReceivedEvent !== 'function') {
@@ -260,18 +260,18 @@ async function requestPairingCode(phone) {
 		}
 	});
 
-	// whatsapp-web.js 要求手机号为纯数字字符串（含国际区号）
+	// whatsapp-web.js requires the mobile phone number to be a pure numeric string (including international area code)
 	const result = await _activeClient.requestPairingCode(phone);
 
-	// 诊断：打印原始返回值类型和内容，帮助判断 WA 内部状态
-	logger.debug('requestPairingCode 原始返回值', { type: typeof result, value: String(result).slice(0, 20) });
+	// Diagnosis: Print the original return value type and content to help determine the internal state of WA
+	logger.debug('requestPairingCode raw return value', { type: typeof result, value: String(result).slice(0, 20) });
 
-	// 库在某些错误状态下会返回短字符串错误码（如 "t"）而非抛出异常
-	// WhatsApp 返回格式不稳定，有时含连字符（ABCD-1234），有时为纯 8 位（ABCD1234）
-	// 用正则匹配合法配对码：8 位字母数字，中间连字符可选
+	// The library will return a short string error code (such as "t") instead of throwing an exception in certain error conditions
+	// WhatsApp return format is unstable, sometimes with hyphens (ABCD-1234), sometimes pure 8-bit (ABCD1234)
+	// Use regular matching to match the legal pairing code: 8 alphanumeric characters, optional hyphen in the middle
 	const PAIRING_CODE_PATTERN = /^[A-Z0-9]{4}-?[A-Z0-9]{4}$/i;
 	if (!result || typeof result !== 'string' || !PAIRING_CODE_PATTERN.test(result)) {
-		throw new Error(`获取配对码失败，WA 返回：${String(result)}`);
+		throw new Error(`Failed to obtain pairing code, WA returns: ${String(result)}`);
 	}
 
 	return result;

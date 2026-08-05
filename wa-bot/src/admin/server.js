@@ -29,7 +29,7 @@ function createApp(sessionStore) {
 function startAdminServer() {
   const app = createApp();
   app.listen(ADMIN_PORT, () => {
-    logger.info(`管理后台已启动，监听端口 ${ADMIN_PORT}`);
+    logger.info(`Admin panel started on port ${ADMIN_PORT}`);
   });
 }
 

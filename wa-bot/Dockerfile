@@ -2,8 +2,8 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# 安装 whatsapp-web.js 内嵌 Chromium 所需的系统库
-# 这是在干净 Ubuntu/Debian 环境中运行的必要条件
+# Install the system libraries required for whatsapp-web.js to embed Chromium
+# This is necessary to run in a clean Ubuntu/Debian environment
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgbm-dev \
     libasound2 \
@@ -23,16 +23,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# 先复制 package.json，利用 layer 缓存
+# First copy package.json and use layer caching
 COPY package.json package-lock.json* ./
-# npm ci 严格按 lockfile 安装，确保镜像与开发环境依赖一致
+# npm ci is installed strictly according to the lockfile to ensure that the image and development environment dependencies are consistent.
 RUN npm ci --omit=dev
 
-# 复制 bot 代码
+# Copy bot code
 COPY . .
 
-# 代码中相对路径会解析到 /config/，但 docker-compose 挂载在 /app/config/
-# 创建符号链接让两条路径都能正确访问配置文件
+# The relative path in the code will resolve to /config/, but docker-compose is mounted at /app/config/
+# Create symbolic links so that both paths can correctly access the configuration file
 RUN ln -s /app/config /config
 
 CMD ["node", "index.js"]

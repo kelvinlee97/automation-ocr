@@ -1,14 +1,14 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`HTML 快照基线 qrPage - 包含 QR 相关关键元素: qrPage title 1`] = `"<title>扫码登录 — ClaimFlow 管理后台</title>"`;
+exports[`HTML snapshot baseline qrPage - Contains key QR related elements: qrPage title 1`] = `"<title>Scan to Login — ClaimFlow Admin</title>"`;
 
-exports[`HTML 快照基线 receiptsPage - 有数据时含关键元素（badge、table）: receiptsPage badge classes 1`] = `
+exports[`HTML snapshot baseline receiptsPage - contains key elements (badge, table) when there is data: receiptsPage badge classes 1`] = `
 [
   "class="badge badge-pending_review"",
   "class="badge badge-pending_review"",
 ]
 `;
 
-exports[`HTML 快照基线 receiptsPage - 空列表包含 empty 提示（无 table）: receiptsPage title 1`] = `"<title>收据审核 — ClaimFlow 管理后台</title>"`;
+exports[`HTML snapshot baseline receiptsPage - empty list contains empty hint (no table): receiptsPage title 1`] = `"<title>Receipt Audit — ClaimFlow Admin</title>"`;
 
-exports[`HTML 快照基线 usersPage - 包含用户管理关键元素: usersPage title 1`] = `"<title>用户管理 — ClaimFlow 管理后台</title>"`;
+exports[`HTML snapshot baseline usersPage - contains key elements of user management: usersPage title 1`] = `"<title>User Management — ClaimFlow Admin</title>"`;

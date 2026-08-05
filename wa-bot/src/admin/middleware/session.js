@@ -12,7 +12,7 @@ const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 function createSessionMiddleware(sessionStore) {
   if (!process.env.SESSION_SECRET && !sessionStore) {
-    logger.warn("未配置 SESSION_SECRET，将使用随机值——重启后 cookie 签名失效，用户须重新登录");
+    logger.warn("If SESSION_SECRET is not configured, a random value will be used - the cookie signature will become invalid after restarting and the user must log in again");
   }
 
   const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
@@ -29,7 +29,7 @@ function createSessionMiddleware(sessionStore) {
       });
       state.setSessionStore(store);
     } catch (err) {
-      logger.error("FileStore 初始化失败，请检查 SESSION_DIR 是否可写", {
+      logger.error("FileStore initialization failed, please check whether SESSION_DIR is writable", {
         path: SESSION_DIR,
         error: err.message,
       });

@@ -38,7 +38,7 @@ function registerReceiptRoutes(app) {
       res.send(receiptsPage(receipts, lang, page, totalPages, searchQuery, statusFilter, allReceipts));
     } catch (err) {
       const lang = getLang(req);
-      logger.error("加载收据列表失败", { error: err.message });
+      logger.error("Failed to load receipt list", { error: err.message });
       res.status(500).send(t('load_fail', lang) + err.message);
     }
   });
@@ -85,11 +85,11 @@ function registerReceiptRoutes(app) {
       }
 
       receiptStore.saveAiResult(id, aiResult);
-      logger.info("AI 提取完成", { id, amount: aiResult.amount });
+      logger.info("AI extraction completed", { id, amount: aiResult.amount });
 
       res.json({ ok: true, aiResult });
     } catch (err) {
-      logger.error("AI 提取失败", { id, error: err.message });
+      logger.error("AI extraction failed", { id, error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
@@ -115,14 +115,14 @@ function registerReceiptRoutes(app) {
       const chatId = record.phone.includes("@") ? record.phone : `${record.phone}@c.us`;
 
       receiptStore.sendMessageToUser(id, message);
-      logger.info("收据状态已更新为 waiting_user_reply，准备发送 WhatsApp", { id, chatId, previousStatus: record.status });
+      logger.info("Receipt status updated to waiting_user_reply, ready to send WhatsApp", { id, chatId, previousStatus: record.status });
 
       await client.sendMessage(chatId, message);
-      logger.info("WhatsApp 消息已发送", { id, chatId, messageLength: message.length });
+      logger.info("WhatsApp message sent", { id, chatId, messageLength: message.length });
 
       res.redirect("/admin");
     } catch (err) {
-      logger.error("发送消息失败", { id, error: err.message });
+      logger.error("Failed to send message", { id, error: err.message });
       res.status(500).send(t('download_fail', lang) + err.message);
     }
   });
@@ -133,10 +133,10 @@ function registerReceiptRoutes(app) {
     const lang = getLang(req);
     try {
       receiptStore.rejectReceipt(id, note);
-      logger.info("收据已拒绝", { id, note });
+      logger.info("Receipt declined", { id, note });
       res.redirect("/admin");
     } catch (err) {
-      logger.error("拒绝收据失败", { id, error: err.message });
+      logger.error("Rejection of receipt failed", { id, error: err.message });
       res.status(500).send(t('download_fail', lang) + err.message);
     }
   });

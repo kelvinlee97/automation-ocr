@@ -1,87 +1,87 @@
-# 容器化部署指南
+# Containerization Deployment Guide
 
-本项目采用**双轨容器化策略**：生产环境用 Docker Compose 部署到 DigitalOcean，本地 Beta 测试用 Apple Container 在 macOS 上运行。
+This project adopts a **dual-track containerization strategy**: the production environment uses Docker Compose to deploy to DigitalOcean, and the local beta test uses Apple Container to run on macOS.
 
 ---
 
-## 快速选择
+## Quick selection
 
-| 你的目标 | 使用方案 | 文档章节 |
+| your goals | Usage plan | Documentation Chapter |
 |----------|----------|----------|
-| 在 macOS 上快速测试 Admin 后台 | 本地 Beta（Apple Container） | [本地 Beta 测试](#本地-beta-测试apple-container) |
-| 部署到生产环境（DO） | 生产部署（Docker Compose） | [生产部署](#生产部署docker-compose--do) |
-| 了解两套配置的区别 | 配置对比表 | [配置对比](#配置对比) |
+| Quickly test the Admin backend on macOS | Local Beta (Apple Container) | [Local Beta Test](#local-beta-testapple-container) |
+| Deploy to production (DO) | Production deployment (Docker Compose) | [Production deployment](#production deployment docker-compose--do) |
+| Understand the differences between the two configurations | Configuration comparison table | [Configuration comparison](#configuration comparison) |
 
 ---
 
-## 本地 Beta 测试（Apple Container）
+## Local Beta Testing (Apple Container)
 
-适用于：在 macOS 上快速迭代测试 Admin 后台和 Feedback 功能。
+Best for: Quickly iteratively test Admin backend and Feedback functionality on macOS.
 
-### 前置条件
+### Preconditions
 
 - macOS 15+
-- 安装 Apple Container：`brew install container`
-- Node.js 20+（用于本地开发，容器内需重新安装 Linux 版本）
+- Install Apple Container: `brew install container`
+- Node.js 20+ (for local development, the Linux version needs to be reinstalled in the container)
 
-### 一键启动
+### One click start
 
 ```bash
 bash scripts/beta-local.sh
 ```
 
-脚本会自动：
-1. 检查 `container` CLI 是否可用
-2. 备份 macOS `node_modules` → `node_modules.mac`（避免 ELF header 错误）
-3. 启动 Apple Container（官方 `node:20-slim` 镜像）
-4. 挂载 `wa-bot/` 目录到容器 `/app`
-5. 容器内重新 `npm install`（生成 Linux 原生模块）
-6. 等待 `localhost:3000` 就绪后打印访问地址
+The script will automatically:
+1. Check if `container` CLI is available
+2. Backup macOS `node_modules` → `node_modules.mac` (avoid ELF header errors)
+3. Start Apple Container (official `node:20-slim` image)
+4. Mount the `wa-bot/` directory to the container `/app`
+5. Re-run `npm install` in the container (generate Linux native module)
+6. Wait for `localhost:3000` to be ready and then print the access address
 
-### 访问地址
+### Access address
 
-启动后访问：`http://localhost:3000/admin/setup`（首次创建 admin 账号）
+After startup, visit: `http://localhost:3000/admin/setup` (create admin account for the first time)
 
-### 脚本参数
+### Script parameters
 
-| 参数 | 说明 |
+| parameter | illustrate |
 |------|------|
-| （无参数） | 正常启动（后台运行） |
-| `--clean` | 停止容器 + 删除 Linux `node_modules` + 恢复 macOS `node_modules.mac` |
-| `--stop` | 停止并删除容器（保留 `node_modules`） |
-| `--logs` | 查看容器实时日志 |
+| (no parameters) | Normal startup (running in the background) |
+| `--clean` | Stop container + remove Linux `node_modules` + restore macOS `node_modules.mac` |
+| `--stop` | Stop and remove the container (keep `node_modules`) |
+| `--logs` | View container real-time logs |
 
-### 常见错误
+### Common mistakes
 
-#### `invalid ELF header`（`better-sqlite3`）
+#### `invalid ELF header` (`better-sqlite3`)
 
-**原因**：`node_modules/` 里的原生模块是 macOS 编译的，容器内是 Linux。
+**Reason**: The native modules in `node_modules/` are compiled for macOS, and the container is Linux.
 
-**解决**：脚本会自动处理。如果手动操作：
+**Solution**: The script will handle it automatically. If doing it manually:
 ```bash
 mv wa-bot/node_modules wa-bot/node_modules.mac
 bash scripts/beta-local.sh
 ```
 
-#### `Address already in use`（端口 3000 被占用）
+#### `Address already in use` (port 3000 is occupied)
 
 ```bash
-lsof -i :3000 | grep LISTEN   # 找到 PID
+lsof -i :3000 | grep LISTEN # Find PID
 kill -9 <PID>
 bash scripts/beta-local.sh
 ```
 
-#### Puppeteer/Chromium 启动失败（不影响 beta 测试）
+#### Puppeteer/Chromium fails to start (does not affect beta testing)
 
-**现象**：日志显示 `Failed to launch the browser process`，但 Admin 后台正常启动。
+**Phenomenon**: The log shows `Failed to launch the browser process`, but the Admin background starts normally.
 
-**原因**：本地 beta 用的 `node:20-slim` 不含 Chromium 依赖。
+**Reason**: The `node:20-slim` used by the local beta does not contain Chromium dependencies.
 
-**影响范围**：仅影响 WhatsApp Bot 功能；Admin 后台、Feedback 页面完全正常。
+**Scope of impact**: Only affects the WhatsApp Bot function; the Admin background and Feedback page are completely normal.
 
-### 恢复宿主机开发环境
+### Restore the host development environment
 
-beta 测试完成后，恢复宿主机直接运行：
+After the beta test is completed, restore the host and run directly:
 
 ```bash
 cd wa-bot/
@@ -91,44 +91,44 @@ node index.js
 
 ---
 
-## 生产部署（Docker Compose + DO）
+## Production deployment (Docker Compose + DO)
 
-适用于：部署稳定版本到 DigitalOcean Droplet，对外提供服务。
+Applicable to: deploying the stable version to DigitalOcean Droplet to provide external services.
 
-### 架构
+### Architecture
 
 ```
-外部请求 → :80/:443 → Caddy（反向代理 + HTTPS）→ :3000 (wa-bot 容器)
+External requests → :80/:443 → Caddy (reverse proxy + HTTPS) → :3000 (wa-bot container)
 ```
 
-| 组件 | 镜像 | 职责 |
+| components | mirror | Responsibilities |
 |------|------|------|
-| Caddy | `caddy:2-alpine` | 反向代理、HTTPS 终止、自动证书申请 |
-| wa-bot | 自建（`wa-bot/Dockerfile`） | Express Admin 后台 + WhatsApp Bot |
+| Caddy | `caddy:2-alpine` | Reverse proxy, HTTPS termination, automatic certificate request |
+| wa-bot | Self-built (`wa-bot/Dockerfile`) | Express Admin Backend + WhatsApp Bot |
 
-### 前置条件
+### Preconditions
 
-- DigitalOcean Droplet（已配置：`<DROPLET_IP>`，Ubuntu 24.04）
-- 域名解析已配置（如 `kelvin.ink` → Droplet IP）
-- GitHub Secrets 已配置（见下方）
+- DigitalOcean Droplet (Configured: `<DROPLET_IP>`, Ubuntu 24.04)
+- Domain name resolution has been configured (such as `kelvin.ink` → Droplet IP)
+- GitHub Secrets configured (see below)
 
 ### GitHub Secrets
 
-| Secret | 值 |
+| Secret | value |
 |--------|-----|
 | `DO_SSH_HOST` | `<DROPLET_IP>` |
 | `DO_SSH_USER` | `deploy` |
-| `DO_SSH_KEY` | CI/CD ed25519 私钥 |
-| `GHCR_PAT` | GitHub PAT（read:packages） |
+| `DO_SSH_KEY` | CI/CD ed25519 private key |
+| `GHCR_PAT` | GitHub PAT (read:packages) |
 
-### 自动部署（推荐）
+### Automatic deployment (recommended)
 
-推送代码到 `main` 分支，GitHub Actions 自动执行：
+Push the code to the `main` branch and GitHub Actions will execute it automatically:
 
-1. **CI 阶段**：lint → test → docker build（验证）
-2. **Deploy 阶段**：构建镜像 → 推送到 GHCR → SSH 到 DO → `docker compose pull && docker compose up -d`
+1. **CI phase**: lint → test → docker build (verification)
+2. **Deploy phase**: Build image → Push to GHCR → SSH to DO → `docker compose pull && docker compose up -d`
 
-### 手动部署（应急）
+### Manual deployment (emergency)
 
 ```bash
 ssh deploy@<DROPLET_IP>
@@ -139,7 +139,7 @@ docker compose up -d --remove-orphans
 docker image prune -f
 ```
 
-### 查看日志
+### View log
 
 ```bash
 ssh deploy@<DROPLET_IP>
@@ -149,78 +149,78 @@ docker compose logs -f --tail=100 wa-bot
 
 ---
 
-## 配置对比
+## Configuration comparison
 
-### 环境变量
+### environment variables
 
-| 变量 | 生产（`.env`） | 本地 Beta（`.env`） | 说明 |
+| variable | production(`.env`) | Local Beta (`.env`) | illustrate |
 |------|------------------|----------------------|------|
 | `NODE_ENV` | `production` | `development` | |
-| `GEMINI_API_KEY` | **必填** | 可选（可留空） | AI OCR 识别 |
-| `GITHUB_TOKEN` | 可选 | 可选（可留空） | Feedback → GitHub Issues |
-| `SESSION_SECRET` | **必填** | 自动生成 | Session 加密密钥 |
-| `DOMAIN` | **必填** | 不需要 | Caddy 域名配置 |
-| `DATA_DIR` | `/opt/claimflow/data` | `./data` | 数据目录 |
+| `GEMINI_API_KEY` | **Required** | Optional (can be left blank) | AI OCR recognition |
+| `GITHUB_TOKEN` | Optional | Optional (can be left blank) | Feedback → GitHub Issues |
+| `SESSION_SECRET` | **Required** | Automatically generated | Session encryption key |
+| `DOMAIN` | **Required** | unnecessary | Caddy domain name configuration |
+| `DATA_DIR` | `/opt/claimflow/data` | `./data` | data directory |
 
-### 端口映射
+### port mapping
 
-| 环境 | 外部端口 | 容器端口 | 说明 |
+| environment | external port | container port | illustrate |
 |------|----------|----------|------|
-| 生产 | 80/443 | 3000（wa-bot） | Caddy 反向代理 |
-| 本地 Beta | 3000 | 3000 | 直接访问 |
+| Production | 80/443 | 3000 (wa-bot) | Caddy reverse proxy |
+| Local Beta | 3000 | 3000 | direct access |
 
-### 镜像策略
+### Mirroring strategy
 
-| 环境 | 镜像来源 | 构建方式 |
+| environment | Mirror source | How to build |
 |------|----------|----------|
-| 生产 | `ghcr.io/kelvinlee97/claimflow:latest` | `wa-bot/Dockerfile`（含 Chromium） |
-| 本地 Beta | `docker.io/library/node:20-slim` | 官方镜像，容器内 `npm install` |
+| Production | `ghcr.io/kelvinlee97/claimflow:latest` | `wa-bot/Dockerfile` (including Chromium) |
+| Local Beta | `docker.io/library/node:20-slim` | Official image, `npm install` in the container |
 
 ---
 
-## 本地构建镜像（可选）
+## Build the image locally (optional)
 
-如果需要本地构建 beta 镜像（利用 Docker layer 缓存，避免每次启动都 `npm install`）：
+If you need to build the beta image locally (use Docker layer cache to avoid `npm install` every time you start it):
 
 ```bash
 cd wa-bot/
 container build -t wa-bot:beta -f Dockerfile.beta .
 ```
 
-然后使用自定义镜像启动（修改 `scripts/beta-local.sh` 中的 `IMAGE` 变量）。
+Then start using a custom image (modify the `IMAGE` variable in `scripts/beta-local.sh`).
 
 ---
 
-## 文件清单
+## Document list
 
-| 文件路径 | 用途 | 环境 |
+| file path | use | environment |
 |----------|------|------|
-| `docker-compose.yml` | 生产编排（Caddy + wa-bot） | 生产（DO） |
-| `wa-bot/Dockerfile` | 生产镜像构建（含 Chromium） | 生产（DO） |
-| `wa-bot/Dockerfile.beta` | 本地 beta 镜像构建（不含 Chromium） | 本地 Beta |
-| `wa-bot/.dockerignore` | Docker 构建排除规则 | 通用 |
-| `Caddyfile` | Caddy 反向代理配置 | 生产（DO） |
-| `scripts/beta-local.sh` | 本地 Apple Container 启动脚本 | 本地 Beta |
-| `scripts/docker.sh` | 生产 Docker 操作封装 | 生产（DO） |
-| `scripts/bootstrap.sh` | DO Droplet 一键部署 | 生产（DO） |
-| `wa-bot/.env.example` | 环境变量模板 | 通用 |
+| `docker-compose.yml` | Production orchestration (Caddy + wa-bot) | Production(DO) |
+| `wa-bot/Dockerfile` | Production image build (including Chromium) | Production(DO) |
+| `wa-bot/Dockerfile.beta` | Local beta image build (without Chromium) | Local Beta |
+| `wa-bot/.dockerignore` | Docker build exclusion rules | Universal |
+| `Caddyfile` | Caddy reverse proxy configuration | Production(DO) |
+| `scripts/beta-local.sh` | Local Apple Container startup script | Local Beta |
+| `scripts/docker.sh` | Production Docker Operation Encapsulation | Production(DO) |
+| `scripts/bootstrap.sh` | DO Droplet one-click deployment | Production(DO) |
+| `wa-bot/.env.example` | Environment variable template | Universal |
 
 ---
 
-## 故障排查
+## Troubleshooting
 
-### 生产环境
+### production environment
 
-| 问题 | 排查命令 |
+| question | troubleshooting command |
 |------|----------|
-| 网站无法访问 | `ssh deploy@<DROPLET_IP>` → `docker compose ps` |
-| HTTPS 证书失败 | `docker compose logs -f caddy` |
-| Bot 无法启动 | `docker compose logs -f wa-bot` |
+| Website cannot be accessed | `ssh deploy@<DROPLET_IP>` → `docker compose ps` |
+| HTTPS certificate failed | `docker compose logs -f caddy` |
+| Bot cannot start | `docker compose logs -f wa-bot` |
 
-### 本地 Beta
+### Local Beta
 
-| 问题 | 排查命令 |
+| question | troubleshooting command |
 |------|----------|
-| 容器无法启动 | `container logs wa-bot-beta` |
-| 端口被占用 | `lsof -i :3000` |
-| `npm install` 失败 | `container logs wa-bot-beta`（查看详细错误） |
+| Container cannot start | `container logs wa-bot-beta` |
+| Port is occupied | `lsof -i :3000` |
+| `npm install` failed | `container logs wa-bot-beta` (see detailed errors) |

@@ -2,8 +2,6 @@
 
 (function() {
   const config = window.ADMIN_UI || {};
-  const initialLang = config.lang || "zh";
-
   window.openLightbox = function(src) {
     document.getElementById("lightbox-img").src = src;
     document.getElementById("lightbox").classList.add("active");
@@ -32,30 +30,6 @@
       setTimeout(function() { toast.remove(); }, 250);
     }, 3000);
   };
-
-  (function() {
-    const LANG_KEY = "admin-lang";
-    const langBtn = document.getElementById("langToggle");
-    if (!langBtn) return;
-
-    function applyLang(lang) {
-      document.documentElement.lang = lang;
-      langBtn.textContent = lang === "zh" ? "EN" : "中文";
-      localStorage.setItem(LANG_KEY, lang);
-    }
-
-    const saved = localStorage.getItem(LANG_KEY) || initialLang;
-    applyLang(saved);
-
-    langBtn.addEventListener("click", function() {
-      const current = localStorage.getItem(LANG_KEY) || initialLang;
-      const next = current === "zh" ? "en" : "zh";
-      applyLang(next);
-      const url = window.location.pathname;
-      const sep = url.indexOf("?") === -1 ? "?" : "&";
-      window.location.href = url + sep + "lang=" + next;
-    });
-  })();
 
   (function() {
     const STORAGE_KEY = "admin-theme";

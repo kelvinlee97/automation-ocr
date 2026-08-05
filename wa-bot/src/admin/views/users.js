@@ -3,7 +3,7 @@
 const { t } = require("../i18n");
 const { htmlLayout } = require("./layout");
 
-function usersPage(users, currentUser, flash = "", lang = "zh") {
+function usersPage(users, currentUser, flash = "", lang = "en") {
   const rows = users.map(u => {
     const isSelf = u.username === currentUser;
     const deleteBtn = isSelf
@@ -15,7 +15,7 @@ function usersPage(users, currentUser, flash = "", lang = "zh") {
 
     return `<tr>
       <td>${u.username}${isSelf ? ` <span style="color:#888;font-size:11px">(${t('current', lang)})</span>` : ""}</td>
-      <td>${u.createdAt ? new Date(u.createdAt).toLocaleString(lang === 'zh' ? "zh-CN" : "en-US") : "—"}</td>
+      <td>${u.createdAt ? new Date(u.createdAt).toLocaleString("en-US") : "—"}</td>
       <td>
         <form class="inline" method="POST" action="/admin/users/${encodeURIComponent(u.username)}/reset-password"
               onsubmit="return promptReset(this, '${u.username}')">
@@ -30,7 +30,7 @@ function usersPage(users, currentUser, flash = "", lang = "zh") {
   const content = `
     ${flash ? `<div style="background:#e6f9f0;border-left:4px solid #10b981;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">${flash}</div>` : ""}
     <div class="toolbar">
-      <a href="/admin/users/new" class="btn btn-primary">＋ ${t('new_user', lang)}</a>
+      <a href="/admin/users/new" class="btn btn-primary">+ ${t('new_user', lang)}</a>
     </div>
     <table>
       <thead><tr><th>${t('username', lang)}</th><th>${t('created_at', lang)}</th><th>${t('actions', lang)}</th></tr></thead>
@@ -38,7 +38,7 @@ function usersPage(users, currentUser, flash = "", lang = "zh") {
     </table>
     <script>
       function promptReset(form, username) {
-        // 翻译模板在服务端注入，{username} 在客户端运行时替换，避免 XSS 且保持动态插值
+        // The translation template is injected on the server side, and {username} is replaced when the client is running, avoiding XSS and maintaining dynamic interpolation.
         var tpl = ${JSON.stringify(t('prompt_new_password', lang))};
         var pwd = prompt(tpl.replace('{username}', username));
         if (!pwd || pwd.length < 8) { alert(${JSON.stringify(t('password_min_8', lang))}); return false; }
@@ -50,7 +50,7 @@ function usersPage(users, currentUser, flash = "", lang = "zh") {
   return htmlLayout(t('manage_users', lang), content, '/admin/users', lang);
 }
 
-function newUserPage(errorMsg = "", lang = "zh") {
+function newUserPage(errorMsg = "", lang = "en") {
   const content = `
     ${errorMsg ? `<div style="background:#fff0f0;border-left:4px solid #c0392b;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">${errorMsg}</div>` : ""}
     <form method="POST" action="/admin/users/new" style="max-width:400px;background:#fff;padding:32px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08)">

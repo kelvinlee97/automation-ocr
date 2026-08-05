@@ -9,7 +9,7 @@
 const { t } = require("../i18n");
 const { htmlLayout } = require("./layout");
 
-function feedbackFormPage(lang = "zh") {
+function feedbackFormPage(lang = "en") {
   const title = t("feedback_new_title", lang) || "New Feedback";
 
   const content = `
@@ -47,7 +47,7 @@ function feedbackFormPage(lang = "zh") {
           <input type="file" id="screenshot" name="screenshot" accept="image/jpeg,image/png,image/gif"
                  onchange="handleFileSelect(event)" />
           <div class="dropzone-icon">📎</div>
-          <div class="dropzone-text">${lang === "zh" ? "点击或拖拽截图到此处" : "Click or drag screenshot here"}</div>
+          <div class="dropzone-text">Click or drag screenshot here</div>
           <div class="dropzone-hint">${t("feedback_screenshot_hint", lang)}</div>
         </div>
         <div id="screenshot-preview"></div>
@@ -131,7 +131,7 @@ function feedbackFormPage(lang = "zh") {
       // Show loading state
       const btn = document.getElementById('submit-btn');
       btn.disabled = true;
-      btn.textContent = '${lang === "zh" ? "提交中…" : "Submitting…"}';
+      btn.textContent = 'Submitting…';
       return true;
     }
 

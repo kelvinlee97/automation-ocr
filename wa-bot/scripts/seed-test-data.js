@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * 测试数据生成脚本
+ * Test data generation script
  *
- * 向 data/ 目录写入覆盖所有状态的测试收据和注册记录，
- * 供管理后台 UI 验证使用（不依赖真实 WhatsApp 消息）。
+ * Write test receipts and registration records covering all states to the data/ directory,
+ * Used for admin UI verification (not relying on real WhatsApp messages).
  *
- * 用法：
- *   node wa-bot/scripts/seed-test-data.js          # 写入测试数据
- *   node wa-bot/scripts/seed-test-data.js --clean  # 清除已写入的测试数据
+ * usage:
+ *   node wa-bot/scripts/seed-test-data.js #Write test data
+ *   node wa-bot/scripts/seed-test-data.js --clean # Clear the written test data
  *
- * 注意：
- *   - 脚本必须从项目根目录运行（ClaimFlow/）
- *   - 写入的记录带 __seed: true 标记，--clean 仅删除带标记的记录
+ * Notice:
+ *   - The script must be run from the project root directory (ClaimFlow/)
+ *   - written records are marked with __seed: true, --clean only deletes marked records
  */
 
 'use strict';
@@ -19,24 +19,24 @@
 const path = require('path');
 const fs   = require('fs');
 
-// ─── 路径修正 ──────────────────────────────────────────────────────────────────
+// ─── Path correction ────────────────────────────────────────────────────────────
 //
-// receiptStore 默认的 DATA_DIR（从 wa-bot/src/services 向上 4 级）在本地开发时
-// 会解析到 ClaimFlow 的父目录，与实际数据目录不一致。
-// 通过环境变量覆盖，统一指向 ClaimFlow/data/
+// receiptStore default DATA_DIR (4 levels up from wa-bot/src/services) when developing locally
+// It will be resolved to the parent directory of ClaimFlow, which is inconsistent with the actual data directory.
+// Override environment variables and point to ClaimFlow/data/
 //
 const PROJECT_ROOT = path.resolve(__dirname, '../../');
 process.env.DATA_DIR = path.join(PROJECT_ROOT, 'data');
 
-// 设置好 DATA_DIR 后再 require，确保模块使用正确路径
+// Set DATA_DIR before require to ensure that the module uses the correct path
 const ExcelJS      = require('exceljs');
 const receiptStore = require('../src/services/receiptStore');
 const excelService = require('../src/services/excelService');
 
-// ─── 测试图片（最小合法 JPEG，避免依赖真实图片文件）──────────────────────────
+// ─── Test image (minimum legal JPEG, avoid relying on real image files)───────────────────────────
 //
-// 这是一个 1x1 像素白色 JPEG 的 base64，用于填充 images/ 目录。
-// 管理后台能正常渲染（显示小图），不需要是真实收据图片。
+// This is a base64 of a 1x1 pixel white JPEG used to populate the images/ directory.
+// The management background can render normally (display a small picture), and it does not need to be a real receipt picture.
 //
 const DUMMY_IMAGE_BASE64 =
   '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8U' +
@@ -46,7 +46,7 @@ const DUMMY_IMAGE_BASE64 =
   'IBBQEAAAAAAAAAAAAAAQIDBAUREiExQf/EABUBAQEAAAAAAAAAAAAAAAAAAAEC/8QAFBEB' +
   'AAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AqGdmMl32RJVI5jqO42Zo3a8AAAA=';
 
-// ─── 测试记录定义 ──────────────────────────────────────────────────────────────
+// ─── Test record definition ─────────────────────────────────────────────────────────
 
 const SEED_REGISTRATIONS = [
   { phone: '60123456001@c.us', ic: '900101-14-5001' },
@@ -55,17 +55,17 @@ const SEED_REGISTRATIONS = [
   { phone: '60123456004@c.us', ic: '920909-08-4321' },
 ];
 
-// 收据按四种状态各一条，覆盖全部 UI 展示场景
+// There is one receipt for each of the four states, covering all UI display scenarios.
 const SEED_RECEIPTS = [
   {
-    // 状态 1：刚收到图片，尚未 AI 提取
+    // Status 1: The image has just been received and has not been extracted by AI yet.
     phone:  '60123456001@c.us',
     ic:     '900101-14-5001',
     status: 'pending_review',
     aiResult: null,
   },
   {
-    // 状态 2：AI 已提取，等待人工审核
+    // Status 2: AI has been extracted, waiting for manual review
     phone:  '60123456002@c.us',
     ic:     '850615-10-1234',
     status: 'ai_extracted',
@@ -79,7 +79,7 @@ const SEED_RECEIPTS = [
     },
   },
   {
-    // 状态 3：人工已确认通过
+    // Status 3: Manually confirmed and passed
     phone:  '60123456003@c.us',
     ic:     '751230-07-8888',
     status: 'confirmed',
@@ -91,10 +91,10 @@ const SEED_RECEIPTS = [
       disqualify_reason: null,
       confidence:       0.98,
     },
-    reviewNote: '金额和品牌均符合要求',
+    reviewNote: 'The amount and brand meet the requirements',
   },
   {
-    // 状态 4：AI 提取但金额不足，已人工拒绝
+    // Status 4: AI withdraws but the amount is insufficient and has been manually rejected
     phone:  '60123456004@c.us',
     ic:     '920909-08-4321',
     status: 'rejected',
@@ -103,47 +103,47 @@ const SEED_RECEIPTS = [
       brand:            'Dyson',
       amount:           350.00,
       qualified:        false,
-      disqualify_reason: '金额低于 RM 500 门槛',
+      disqualify_reason: 'Amount below RM 500 threshold',
       confidence:       0.91,
     },
-    reviewNote: '金额不足，已拒绝',
+    reviewNote: 'Insufficient amount, rejected',
   },
 ];
 
-// ─── 写入逻辑 ─────────────────────────────────────────────────────────────────
+// ─── Write logic ────────────────────────────────────────────────────────────
 
 async function seed() {
-  console.log('📦 开始写入测试种子数据...\n');
+  console.log('📦 Start writing test seed data...\\n');
   console.log(`  DATA_DIR: ${process.env.DATA_DIR}`);
 
-  // 初始化 Excel（确保文件存在）
+  // Initialize Excel (make sure the file exists)
   await excelService.initExcel();
 
-  // receiptStore.addPendingReceipt 在 readStore()（ensureInit）之前就写图片，
-  // 所以需要先手动创建 images 目录，否则首次运行会报 ENOENT
+  // receiptStore.addPendingReceipt writes the image before readStore()(ensureInit),
+  // Therefore, you need to manually create the images directory first, otherwise ENOENT will be reported when running for the first time.
   const imagesDir = path.join(process.env.DATA_DIR, 'images');
   if (!fs.existsSync(imagesDir)) {
     fs.mkdirSync(imagesDir, { recursive: true });
-    console.log(`  ✓ 创建目录: ${imagesDir}`);
+    console.log(`✓ Create directory: ${imagesDir}`);
   }
 
-  // ── 写入注册记录到 Excel ──────────────────────────────────────────────────
+  // ── Write registration records to Excel ────────────────────────────────────────────────
   //
-  // 不走 excelService.addRegistration()：该函数重复检测依赖 column key，
-  // 而 ExcelJS 从磁盘读取 xlsx 后不恢复 key 元数据（key 只在内存中存在）。
-  // 直接操作 workbook 更可靠。
+  // Do not use excelService.addRegistration(): This function repeatedly detects dependency on column key.
+  // However, ExcelJS does not restore key metadata after reading xlsx from disk (key only exists in memory).
+  // It is more reliable to operate the workbook directly.
   //
-  console.log('\n[1/2] 写入注册记录...');
+  console.log('\\n[1/2] Write registration record...');
   const EXCEL_PATH = path.join(process.env.DATA_DIR, 'excel', 'records.xlsx');
 
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(EXCEL_PATH);
   const regSheet = workbook.getWorksheet('Registrations');
 
-  // 读取已存在的 IC 列，避免重复写入（按位置读取第 4 列，即 IC Number）
+  // Read the existing IC column to avoid repeated writing (read the 4th column by position, that is, IC Number)
   const existingICs = new Set();
   regSheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) return; // 跳过表头
+    if (rowNumber === 1) return; // skip header
     const icCell = row.getCell(4);
     if (icCell.value) existingICs.add(String(icCell.value));
   });
@@ -151,11 +151,11 @@ async function seed() {
   let addedCount = 0;
   for (const reg of SEED_REGISTRATIONS) {
     if (existingICs.has(reg.ic)) {
-      console.log(`  跳过（重复）：${reg.ic}`);
+      console.log(`Skip (repeat): ${reg.ic}`);
       continue;
     }
     regSheet.addRow([
-      regSheet.rowCount, // No（含表头行）
+      regSheet.rowCount, // No (including header row)
       new Date().toISOString(),
       reg.phone,
       reg.ic,
@@ -169,8 +169,8 @@ async function seed() {
     await workbook.xlsx.writeFile(EXCEL_PATH);
   }
 
-  // ── 写入收据到 receiptStore（JSON + images）────────────────────────────────
-  console.log('\n[2/2] 写入收据记录...');
+  // ──Write receipt to receiptStore (JSON + images)────────────────────────────────
+  console.log('\\n[2/2] Write receipt record...');
   for (const receipt of SEED_RECEIPTS) {
     const { id, imageFilename } = receiptStore.addPendingReceipt(
       receipt.phone,
@@ -179,7 +179,7 @@ async function seed() {
       receipt.ic,
     );
 
-    // 根据目标 status 继续流转状态
+    // Continue to transfer status according to target status
     if (receipt.status === 'ai_extracted' || receipt.status === 'confirmed' || receipt.status === 'rejected') {
       receiptStore.saveAiResult(id, receipt.aiResult);
     }
@@ -192,21 +192,21 @@ async function seed() {
       receiptStore.rejectReceipt(id, receipt.reviewNote || '');
     }
 
-    // 在 JSON 记录中打上 seed 标记，方便 --clean 精确删除
+    // Mark the seed in the JSON record to facilitate precise deletion by --clean
     _markAsSeed(id);
 
     console.log(`  ✓ [${receipt.status.padEnd(14)}] ${receipt.phone} — image: ${imageFilename}`);
   }
 
-  console.log('\n✅ 种子数据写入完成！');
-  console.log(`   收据 JSON: ${process.env.DATA_DIR}/pending_receipts.json`);
-  console.log(`   注册 Excel: ${process.env.DATA_DIR}/excel/records.xlsx`);
-  console.log('\n现在可以访问 http://<服务器IP>/admin 查看测试数据。');
+  console.log('\\n✅ Seed data writing completed!');
+  console.log(`Receipts JSON: ${process.env.DATA_DIR}/pending_receipts.json`);
+  console.log(`Register Excel: ${process.env.DATA_DIR}/excel/records.xlsx`);
+  console.log('\\nNow you can visit http://<server IP>/admin to view the test data.');
 }
 
 /**
- * 在 JSON 记录中追加 __seed 标记（供 clean 使用）
- * 直接操作 JSON 文件，绕过 receiptStore 的公开 API
+ * Append __seed tag in JSON records (for use by clean)
+ * Directly manipulate JSON files, bypassing the public API of receiptStore
  */
 function _markAsSeed(id) {
   const storePath = path.join(process.env.DATA_DIR, 'pending_receipts.json');
@@ -218,16 +218,16 @@ function _markAsSeed(id) {
   }
 }
 
-// ─── 清除逻辑 ─────────────────────────────────────────────────────────────────
+// ─── Clear logic ───────────────────────────────────────────────────────────
 
 async function clean() {
-  console.log('🧹 清除测试种子数据...\n');
+  console.log('🧹 Clear test seed data...\\n');
 
   const storePath  = path.join(process.env.DATA_DIR, 'pending_receipts.json');
   const imagesDir  = path.join(process.env.DATA_DIR, 'images');
 
   if (!fs.existsSync(storePath)) {
-    console.log('  pending_receipts.json 不存在，跳过。');
+    console.log('pending_receipts.json does not exist, skip.');
     return;
   }
 
@@ -235,29 +235,29 @@ async function clean() {
   const toDelete = records.filter((r) => r.__seed);
   const toKeep   = records.filter((r) => !r.__seed);
 
-  // 删除对应的图片文件
+  // Delete the corresponding image file
   for (const r of toDelete) {
     const imgPath = path.join(imagesDir, r.imageFilename);
     if (fs.existsSync(imgPath)) {
       fs.unlinkSync(imgPath);
-      console.log(`  ✓ 删除图片: ${r.imageFilename}`);
+      console.log(`✓ Delete image: ${r.imageFilename}`);
     }
   }
 
-  // 写回去掉 seed 记录的 JSON
+  // Write back the JSON of the seed record
   fs.writeFileSync(storePath, JSON.stringify(toKeep, null, 2), 'utf-8');
-  console.log(`  ✓ 从 pending_receipts.json 删除 ${toDelete.length} 条种子记录`);
+  console.log(`✓ Delete ${toDelete.length} seed records from pending_receipts.json`);
 
-  console.log('\n注意：Excel 注册记录需手动删除（ExcelJS 不支持删除行）。');
-  console.log(`  Excel 路径: ${process.env.DATA_DIR}/excel/records.xlsx`);
-  console.log('\n✅ 清除完成（Excel 除外）。');
+  console.log('\\nNote: Excel registration records need to be deleted manually (ExcelJS does not support deleting rows).');
+  console.log(`Excel path: ${process.env.DATA_DIR}/excel/records.xlsx`);
+  console.log('\\n✅ Cleanup completed (except Excel).');
 }
 
-// ─── 入口 ─────────────────────────────────────────────────────────────────────
+// ─── Entrance ──────────────────────────────────────────────────────────────
 
 const isClean = process.argv.includes('--clean');
 
 (isClean ? clean() : seed()).catch((err) => {
-  console.error('❌ 脚本执行失败:', err.message);
+  console.error('❌ Script execution failed:', err.message);
   process.exit(1);
 });

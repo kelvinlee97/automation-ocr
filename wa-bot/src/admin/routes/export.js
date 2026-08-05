@@ -11,7 +11,7 @@ function registerExportRoutes(app) {
     const excelPath = getExcelPath();
     res.download(excelPath, "records.xlsx", (err) => {
       if (err) {
-        logger.error("Excel 下载失败", { error: err.message });
+        logger.error("Excel download failed", { error: err.message });
         res.status(500).send(t('download_fail', lang) + err.message);
       }
     });

@@ -4,15 +4,15 @@ const { t } = require("../i18n");
 const { htmlLayout } = require("./layout");
 const { escapeHtml } = require("./escapeHtml");
 
-function _renderAiResult(aiResult, lang = "zh") {
+function _renderAiResult(aiResult, lang = "en") {
   if (!aiResult) return '<span style="color:#aaa;font-size:12px">—</span>';
   return `<div class="ai-result">
-    <strong>${t('ai_amount', lang)}：</strong>RM ${escapeHtml(aiResult.amount ?? "—")}<br>
-    <strong>${t('ai_summary', lang)}：</strong>${escapeHtml(aiResult.summary || "—")}
+    <strong>${t('ai_amount', lang)}:</strong>RM ${escapeHtml(aiResult.amount ?? "—")}<br>
+    <strong>${t('ai_summary', lang)}:</strong>${escapeHtml(aiResult.summary || "—")}
   </div>`;
 }
 
-function renderInlineActions(r, lang = "zh") {
+function renderInlineActions(r, lang = "en") {
   if (r.status === "pending_review") {
     return `<button class="btn btn-ai" onclick="aiExtract('${r.id}', this)">🤖 ${t('ai_extract', lang)}</button>`;
   }
@@ -22,11 +22,11 @@ function renderInlineActions(r, lang = "zh") {
   </form>`;
 }
 
-function buildExpandPanel(r, lang = "zh") {
-  const locale = lang === 'zh' ? "zh-CN" : "en-US";
+function buildExpandPanel(r, lang = "en") {
+  const locale = "en-US";
   let html = "";
 
-  // AI 结果区
+  // AI result area
   if (r.aiResult) {
     html += `<div class="expand-section">
       <div class="expand-label">🤖 ${t('ai_summary', lang)}</div>
@@ -37,7 +37,7 @@ function buildExpandPanel(r, lang = "zh") {
     </div>`;
   }
 
-  // 状态相关操作区
+  // Status related operation area
   if (r.status === "ai_extracted") {
     html += `<div class="expand-section">
       <div class="expand-label">❌ ${t('reject', lang)}</div>
@@ -145,7 +145,7 @@ function buildPagination(currentPage, totalPages, q, status, lang) {
   return html;
 }
 
-function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, searchQuery = "", statusFilter = "", allReceipts = null) {
+function receiptsPage(receipts, lang = "en", currentPage = 1, totalPages = 1, searchQuery = "", statusFilter = "", allReceipts = null) {
   if (receipts.length === 0) {
     return htmlLayout(t('receipt_audit', lang), `<div class="empty">${t('no_receipts', lang)}</div>`, '/admin', lang);
   }
@@ -188,7 +188,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
     </div>
   `;
 
-  const locale = lang === 'zh' ? "zh-CN" : "en-US";
+  const locale = "en-US";
 
   // Group receipts by phone number
   const groups = {};
@@ -349,7 +349,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         }
       })();
 
-      // ── 行展开/折叠 ────────────────────────────────────────────
+      // ── Row expand/collapse ─────────────────────────────────────────
       window.toggleRow = function(id) {
         var panel = document.getElementById('expand-' + id);
         var row = document.getElementById('row-' + id);
@@ -360,7 +360,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         if (chevron) chevron.classList.toggle('rotated');
       };
 
-      // ── 组折叠 ─────────────────────────────────────────────────
+      // ── Group collapse ──────────────────────────────────────────────
       window.toggleGroup = function(phone) {
         var header = document.querySelector('tr.group-header[data-phone="' + CSS.escape(phone) + '"]');
         if (!header) return;
@@ -371,14 +371,14 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
 
         document.querySelectorAll('.group-row-' + CSS.escape(phone)).forEach(function(row) {
           row.style.display = isCollapsed ? '' : 'none';
-          // 同时隐藏对应的展开面板
+          // Also hide the corresponding expanded panel
           var expandId = 'expand-' + row.id.replace('row-', '');
           var expandRow = document.getElementById(expandId);
           if (expandRow && !isCollapsed) expandRow.classList.remove('visible');
         });
       };
 
-      // ── AJAX 发送消息 ──────────────────────────────────────────
+      // ── AJAX send message ────────────────────────────────────────
       window.handleSend = async function(e, id) {
         e.preventDefault();
         var form = document.getElementById('send-form-' + id);
@@ -410,7 +410,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         return false;
       };
 
-      // ── AJAX 拒绝收据 ──────────────────────────────────────────
+      // ── AJAX Rejected Receipt ───────────────────────────────────────
       window.handleReject = async function(e, id) {
         e.preventDefault();
         var form = e.target;
@@ -440,7 +440,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         return false;
       };
 
-      // ── AI 提取（改用 toast 替代 alert） ───────────────────────
+      // ── AI extraction (use toast instead of alert) ───────────────────────
       window.aiExtract = async function(id, btn) {
         btn.disabled = true;
         btn.textContent = '⏳ ' + ${JSON.stringify(t('extracting', lang))};
@@ -448,7 +448,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
           const res = await fetch('/admin/receipts/' + id + '/ai-extract', {
             method: 'POST',
           });
-          // 先检查 HTTP 状态，再解析 body——5xx 响应体可能是 HTML，直接 res.json() 会抛 SyntaxError
+          // Check the HTTP status first, then parse the body - the 5xx response body may be HTML, direct res.json() will throw SyntaxError
           if (!res.ok) {
             let errMsg = res.statusText;
             try { const d = await res.json(); errMsg = d.error || errMsg; } catch (_) {}
@@ -467,7 +467,7 @@ function receiptsPage(receipts, lang = "zh", currentPage = 1, totalPages = 1, se
         }
       };
 
-      // ── Ctrl+Enter 快捷提交 ────────────────────────────────────
+      // ── Ctrl+Enter Quick submission ──────────────────────────────────
       (function() {
         var textareas = document.querySelectorAll('.send-form textarea');
         textareas.forEach(function(ta) {

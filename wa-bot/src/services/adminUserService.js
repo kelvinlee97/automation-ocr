@@ -1,28 +1,28 @@
 "use strict";
 
 /**
- * adminUserService.js — 管理员账户管理（SQLite 实现）
+ * adminUserService.js — Administrator account management (SQLite implementation)
  *
- * 使用 Node.js 内置 crypto.scrypt 做密码哈希，无第三方依赖。
- * 账户数据存储在 SQLite admin_users 表中。
+ * Use Node.js's built-in crypto.scrypt for password hashing, without third-party dependencies.
+ * Account data is stored in the SQLite admin_users table.
  *
- * 密码哈希格式：scrypt:<salt_hex>:<hash_hex>
+ * Password hash format: scrypt:<salt_hex>:<hash_hex>
  *
- * 对外 API 与原 JSON 版本完全兼容，调用方零改动。
+ * The external API is fully compatible with the original JSON version, with zero changes to the caller.
  */
 
 const crypto = require("crypto");
 const db     = require("../db");
 
-// scrypt 参数（OWASP 推荐最低值，低频登录场景足够安全）
+// scrypt parameter (OWASP recommends the lowest value, which is safe enough for low-frequency login scenarios)
 const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
 const KEY_LEN       = 64;
 
-// ── 密码工具 ──────────────────────────────────────────────────────────────
+// ──Crypto tools ───────────────────────────────────────────────────────
 
 /**
- * 生成含随机 salt 的 scrypt 哈希
- * @returns {string}  格式："scrypt:<salt_hex>:<hash_hex>"
+ * Generate scrypt hash with random salt
+ * @returns {string} Format: "scrypt:<salt_hex>:<hash_hex>"
  */
 function hashPassword(password) {
   const salt = crypto.randomBytes(16);
@@ -31,8 +31,8 @@ function hashPassword(password) {
 }
 
 /**
- * 验证密码是否匹配存储的哈希
- * 使用 timingSafeEqual 防止时序攻击
+ * Verify that the password matches the stored hash
+ * Use timingSafeEqual to prevent timing attacks
  */
 function verifyPassword(password, storedHash) {
   try {
@@ -47,10 +47,10 @@ function verifyPassword(password, storedHash) {
   }
 }
 
-// ── 对外接口 ──────────────────────────────────────────────────────────────
+// ── External interface ───────────────────────────────────────────────────────
 
 /**
- * 是否尚未创建任何用户（触发首次设置流程的依据）
+ * Whether no users have been created yet (the basis for triggering the first-time setup process)
  */
 function isEmpty() {
   db.init();
@@ -59,7 +59,7 @@ function isEmpty() {
 }
 
 /**
- * 验证登录凭据
+ * Verify login credentials
  */
 function authenticate(username, password) {
   db.init();
@@ -78,20 +78,20 @@ function isSuperAdmin(username) {
 }
 
 /**
- * 创建新用户
- * 首个用户默认为 super admin（is_super_admin = 1）
+ * Create new user
+ * The first user defaults to super admin (is_super_admin = 1)
  * @returns {{ ok: boolean, error?: string }}
  */
 function createUser(username, password) {
-  if (!username || username.length < 3)  return { ok: false, error: "用户名至少 3 个字符" };
-  if (!password  || password.length < 8) return { ok: false, error: "密码至少 8 个字符" };
-  if (!/^[\w-]+$/.test(username))        return { ok: false, error: "用户名只允许字母、数字、下划线" };
+  if (!username || username.length < 3)  return { ok: false, error: "Username must be at least 3 characters" };
+  if (!password  || password.length < 8) return { ok: false, error: "Password must be at least 8 characters" };
+  if (!/^[\w-]+$/.test(username))        return { ok: false, error: "Username only allows letters, numbers, and underscores" };
 
   db.init();
   const existing = db.db.prepare("SELECT username FROM admin_users WHERE username = ?").get(username);
-  if (existing) return { ok: false, error: "用户名已存在" };
+  if (existing) return { ok: false, error: "Username already exists" };
 
-  // 首个用户默认为 super admin
+  // The first user defaults to super admin
   const isEmpty = db.db.prepare("SELECT COUNT(*) as cnt FROM admin_users").get().cnt === 0;
   const isSuperAdmin = isEmpty ? 1 : 0;
 
@@ -103,47 +103,47 @@ function createUser(username, password) {
 }
 
 /**
- * 重置任意用户密码（管理员操作，无需旧密码）
+ * Reset any user password (administrator operation, no old password required)
  * @returns {{ ok: boolean, error?: string }}
  */
 function resetPassword(username, newPassword) {
-  if (!newPassword || newPassword.length < 8) return { ok: false, error: "新密码至少 8 个字符" };
+  if (!newPassword || newPassword.length < 8) return { ok: false, error: "New password must be at least 8 characters" };
 
   db.init();
   const info = db.db.prepare(
     "UPDATE admin_users SET password_hash = ? WHERE username = ?"
   ).run(hashPassword(newPassword), username);
 
-  if (info.changes === 0) return { ok: false, error: "用户不存在" };
+  if (info.changes === 0) return { ok: false, error: "User does not exist" };
   return { ok: true };
 }
 
 /**
- * 删除用户（不能删除当前登录账户）
+ * Delete user (current login account cannot be deleted)
  * @returns {{ ok: boolean, error?: string }}
  */
 function deleteUser(username, requestingUsername) {
-  if (username === requestingUsername) return { ok: false, error: "不能删除当前登录账户" };
+  if (username === requestingUsername) return { ok: false, error: "The current login account cannot be deleted" };
 
   db.init();
   const target = db.db.prepare(
     "SELECT is_super_admin FROM admin_users WHERE username = ?"
   ).get(username);
-  if (!target) return { ok: false, error: "用户不存在" };
+  if (!target) return { ok: false, error: "User does not exist" };
   if (target.is_super_admin === 1) {
     const count = db.db.prepare(
       "SELECT COUNT(*) AS cnt FROM admin_users WHERE is_super_admin = 1"
     ).get().cnt;
-    if (count <= 1) return { ok: false, error: "不能删除唯一的 Super Admin" };
+    if (count <= 1) return { ok: false, error: "Unable to delete the only Super Admin" };
   }
 
   const info = db.db.prepare("DELETE FROM admin_users WHERE username = ?").run(username);
-  if (info.changes === 0) return { ok: false, error: "用户不存在" };
+  if (info.changes === 0) return { ok: false, error: "User does not exist" };
   return { ok: true };
 }
 
 /**
- * 获取所有用户列表（脱敏，不含密码哈希）
+ * Get a list of all users (desensitized, without password hashes)
  * @returns {Array<{ username: string, isSuperAdmin: boolean, createdAt: string }>}
  */
 function listUsers() {

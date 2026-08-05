@@ -1,180 +1,190 @@
 # 📱 ClaimFlow
 
-> WhatsApp 驱动的促销申领管理平台：消费者提交收据，AI 辅助识别，工作人员高效审核。
+> WhatsApp-driven promotion claim management platform: consumers submit receipts, AI-assisted identification, and staff review efficiently.
 
 ---
 
-## 系统简介
+## System introduction
 
-这个系统是为马来西亚促销活动（如电器返现、品牌优惠等）设计的自动化工具。
+This system is an automated tool designed for Malaysian promotional activities (such as cash rebates on electrical appliances, brand offers, etc.).
 
-**传统方式的问题：**
-- 消费者需要亲自到店铺或上网提交收据
-- 工作人员要一张张人工核对收据信息，费时费力
-- 容易出错，效率低下
+**Problems with the Traditional Way:**
+- Consumers need to go to the store in person or submit the receipt online
+- Staff have to manually check receipt information one by one, which is time-consuming and laborious
+- Error-prone and inefficient
 
-**使用本系统后：**
-- 消费者只需用 WhatsApp 发送收据照片
-- AI 自动识别收据上的品牌和金额
-- 工作人员在电脑上快速审核并发送结果给消费者
-- 所有记录自动保存，随时可查
-
----
-
-## 适用对象
-
-✅ **活动主办方** - 需要审核大量消费者收据的企业或机构  
-✅ **促销活动的品牌方** - 如三星、苹果、戴森等品牌的返现活动  
-✅ **市场营销公司** - 帮助客户管理促销活动  
-✅ **需要收据验证的任何组织**
+**After using this system:**
+- Consumers simply send a photo of their receipt using WhatsApp
+- AI automatically identifies brands and amounts on receipts
+- Staff quickly review the results on their computers and send the results to consumers
+- All records are automatically saved and can be checked at any time
 
 ---
 
-## 主要功能
+## Applicable objects
 
-### 📸 消费者端（WhatsApp）
+✅ **Event Organizer** - A business or organization that needs to review a large number of consumer receipts
+✅ **Brand Side of Promotions** - Cashback activities for brands such as Samsung, Apple, Dyson, etc.
+✅ **Marketing Company** - Help clients manage promotions
+✅ **Any organization requiring receipt verification**
 
-消费者不需要安装任何 App，直接用 WhatsApp 就能参与活动：
+---
 
-| 步骤 | 消费者做什么 | 系统自动做什么 |
+## Main functions
+
+### 📸 Consumer (WhatsApp)
+
+Consumers do not need to install any App and can participate in the event directly using WhatsApp:
+
+| step | what consumers do | What does the system do automatically? |
 |------|-------------|---------------|
-| 1 | 发送身份证号 | 验证格式是否正确，提示下一步操作 |
-| 2 | 拍摄并发送收据照片 | 确认收到照片，通知等待审核结果 |
-| 3 | 等待通知 | 收到审核结果（通过/不通过）|
+| 1 | Send ID number | Verify that the format is correct and prompt for next step. |
+| 2 | Take and send a photo of your receipt | Confirm receipt of photos, notify and wait for review results |
+| 3 | Wait for notification | Receive review results (pass/fail) |
 
-**特点：**
-- 无需下载 App，用熟悉的 WhatsApp 即可
-- 操作简单，按提示一步步来
-- 24小时随时可提交
+**Features:**
+- No need to download an app, just use the familiar WhatsApp
+- Simple operation, follow the prompts step by step
+- Available for submission 24 hours a day
 
-### 💻 工作人员端（电脑后台）
+### 💻 Staff terminal (computer background)
 
-工作人员通过网页浏览器登录管理后台，进行高效审核：
+Staff log in to the management backend through a web browser for efficient review:
 
-1. **登录后台** - 用浏览器打开管理网站，输入账号密码登录
-2. **查看提交记录** - 看到所有消费者提交的收据列表
-3. **AI 辅助审核** - 点击查看 AI 自动识别的结果（品牌、金额、置信度）
-4. **一键回复** - 输入审核意见，点击发送，消费者立即在 WhatsApp 收到通知
+1. **Login to the background** - Open the management website with a browser, enter your account and password to log in
+2. **View Submission Records** - See a list of all consumer submitted receipts
+3. **AI Assisted Review** - Click to view the results of AI automatic recognition (brand, amount, confidence level)
+4. **One-click reply** - Enter review comments, click send, and consumers will receive notifications on WhatsApp immediately
 
-**特点：**
-- 网页操作，无需安装软件
-- AI 自动识别，减少人工输入错误
-- 批量处理，提高效率
-- 所有操作有记录，可追溯
+**Features:**
+- Web operation, no need to install software
+- AI automatic recognition reduces manual input errors
+- Batch processing to improve efficiency
+- All operations are recorded and traceable
 
 ---
 
-## 审核状态说明
+## Review status description
 
-在管理后台，您会看到每个收据的审核状态：
+In the admin panel, you will see the review status of each receipt:
 
-| 状态 | 含义 | 下一步操作 |
+| state | meaning | Next steps |
 |------|------|-----------|
-| 🟡 待 AI 提取 | 消费者已提交收据，正在等待 AI 识别 | 等待系统自动处理（通常几秒内完成）|
-| 🔵 待发消息 | AI 已识别完成，等待工作人员审核 | 查看识别结果，输入审核意见并发送 |
-| 🟢 已发送 | 已审核并通过，消费者已收到通知 | 无需操作，记录已存档 |
-| 🔴 已拒绝 | 已审核但不通过，消费者已收到通知 | 无需操作，可查看拒绝原因 |
+| 🟡To be extracted by AI | The consumer has submitted the receipt and is waiting for AI recognition | Wait for the system to process it automatically (usually completed within a few seconds) |
+| 🔵 Message to be sent | AI recognition has been completed and is waiting for staff review | View the recognition results, enter review comments and send |
+| 🟢 Sent | Reviewed and approved, consumers have been notified | No action required, the record has been archived |
+| 🔴Rejected | Reviewed but not passed, the consumer has been notified | No action required, you can view the reasons for rejection |
 
 ---
 
-## 活动规则设置
+## Activity rule settings
 
-您可以根据活动需求，灵活设置审核规则：
+You can flexibly set review rules based on activity needs:
 
-**可配置的规则包括：**
-- **认可的品牌列表** - 只有这些品牌的收据才能通过（如：Samsung、Apple、Dyson、Panasonic、Sony）
-- **最低消费金额** - 收据金额必须达到这个数目才符合要求（如：RM 500）
-- **每人每天提交次数限制** - 防止重复提交（如：每人每天最多 5 次）
-- **提交超时时间** - 消费者发送身份证后，必须在规定时间内发送收据（如：30 分钟）
+**Configurable rules include:**
+- **Approved Brand List** - Only receipts from these brands will pass (eg: Samsung, Apple, Dyson, Panasonic, Sony)
+- **Minimum Spending Amount** - The receipt amount must reach this amount to meet the requirements (eg: RM 500)
+- **Limit on the number of submissions per person per day** - to prevent repeated submissions (e.g.: maximum 5 times per person per day)
+- **Submission timeout** - After the consumer sends the ID card, the receipt must be sent within the specified time (eg: 30 minutes)
 
-**如何修改规则：**  
-请联系系统管理员修改配置文档，修改后需要重启系统才能生效。
+**How to modify a rule:**
+Please contact the system administrator to modify the configuration document. After modification, the system needs to be restarted to take effect.
 
 ---
 
-## 数据记录与导出
+## Data recording and export
 
-系统会自动保存所有重要数据：
+The system automatically saves all important data:
 
-### 📊 自动生成的 Excel 表格
+### 📊 Automatically generated Excel table
 
-系统会维护两个 Excel 表格，记录所有活动数据：
+The system maintains two Excel tables to record all activity data:
 
-| 表格名称 | 记录内容 | 用途 |
+| table name | Record content | use |
 |---------|---------|------|
-| **Registrations** | 所有参与活动的用户：手机号、身份证号、注册时间 | 统计参与人数、用户信息 |
-| **Receipts** | 所有提交的收据：单据编号、品牌、金额、审核结果、AI 识别准确度 | 财务对账、活动效果分析 |
+| **Registrations** | All users participating in the event: mobile phone number, ID number, registration time | Count the number of participants and user information |
+| **Receipts** | All submitted receipts: document number, brand, amount, review results, AI recognition accuracy | Financial reconciliation and activity effect analysis |
 
-### 📁 数据备份
+### 📁 Data backup
 
-系统会自动备份：
-- 所有收据图片（方便复查）
-- 完整的数据库（包含所有操作记录）
-- Excel 导出文件（可直接打印或发送给财务）
-
----
-
-## 常见问题 (FAQ)
-
-### ❓ 消费者常见问题
-
-**Q：我需要下载 App 吗？**  
-A：不需要！您只需要用手机上的 WhatsApp 即可参与活动。
-
-**Q：我的个人信息安全吗？**  
-A：系统会严格保护您的隐私。身份证号和手机号只会用于活动审核，不会泄露给第三方。
-
-**Q：提交后多久能收到结果？**  
-A：通常几分钟到几小时内就会有结果。具体时间取决于工作人员审核速度。
-
-**Q：如果收据拍得不清楚怎么办？**  
-A：系统会提示您重新拍摄。请确保照片清晰、光线充足，能看到品牌名称和金额。
-
-**Q：我可以提交多张收据吗？**  
-A：可以，但每人每天有提交次数限制（具体次数由活动规则决定）。
-
-### ❓ 工作人员常见问题
-
-**Q：我需要懂技术才能用吗？**  
-A：不需要！管理后台设计得很简单，会用网页就能操作。如果有疑问，请看操作手册或联系技术支持。
-
-**Q：AI 识别错了怎么办？**  
-A：AI 只是辅助工具，最终审核权在您手里。如果 AI 识别有误，您可以手动修改品牌和金额，再发送审核结果。
-
-**Q：如何导出数据给财务？**  
-A：系统会自动生成 Excel 文件，您可以直接下载或打印。文件路径在系统设置中有说明。
-
-**Q：如果系统出问题了怎么办？**  
-A：请联系系统管理员或技术支持。系统有自动备份功能，数据不会丢失。
-
-**Q：可以同时多人审核吗？**  
-A：可以！多个工作人员可以同时登录后台，各自处理不同的收据，互不影响。
+The system will automatically back up:
+- Pictures of all receipts (for easy review)
+- Complete database (contains all operation records)
+- Excel export file (can be printed directly or sent to finance)
 
 ---
 
-## 注意事项
+## Frequently Asked Questions (FAQ)
 
-- **登录凭证安全** - 工作人员的账号密码请妥善保管，不要泄露给他人
-- **定期备份** - 建议定期备份系统数据，防止意外丢失
-- **网络稳定** - 使用时请确保网络连接稳定，以免影响审核效率
-- **培训工作人员** - 首次使用前，请对工作人员进行简单培训，确保他们熟悉操作流程
+### ❓ Consumer FAQs
+
+**Q: Do I need to download the app?**
+
+A: No need! All you need to participate is WhatsApp on your phone.
+
+**Q: Is my personal information safe?**
+
+A: The system will strictly protect your privacy. The ID number and mobile phone number will only be used for activity review and will not be disclosed to third parties.
+
+**Q: How long does it take to receive the results after submission?**
+
+A: Results are usually available within a few minutes to a few hours. The specific time depends on the review speed of the staff.
+
+**Q: What should I do if the receipt is not clearly photographed?**
+
+A: The system will prompt you to shoot again. Please make sure the photo is clear and well-lit so that the brand name and amount can be seen.
+
+**Q: Can I submit multiple receipts?**
+
+A: Yes, but there is a limit on the number of submissions per person per day (the specific number is determined by the event rules).
+
+### ❓ FAQs from staff
+
+**Q: Do I need to know technology to use it?**
+
+A: No need! The management backend is designed to be very simple and can be operated if you know how to use the web page. If in doubt, please read the operation manual or contact technical support.
+
+**Q: What should I do if the AI recognition is wrong?**
+
+A: AI is just an auxiliary tool, and the final review is in your hands. If the AI recognition is wrong, you can manually modify the brand and amount before sending the review results.
+
+**Q: How to export data to finance?**
+
+A: The system will automatically generate an Excel file, which you can download or print directly. The file path is described in the system settings.
+
+**Q: What should I do if there is a problem with the system?**
+
+A: Please contact your system administrator or technical support. The system has an automatic backup function, so data will not be lost.
+
+**Q: Can multiple people review it at the same time?**
+
+A: Yes! Multiple staff can log in to the backend at the same time and process different receipts without affecting each other.
 
 ---
 
-## 技术支持
+## Things to note
 
-如果您在使用过程中遇到任何问题，请通过以下方式联系我们：
-
-- **技术支持邮箱**：[请填入您的技术支持邮箱]
-- **技术支持电话**：[请填入您的技术支持电话]
-- **在线客服**：[请填入在线客服链接]
+- **Login Credential Security** - Please keep the account and password of the staff properly and do not disclose them to others.
+- **Regular Backup** - It is recommended to back up system data regularly to prevent accidental loss.
+- **Network Stability** - Please ensure that the network connection is stable when using it to avoid affecting the review efficiency.
+- **Train staff** - Before first use, please conduct simple training for staff to ensure they are familiar with the operating procedures
 
 ---
 
-## 版本历史
+## Technical support
 
-- **当前版本**：v1.0
-- **最后更新**：2026年6月
+If you encounter any problems during use, please contact us through the following methods:
+
+- **Technical Support Email**: [Please fill in your technical support email]
+- **Technical support phone number**: [Please enter your technical support phone number]
+- **Online Customer Service**: [Please fill in the online customer service link]
+
+---
+
+## Version history
+
+- **Current version**: v1.0
+- **Last updated**: June 2026
 
 ---
 

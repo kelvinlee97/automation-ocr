@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * feedback-routes.test.js — Feedback 路由单元测试
+ * feedback-routes.test.js — Feedback routing unit test
  */
 
 const request = require("supertest");
@@ -12,7 +12,7 @@ const session = require("express-session");
 // register process exit listeners.
 jest.mock("session-file-store", () => () => class TestFileStore {});
 
-// Mock 工厂函数
+// Mock factory function
 function createMocks() {
   return {
     adminUserService: {
@@ -48,20 +48,20 @@ function createMocks() {
       warn: jest.fn(),
     },
     i18n: {
-      getLang: jest.fn(() => "zh"),
+      getLang: jest.fn(() => "en"),
       t: jest.fn((key) => {
         const translations = {
-          load_fail: "加载失败：",
-          feedback_required_fields: "请填写所有必填字段",
-          feedback_title_too_long: "标题过长（最多 200 字符）",
-          feedback_description_too_long: "描述过长（最多 5000 字符）",
-          feedback_invalid_type: "反馈类型无效",
-          feedback_submit_fail: "提交失败：",
-          feedback_not_found: "反馈不存在",
-          feedback_no_github_issue: "该反馈未关联 GitHub Issue",
-          feedback_upload_fail: "上传失败：",
-          feedback_no_file: "未收到文件",
-          feedback_screenshot_not_found: "截图不存在",
+          load_fail: "Loading failed:",
+          feedback_required_fields: "Please fill in all required fields",
+          feedback_title_too_long: "Title too long (maximum 200 characters)",
+          feedback_description_too_long: "Description too long (maximum 5000 characters)",
+          feedback_invalid_type: "Invalid feedback type",
+          feedback_submit_fail: "Submission failed:",
+          feedback_not_found: "Feedback does not exist",
+          feedback_no_github_issue: "This feedback is not associated with a GitHub Issue",
+          feedback_upload_fail: "Upload failed:",
+          feedback_no_file: "Document not received",
+          feedback_screenshot_not_found: "Screenshot does not exist",
         };
         return translations[key] || key;
       }),
@@ -124,21 +124,21 @@ async function getAuthCookie(app) {
     .post("/admin/login")
     .send("username=admin&password=pass");
   const cookies = res.headers["set-cookie"];
-  if (!cookies) throw new Error("登录后未收到 Set-Cookie");
+  if (!cookies) throw new Error("Set-Cookie not received after logging in");
   return Array.isArray(cookies) ? cookies[0].split(";")[0] : cookies.split(";")[0];
 }
 
-// ── 测试套件 ─────────────────────────────────────────────────────────────────────
+// ──Test Suite───────────────────────────────────────────────────────────────
 
 describe("Feedback Routes - GET /admin/feedback", () => {
-  it("未登录时 302 重定向到 /admin/login", async () => {
+  it("302 redirect to /admin/login when not logged in", async () => {
     const app = buildApp();
     const res = await request(app).get("/admin/feedback");
     expect(res.status).toBe(302);
     expect(res.headers.location).toMatch(/\/admin\/login/);
   });
 
-  it("已登录时返回 200", async () => {
+  it("Returns 200 when logged in", async () => {
     const app = buildApp();
     const cookie = await getAuthCookie(app);
     const res = await request(app)
@@ -149,13 +149,13 @@ describe("Feedback Routes - GET /admin/feedback", () => {
 });
 
 describe("Feedback Routes - GET /admin/feedback/new", () => {
-  it("未登录时 302 重定向", async () => {
+  it("302 redirect when not logged in", async () => {
     const app = buildApp();
     const res = await request(app).get("/admin/feedback/new");
     expect(res.status).toBe(302);
   });
 
-  it("已登录时返回 200", async () => {
+  it("Returns 200 when logged in", async () => {
     const app = buildApp();
     const cookie = await getAuthCookie(app);
     const res = await request(app)
@@ -166,7 +166,7 @@ describe("Feedback Routes - GET /admin/feedback/new", () => {
 });
 
 describe("Feedback Routes - POST /admin/feedback", () => {
-  it("未登录时 302 重定向", async () => {
+  it("302 redirect when not logged in", async () => {
     const app = buildApp();
     const res = await request(app)
       .post("/admin/feedback")
@@ -174,7 +174,7 @@ describe("Feedback Routes - POST /admin/feedback", () => {
     expect(res.status).toBe(302);
   });
 
-  it("缺少 title 时返回 400", async () => {
+  it("Returns 400 when title is missing", async () => {
     const app = buildApp();
     const cookie = await getAuthCookie(app);
     const res = await request(app)
@@ -186,13 +186,13 @@ describe("Feedback Routes - POST /admin/feedback", () => {
 });
 
 describe("Feedback Routes - GET /admin/feedback/:id", () => {
-  it("未登录时 302 重定向", async () => {
+  it("302 redirect when not logged in", async () => {
     const app = buildApp();
     const res = await request(app).get("/admin/feedback/test-id");
     expect(res.status).toBe(302);
   });
 
-  it("已登录且反馈存在时返回 200", async () => {
+  it("Returns 200 when logged in and feedback exists", async () => {
     mocks.feedbackStore.getById.mockReturnValueOnce({
       id: "test-id",
       title: "Test",
@@ -213,7 +213,7 @@ describe("Feedback Routes - GET /admin/feedback/:id", () => {
 });
 
 describe("Feedback Routes - POST /admin/feedback/:id/sync", () => {
-  it("未登录时 302 重定向到 /admin/login", async () => {
+  it("302 redirect to /admin/login when not logged in", async () => {
     const app = buildApp();
     const res = await request(app)
       .post("/admin/feedback/test-id/sync");
@@ -223,7 +223,7 @@ describe("Feedback Routes - POST /admin/feedback/:id/sync", () => {
 });
 
 describe("Feedback Routes - POST /admin/feedback/:id/screenshot", () => {
-  it("未登录时 302 重定向到 /admin/login", async () => {
+  it("302 redirect to /admin/login when not logged in", async () => {
     const app = buildApp();
     const res = await request(app)
       .post("/admin/feedback/test-id/screenshot");
@@ -233,7 +233,7 @@ describe("Feedback Routes - POST /admin/feedback/:id/screenshot", () => {
 });
 
 describe("Feedback Routes - GET /admin/uploads/feedback/:filename", () => {
-  it("未登录时 302 重定向", async () => {
+  it("302 redirect when not logged in", async () => {
     const app = buildApp();
     const res = await request(app).get("/admin/uploads/feedback/test.png");
     expect(res.status).toBe(302);

@@ -25,7 +25,7 @@ function registerUserRoutes(app) {
     if (password !== confirm) return res.send(newUserPage(t('password_mismatch', lang), lang));
     const result = adminUserService.createUser(username, password);
     if (!result.ok) return res.send(newUserPage(result.error, lang));
-    logger.info("新管理员账号已创建", { by: req.session.username, newUser: username });
+    logger.info("New administrator account has been created", { by: req.session.username, newUser: username });
     res.redirect("/admin/users?flash=" + encodeURIComponent(t('user_created', lang)));
   });
 
@@ -35,7 +35,7 @@ function registerUserRoutes(app) {
     const lang = getLang(req);
     const result = adminUserService.resetPassword(username, newPassword);
     if (!result.ok) return res.redirect(`/admin/users?flash=${encodeURIComponent(t('download_fail', lang) + result.error)}`);
-    logger.info("密码已重置", { by: req.session.username, target: username });
+    logger.info("Password reset", { by: req.session.username, target: username });
     res.redirect("/admin/users?flash=" + encodeURIComponent(t('password_reset_ok', lang)));
   });
 
@@ -44,7 +44,7 @@ function registerUserRoutes(app) {
     const lang = getLang(req);
     const result = adminUserService.deleteUser(username, req.session.username);
     if (!result.ok) return res.redirect(`/admin/users?flash=${encodeURIComponent(t('download_fail', lang) + result.error)}`);
-    logger.info("管理员账号已删除", { by: req.session.username, deleted: username });
+    logger.info("Administrator account has been deleted", { by: req.session.username, deleted: username });
     res.redirect("/admin/users?flash=" + encodeURIComponent(t('user_deleted', lang)));
   });
 }

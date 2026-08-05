@@ -1,17 +1,17 @@
 "use strict";
 
 /**
- * githubService.test.js — githubService GitHub API 集成测试
+ * githubService.test.js — githubService GitHub API integration test
  *
- * 测试策略：
- *  - 使用 setTestOctokit 注入 mock Octokit 实例
- *  - 避免真实网络请求
- *  - 验证 API 调用参数和错误处理
+ * Test strategy:
+ *  - Use setTestOctokit to inject mock Octokit instance
+ *  - Avoid real network requests
+ *  - Validation of API call parameters and error handling
  */
 
-// ── 在 require githubService 之前先设置测试环境 ─────────────────────────
+// ── Set up the test environment before require githubService ────────────────────────
 
-// 创建 mock octokit 实例
+// Create mock octokit instance
 const mockOctokitInstance = {
   issues: {
     create: jest.fn(),
@@ -26,19 +26,19 @@ jest.mock("../../utils/logger", () => ({
   warn: jest.fn(),
 }));
 
-// 设置环境变量（在 require githubService 之前）
+// Set environment variables (before require githubService)
 process.env.GITHUB_TOKEN = "fake-github-token-for-test";
 process.env.GITHUB_REPO_OWNER = "test-owner";
 process.env.GITHUB_REPO_NAME = "test-repo";
 
-// 清除 require 缓存，确保使用最新的 githubService
+// Clear the require cache to ensure the latest githubService is used
 delete require.cache[require.resolve("../githubService")];
 const githubService = require("../githubService");
 
-// 注入 mock Octokit 实例
+// Inject mock Octokit instance
 githubService.setTestOctokit(mockOctokitInstance);
 
-// ── 测试辅助 ──────────────────────────────────────────────────────────────────
+// ──Testing assistance────────────────────────────────────────────────────────────
 
 function createFakeFeedback(overrides = {}) {
   return {
@@ -78,7 +78,7 @@ function createGitHubIssueGetResponse(overrides = {}) {
 }
 
 beforeEach(() => {
-  // 清除所有 mock 调用记录
+  // Clear all mock call records
   jest.clearAllMocks();
   mockOctokitInstance.issues.create.mockReset();
   mockOctokitInstance.issues.get.mockReset();
@@ -87,7 +87,7 @@ beforeEach(() => {
 // ─── createIssue ────────────────────────────────────────────────────────────────
 
 describe("githubService.createIssue", () => {
-  it("调用 octokit.issues.create 并传正确参数", async () => {
+  it("Call octokit.issues.create and pass the correct parameters", async () => {
     const feedback = createFakeFeedback();
     const mockResponse = createGitHubIssueResponse();
     mockOctokitInstance.issues.create.mockResolvedValueOnce(mockResponse);
@@ -105,7 +105,7 @@ describe("githubService.createIssue", () => {
     });
   });
 
-  it("type=bug 时使用 labels=[bug]", async () => {
+  it("Use labels=[bug] when type=bug", async () => {
     const feedback = createFakeFeedback({ type: "bug" });
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 
@@ -115,7 +115,7 @@ describe("githubService.createIssue", () => {
     expect(callArgs.labels).toEqual(["bug"]);
   });
 
-  it("type=improvement 时使用 labels=[enhancement]", async () => {
+  it("Use labels=[enhancement] when type=improvement", async () => {
     const feedback = createFakeFeedback({ type: "improvement" });
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 
@@ -125,7 +125,7 @@ describe("githubService.createIssue", () => {
     expect(callArgs.labels).toEqual(["enhancement"]);
   });
 
-  it("Issue body 包含 description", async () => {
+  it("Issue body contains description", async () => {
     const feedback = createFakeFeedback({ description: "Page crashes when filtering" });
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 
@@ -135,7 +135,7 @@ describe("githubService.createIssue", () => {
     expect(callArgs.body).toContain("Page crashes when filtering");
   });
 
-  it("Issue body 包含 screenshot URL（当有截图时）", async () => {
+  it("Issue body contains screenshot URL (when there is a screenshot)", async () => {
     const feedback = createFakeFeedback({
       screenshotUrl: "/uploads/feedback/test.png",
     });
@@ -147,7 +147,7 @@ describe("githubService.createIssue", () => {
     expect(callArgs.body).toContain("![Screenshot](/uploads/feedback/test.png)");
   });
 
-  it("Issue body 不包含 screenshot section（当无截图时）", async () => {
+  it("Issue body does not contain screenshot section (when there is no screenshot)", async () => {
     const feedback = createFakeFeedback({ screenshotUrl: null });
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 
@@ -157,7 +157,7 @@ describe("githubService.createIssue", () => {
     expect(callArgs.body).not.toContain("## Screenshot");
   });
 
-  it("Issue body 包含 submittedBy", async () => {
+  it("Issue body contains submittedBy", async () => {
     const feedback = createFakeFeedback({ submittedBy: "admin-kelvin" });
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 
@@ -167,7 +167,7 @@ describe("githubService.createIssue", () => {
     expect(callArgs.body).toContain("@admin-kelvin");
   });
 
-  it("Issue body 包含 feedback ID", async () => {
+  it("Issue body contains feedback ID", async () => {
     const feedback = createFakeFeedback({ id: "test-uuid-1234" });
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 
@@ -177,7 +177,7 @@ describe("githubService.createIssue", () => {
     expect(callArgs.body).toContain("test-uuid-1234");
   });
 
-  it("返回 { issueId, issueUrl }", async () => {
+  it("Return { issueId, issueUrl }", async () => {
     const feedback = createFakeFeedback();
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 
@@ -189,7 +189,7 @@ describe("githubService.createIssue", () => {
     });
   });
 
-  it("GitHub API 成功时记录 info 日志", async () => {
+  it("GitHub API logs info on success", async () => {
     const logger = require("../../utils/logger");
     const feedback = createFakeFeedback();
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
@@ -197,7 +197,7 @@ describe("githubService.createIssue", () => {
     await githubService.createIssue(feedback);
 
     expect(logger.info).toHaveBeenCalledWith(
-      "GitHub Issue 创建成功",
+      "GitHub Issue created successfully",
       expect.objectContaining({
         issueId: 123456,
         issueNumber: 123,
@@ -206,16 +206,16 @@ describe("githubService.createIssue", () => {
     );
   });
 
-  it("GitHub API 失败（网络错误）时抛出错误", async () => {
+  it("GitHub API throws error when it fails (network error)", async () => {
     const feedback = createFakeFeedback();
     mockOctokitInstance.issues.create.mockRejectedValueOnce(new Error("Network error"));
 
     await expect(githubService.createIssue(feedback)).rejects.toThrow(
-      /GitHub API 错误/
+      /GitHub API error/
     );
   });
 
-  it("GitHub API 失败（401 未授权）时抛出错误包含 response data", async () => {
+  it("GitHub API fails (401 Unauthorized) and throws an error containing response data", async () => {
     const feedback = createFakeFeedback();
     const error = new Error("Unauthorized");
     error.response = { data: { message: "Bad credentials" } };
@@ -226,7 +226,7 @@ describe("githubService.createIssue", () => {
     );
   });
 
-  it("GitHub API 失败（403 限流）时抛出错误", async () => {
+  it("GitHub API throws an error when it fails (403 Throttling)", async () => {
     const feedback = createFakeFeedback();
     const error = new Error("API rate limit exceeded");
     error.response = { data: { message: "API rate limit exceeded" } };
@@ -237,7 +237,7 @@ describe("githubService.createIssue", () => {
     );
   });
 
-  it("GitHub API 失败时记录 error 日志", async () => {
+  it("GitHub API records error logs when it fails", async () => {
     const logger = require("../../utils/logger");
     const feedback = createFakeFeedback();
     const error = new Error("Server error");
@@ -247,11 +247,11 @@ describe("githubService.createIssue", () => {
     try {
       await githubService.createIssue(feedback);
     } catch (e) {
-      // 忽略错误
+      // ignore errors
     }
 
     expect(logger.error).toHaveBeenCalledWith(
-      "GitHub Issue 创建失败",
+      "GitHub Issue creation failed",
       expect.objectContaining({
         error: expect.any(String),
         response: expect.any(Object),
@@ -259,19 +259,19 @@ describe("githubService.createIssue", () => {
     );
   });
 
-  it("GITHUB_TOKEN 未配置时抛出错误", async () => {
+  it("Throws an error when GITHUB_TOKEN is not configured", async () => {
     const originalToken = process.env.GITHUB_TOKEN;
     delete process.env.GITHUB_TOKEN;
 
-    // 重新加载模块以获取最新的环境变量
+    // Reload the module to get the latest environment variables
     delete require.cache[require.resolve("../githubService")];
     const freshModule = require("../githubService");
 
     await expect(freshModule.createIssue(createFakeFeedback())).rejects.toThrow(
-      /GITHUB_TOKEN 未配置/
+      /GITHUB_TOKEN not configured/
     );
 
-    // 恢复环境变量并重新加载原模块
+    // Restore environment variables and reload the original module
     process.env.GITHUB_TOKEN = originalToken;
     delete require.cache[require.resolve("../githubService")];
     const restoredModule = require("../githubService");
@@ -282,7 +282,7 @@ describe("githubService.createIssue", () => {
 // ─── getIssue ─────────────────────────────────────────────────────────────────
 
 describe("githubService.getIssue", () => {
-  it("调用 octokit.issues.get 并传正确参数", async () => {
+  it("Call octokit.issues.get and pass the correct parameters", async () => {
     const mockResponse = createGitHubIssueGetResponse();
     mockOctokitInstance.issues.get.mockResolvedValueOnce(mockResponse);
 
@@ -297,7 +297,7 @@ describe("githubService.getIssue", () => {
     });
   });
 
-  it("返回 { state, labels }", async () => {
+  it("Return { state, labels }", async () => {
     const mockResponse = createGitHubIssueGetResponse({
       state: "closed",
       labels: [{ name: "bug" }, { name: "priority-high" }],
@@ -312,7 +312,7 @@ describe("githubService.getIssue", () => {
     });
   });
 
-  it("state=open 时返回 state=open", async () => {
+  it("Returns state=open when state=open", async () => {
     const mockResponse = createGitHubIssueGetResponse({ state: "open" });
     mockOctokitInstance.issues.get.mockResolvedValueOnce(mockResponse);
 
@@ -321,7 +321,7 @@ describe("githubService.getIssue", () => {
     expect(result.state).toBe("open");
   });
 
-  it("state=closed 时返回 state=closed", async () => {
+  it("Returns state=closed when state=closed", async () => {
     const mockResponse = createGitHubIssueGetResponse({ state: "closed" });
     mockOctokitInstance.issues.get.mockResolvedValueOnce(mockResponse);
 
@@ -330,17 +330,17 @@ describe("githubService.getIssue", () => {
     expect(result.state).toBe("closed");
   });
 
-  it("GitHub API 失败（issue 不存在）时抛出错误", async () => {
+  it("Throw error when GitHub API fails (issue does not exist)", async () => {
     const error = new Error("Not Found");
     error.response = { data: { message: "Not Found" } };
     mockOctokitInstance.issues.get.mockRejectedValueOnce(error);
 
     await expect(githubService.getIssue(999)).rejects.toThrow(
-      /GitHub API 错误/
+      /GitHub API error/
     );
   });
 
-  it("GitHub API 失败时记录 error 日志", async () => {
+  it("GitHub API records error logs when it fails", async () => {
     const logger = require("../../utils/logger");
     const error = new Error("Not Found");
     error.response = { data: { message: "Not Found" } };
@@ -349,11 +349,11 @@ describe("githubService.getIssue", () => {
     try {
       await githubService.getIssue(999);
     } catch (e) {
-      // 忽略错误
+      // ignore errors
     }
 
     expect(logger.error).toHaveBeenCalledWith(
-      "获取 GitHub Issue 失败",
+      "Failed to get GitHub Issue",
       expect.objectContaining({
         issueNumber: 999,
         error: expect.any(String),
@@ -365,7 +365,7 @@ describe("githubService.getIssue", () => {
 // ─── syncIssueStatus ───────────────────────────────────────────────────────────
 
 describe("githubService.syncIssueStatus", () => {
-  it("调用 getIssue 获取最新状态", async () => {
+  it("Call getIssue to get the latest status", async () => {
     const feedback = { id: "test-id", githubIssueId: 123 };
     const mockResponse = createGitHubIssueGetResponse({ state: "open" });
     mockOctokitInstance.issues.get.mockResolvedValueOnce(mockResponse);
@@ -379,7 +379,7 @@ describe("githubService.syncIssueStatus", () => {
     });
   });
 
-  it("state=open 时返回 status=open, githubIssueState=open", async () => {
+  it("Return status=open, githubIssueState=open when state=open", async () => {
     const feedback = { id: "test-id", githubIssueId: 123 };
     const mockResponse = createGitHubIssueGetResponse({ state: "open" });
     mockOctokitInstance.issues.get.mockResolvedValueOnce(mockResponse);
@@ -392,7 +392,7 @@ describe("githubService.syncIssueStatus", () => {
     });
   });
 
-  it("state=closed 时返回 status=resolved, githubIssueState=closed", async () => {
+  it("When state=closed returns status=resolved, githubIssueState=closed", async () => {
     const feedback = { id: "test-id", githubIssueId: 123 };
     const mockResponse = createGitHubIssueGetResponse({ state: "closed" });
     mockOctokitInstance.issues.get.mockResolvedValueOnce(mockResponse);
@@ -405,38 +405,38 @@ describe("githubService.syncIssueStatus", () => {
     });
   });
 
-  it("githubIssueId 为 null 时抛出错误", async () => {
+  it("Throws an error when githubIssueId is null", async () => {
     const feedback = { id: "test-id", githubIssueId: null };
 
     await expect(githubService.syncIssueStatus(feedback)).rejects.toThrow(
-      /反馈未关联 GitHub Issue/
+      /Feedback is not associated with a GitHub Issue/
     );
   });
 
-  it("githubIssueId 为 undefined 时抛出错误", async () => {
+  it("Throws an error when githubIssueId is undefined", async () => {
     const feedback = { id: "test-id", githubIssueId: undefined };
 
     await expect(githubService.syncIssueStatus(feedback)).rejects.toThrow(
-      /反馈未关联 GitHub Issue/
+      /Feedback is not associated with a GitHub Issue/
     );
   });
 
-  it("GitHub API 失败（issue 不存在）时抛出错误", async () => {
+  it("Throw error when GitHub API fails (issue does not exist)", async () => {
     const feedback = { id: "test-id", githubIssueId: 999 };
     const error = new Error("Not Found");
     error.response = { data: { message: "Not Found" } };
     mockOctokitInstance.issues.get.mockRejectedValueOnce(error);
 
     await expect(githubService.syncIssueStatus(feedback)).rejects.toThrow(
-      /GitHub API 错误/
+      /GitHub API error/
     );
   });
 });
 
-// ─── buildIssueBody 间接测试 ────────────────────────────────────────────────
+// ─── buildIssueBody indirect test ──────────────────────────────────────────────
 
-describe("githubService.buildIssueBody（通过 createIssue 间接测试）", () => {
-  it("包含 ## Feedback Details 标题", async () => {
+describe("githubService.buildIssueBody (tested indirectly via createIssue)", () => {
+  it("Contains the ## Feedback Details header", async () => {
     const feedback = createFakeFeedback();
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 
@@ -446,7 +446,7 @@ describe("githubService.buildIssueBody（通过 createIssue 间接测试）", ()
     expect(callArgs.body).toContain("## Feedback Details");
   });
 
-  it("包含 **Admin:** 行", async () => {
+  it("Contains the **Admin:** line", async () => {
     const feedback = createFakeFeedback({ submittedBy: "admin1" });
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 
@@ -456,7 +456,7 @@ describe("githubService.buildIssueBody（通过 createIssue 间接测试）", ()
     expect(callArgs.body).toContain("**Admin:** @admin1");
   });
 
-  it("包含 **Submitted At:** 行（ISO 格式）", async () => {
+  it("Contains the **Submitted At:** line (ISO format)", async () => {
     const submittedAt = new Date("2026-01-10T15:30:00Z").getTime();
     const feedback = createFakeFeedback({ submittedAt });
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
@@ -467,7 +467,7 @@ describe("githubService.buildIssueBody（通过 createIssue 间接测试）", ()
     expect(callArgs.body).toContain("**Submitted At:** 2026-01-10T15:30:00.000Z");
   });
 
-  it("包含 **Feedback ID:** 行", async () => {
+  it("Contains the line **Feedback ID:**", async () => {
     const feedback = createFakeFeedback({ id: "my-uuid-123" });
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 
@@ -477,7 +477,7 @@ describe("githubService.buildIssueBody（通过 createIssue 间接测试）", ()
     expect(callArgs.body).toContain("**Feedback ID:** my-uuid-123");
   });
 
-  it("包含 ## Description 部分", async () => {
+  it("Contains ## Description section", async () => {
     const feedback = createFakeFeedback({ description: "Test description here" });
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 
@@ -488,7 +488,7 @@ describe("githubService.buildIssueBody（通过 createIssue 间接测试）", ()
     expect(callArgs.body).toContain("Test description here");
   });
 
-  it("有截图时包含 ## Screenshot 部分和 markdown 图片链接", async () => {
+  it("If you have a screenshot, include the ## Screenshot part and markdown image link", async () => {
     const feedback = createFakeFeedback({
       screenshotUrl: "https://example.com/screenshot.png",
     });
@@ -501,7 +501,7 @@ describe("githubService.buildIssueBody（通过 createIssue 间接测试）", ()
     expect(callArgs.body).toContain("![Screenshot](https://example.com/screenshot.png)");
   });
 
-  it("无截图时不包含 ## Screenshot 部分", async () => {
+  it("If there is no screenshot, the ## Screenshot part is not included.", async () => {
     const feedback = createFakeFeedback({ screenshotUrl: null });
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 
@@ -511,7 +511,7 @@ describe("githubService.buildIssueBody（通过 createIssue 间接测试）", ()
     expect(callArgs.body).not.toContain("## Screenshot");
   });
 
-  it("包含 --- 分隔线", async () => {
+  it("Contains --- separator", async () => {
     const feedback = createFakeFeedback();
     mockOctokitInstance.issues.create.mockResolvedValueOnce(createGitHubIssueResponse());
 

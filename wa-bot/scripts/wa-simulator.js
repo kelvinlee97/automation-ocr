@@ -1,32 +1,32 @@
 #!/usr/bin/env node
 /**
- * wa-simulator.js — WhatsApp 用户流程可复用模拟工具
+ * wa-simulator.js — WhatsApp user flow reusable simulation tool
  *
- * 内建多个命名场景，完整走 messageHandler 业务逻辑写入真实 data/ 目录，
- * 管理后台可立即看到结果。
+ * Multiple named scenarios are built-in, and the messageHandler business logic is completely written into the real data/ directory.
+ * The results can be seen immediately in the management backend.
  *
- * ─── 用法 ────────────────────────────────────────────────────────────────────
- *   node wa-bot/scripts/wa-simulator.js                    # 运行默认场景（happy-path）
- *   node wa-bot/scripts/wa-simulator.js --scene <名称>     # 运行指定场景
- *   node wa-bot/scripts/wa-simulator.js --all              # 运行全部场景
- *   node wa-bot/scripts/wa-simulator.js --list             # 查看所有场景
- *   node wa-bot/scripts/wa-simulator.js --clean            # 清除所有模拟数据
+ * ───Usage ─────────────────────────────────────────────────────────────
+ *   node wa-bot/scripts/wa-simulator.js #Run the default scenario (happy-path)
+ *   node wa-bot/scripts/wa-simulator.js --scene <name> # Run the specified scene
+ *   node wa-bot/scripts/wa-simulator.js --all #Run all scenarios
+ *   node wa-bot/scripts/wa-simulator.js --list # View all scenarios
+ *   node wa-bot/scripts/wa-simulator.js --clean # Clear all simulation data
  *
- * ─── 自定义参数（覆盖场景默认值）────────────────────────────────────────────
- *   --phone <号码>   手机号（纯数字，不含 @c.us 后缀）
- *   --ic    <IC>     马来西亚 IC 号码
+ * ─── Custom parameters (override scene default values)──────────────────────────────────────────
+ *   --phone <number> Mobile phone number (pure numbers, excluding @c.us suffix)
+ *   --ic <IC> Malaysian IC number
  *
- * ─── 内建场景 ────────────────────────────────────────────────────────────────
- *   happy-path      正常流程：发 IC → 发 1 张收据
- *   multi-receipt   多收据：发 IC → 发 3 张收据
- *   no-ic           跳过 IC 直接发图（ic 字段为 null）
- *   invalid-ic      先发无效 IC → 再发合法 IC → 发收据（验证容错）
- *   duplicate-ic    同一 IC 两次注册（验证去重逻辑）
- *   group-ignored   模拟群组消息（应被静默忽略，不写任何数据）
+ * ─── Built-in scenes ────────────────────────────────────────────────────────────
+ *   happy-path normal process: issue IC → issue 1 receipt
+ *   multi-receipt: send IC → send 3 receipts
+ *   no-ic skips IC and sends pictures directly (ic field is null)
+ *   invalid-ic sends invalid IC first → then sends legal IC → sends receipt (verification fault tolerance)
+ *   duplicate-ic The same IC is registered twice (verification of deduplication logic)
+ *   group-ignored simulates a group message (should be silently ignored, no data is written)
  *
- * 注意：
- *   - 必须从项目根目录运行（ClaimFlow/）
- *   - 模拟记录带 __simulate: true 标记，--clean 仅删带标记的记录
+ * Notice:
+ *   - Must be run from the project root (ClaimFlow/)
+ *   - Simulate records with __simulate: true flag, --clean only deletes records with the flag
  */
 
 'use strict';
@@ -34,17 +34,17 @@
 const path = require('path');
 const fs   = require('fs');
 
-// ─── 路径修正（必须在 require 业务模块之前）────────────────────────────────────
-// receiptStore 默认 DATA_DIR 从 wa-bot/src/services 向上 4 级，本地会解析到
-// ClaimFlow 的父目录。通过 DATA_DIR 覆盖，统一指向 ClaimFlow/data/
+// ─── Path correction (must be before require business module)───────────────────────────────────
+// The default DATA_DIR of receiptStore is 4 levels upward from wa-bot/src/services, which will be resolved locally.
+// ClaimFlow's parent directory. Covered by DATA_DIR and uniformly pointed to ClaimFlow/data/
 const PROJECT_ROOT = path.resolve(__dirname, '../../');
 process.env.DATA_DIR = path.join(PROJECT_ROOT, 'data');
 
 const { handleMessage } = require('../src/messageHandler');
 const excelService      = require('../src/services/excelService');
 
-// ─── 最小合法 JPEG（1×1 白色像素，base64）────────────────────────────────────
-// 用于所有图片消息，避免依赖外部文件；管理后台可正常渲染缩略图
+// ─── Smallest legal JPEG (1×1 white pixels, base64) ───────────────────────────────────
+// Used for all picture messages to avoid relying on external files; the management background can render thumbnails normally
 const DUMMY_JPEG_BASE64 =
   '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8U' +
   'HRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgN' +
@@ -53,10 +53,10 @@ const DUMMY_JPEG_BASE64 =
   'IBBQEAAAAAAAAAAAAAAQIDBAUREiExQf/EABUBAQEAAAAAAAAAAAAAAAAAAAEC/8QAFBEB' +
   'AAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AqGdmMl32RJVI5jqO42Zo3a8AAAA=';
 
-// ─── Message 工厂 ─────────────────────────────────────────────────────────────
+// ─── Message Factory ────────────────────────────────────────────────────────
 //
-// 每个工厂函数返回满足 handleMessage 接口的 mock 对象。
-// 字段与 whatsapp-web.js Message 对齐：from, type, hasMedia, body, timestamp 等。
+// Each factory function returns a mock object that satisfies the handleMessage interface.
+// Fields are aligned with whatsapp-web.js Message: from, type, hasMedia, body, timestamp, etc.
 //
 
 function makeTextMsg(waId, body) {
@@ -84,7 +84,7 @@ function makeImageMsg(waId) {
   };
 }
 
-// 群组消息：getChat 返回 isGroup: true，messageHandler 应静默忽略
+// Group message: getChat returns isGroup: true, messageHandler should be silently ignored
 function makeGroupMsg(waId, body) {
   return {
     from:      waId,
@@ -97,41 +97,41 @@ function makeGroupMsg(waId, body) {
   };
 }
 
-// ─── 场景定义 ─────────────────────────────────────────────────────────────────
+// ─── Scene definition ────────────────────────────────────────────────────────────
 //
-// 每个场景是一个对象：
-//   name        场景唯一标识
-//   desc        说明（--list 展示）
-//   phone       模拟手机号
-//   steps       async 步骤数组，每步返回 { label, msg } 或直接是一个 async fn(ctx)
+// Each scene is an object:
+//   name scene unique identifier
+//   desc description (--list display)
+//   phone simulated mobile phone number
+//   steps async step array, each step returns { label, msg } or directly an async fn(ctx)
 //
-// ctx 包含 { waId, log } 供步骤函数使用。
+// ctx contains { waId, log } for use by step functions.
 //
 
 const SCENES = [
   {
     name:  'happy-path',
-    desc:  '正常流程：发 IC → 发 1 张收据',
+    desc:  'Normal process: issue IC → issue 1 receipt',
     phone: '60100010001',
     steps: async ({ waId, log }) => {
-      log('发送 IC: 900101-14-5001');
+      log('Send IC: 900101-14-5001');
       await handleMessage(makeTextMsg(waId, '900101-14-5001'));
 
-      log('发送收据图片');
+      log('Send receipt image');
       await handleMessage(makeImageMsg(waId));
     },
   },
 
   {
     name:  'multi-receipt',
-    desc:  '多收据流程：发 IC → 发 3 张收据',
+    desc:  'Multiple receipt process: issue IC → issue 3 receipts',
     phone: '60100020002',
     steps: async ({ waId, log }) => {
-      log('发送 IC: 850615-10-1234');
+      log('Send IC: 850615-10-1234');
       await handleMessage(makeTextMsg(waId, '850615-10-1234'));
 
       for (let i = 1; i <= 3; i++) {
-        log(`发送收据图片 ${i}/3`);
+        log(`Send receipt image ${i}/3`);
         await handleMessage(makeImageMsg(waId));
       }
     },
@@ -139,78 +139,78 @@ const SCENES = [
 
   {
     name:  'no-ic',
-    desc:  '跳过 IC 直接发图（ic 字段将为 null，验证宽松模式）',
+    desc:  'Skip IC and send pictures directly (ic field will be null, verification relaxed mode)',
     phone: '60100030003',
     steps: async ({ waId, log }) => {
-      log('直接发送收据图片（未提交 IC）');
+      log('Send receipt image directly (no IC submitted)');
       await handleMessage(makeImageMsg(waId));
     },
   },
 
   {
     name:  'invalid-ic',
-    desc:  '先发无效 IC，再发合法 IC，最后发收据（验证容错与重试）',
+    desc:  'Issue invalid IC first, then issue valid IC, and finally issue receipt (verification fault tolerance and retry)',
     phone: '60100040004',
     steps: async ({ waId, log }) => {
-      log('发送无效 IC: 123456789（应被静默忽略）');
+      log('Sent invalid IC: 123456789 (should be silently ignored)');
       await handleMessage(makeTextMsg(waId, '123456789'));
 
-      log('发送无效 IC: ABCD-EF-GHIJ（应被静默忽略）');
+      log('Invalid IC sent: ABCD-EF-GHIJ (should be silently ignored)');
       await handleMessage(makeTextMsg(waId, 'ABCD-EF-GHIJ'));
 
-      log('发送合法 IC: 751230-07-8888');
+      log('Send legal IC: 751230-07-8888');
       await handleMessage(makeTextMsg(waId, '751230-07-8888'));
 
-      log('发送收据图片');
+      log('Send receipt image');
       await handleMessage(makeImageMsg(waId));
     },
   },
 
   {
     name:  'duplicate-ic',
-    desc:  '同一 IC 两次注册（验证 Excel 去重：第二次应记录日志但不报错）',
+    desc:  'The same IC is registered twice (verify Excel deduplication: the second time should record the log but not report an error)',
     phone: '60100050005',
     steps: async ({ waId, log }) => {
-      log('第 1 次发送 IC: 920909-08-4321');
+      log('1st sending IC: 920909-08-4321');
       await handleMessage(makeTextMsg(waId, '920909-08-4321'));
 
-      // 同一 session 下再次发相同 IC（模拟用户重发）
-      log('第 2 次发送同一 IC: 920909-08-4321（应提示重复但允许继续）');
+      // Send the same IC again under the same session (simulating user resending)
+      log('Send the same IC for the second time: 920909-08-4321 (you should be prompted to repeat but allowed to continue)');
       await handleMessage(makeTextMsg(waId, '920909-08-4321'));
 
-      log('发送收据图片');
+      log('Send receipt image');
       await handleMessage(makeImageMsg(waId));
     },
   },
 
   {
     name:  'group-ignored',
-    desc:  '群组消息（应被 messageHandler 静默忽略，data/ 无任何新记录）',
+    desc:  'Group messages (should be silently ignored by messageHandler, no new records in data/)',
     phone: '60100060006',
     steps: async ({ waId, log }) => {
-      log('发送群组文字消息（应忽略）');
+      log('Send group text message (should be ignored)');
       await handleMessage(makeGroupMsg(waId, '900101-14-5001'));
 
-      log('发送群组图片消息（应忽略）');
-      // 群组图片：isGroup: true，直接构造而不用 makeImageMsg（不需要 downloadMedia）
+      log('Send group picture message (should be ignored)');
+      // Group image: isGroup: true, constructed directly without makeImageMsg (no downloadMedia required)
       await handleMessage({
         ...makeImageMsg(waId),
         getChat: async () => ({ isGroup: true, id: { _serialized: `${waId}-group@g.us` } }),
       });
 
-      log('验证：以上消息均应被忽略，data/ 无新记录');
+      log('Verification: The above messages should be ignored, there are no new records in data/');
     },
   },
 ];
 
-// ─── 执行引擎 ─────────────────────────────────────────────────────────────────
+// ───Execution engine────────────────────────────────────────────────────────────
 
 async function runScene(scene, overrides = {}) {
   const phone = overrides.phone || scene.phone;
   const waId  = `${phone}@c.us`;
 
-  console.log(`\n  场景: [${scene.name}] ${scene.desc}`);
-  console.log(`  手机: ${phone}`);
+  console.log(`\\n Scene: [${scene.name}] ${scene.desc}`);
+  console.log(`Mobile phone: ${phone}`);
 
   let stepNum = 1;
   const log = (msg) => console.log(`    [${stepNum++}] ${msg}`);
@@ -221,14 +221,14 @@ async function runScene(scene, overrides = {}) {
 
   const delta = after - before;
   const tag   = scene.name === 'group-ignored'
-    ? (delta === 0 ? '✓ 正确：群组消息被忽略' : `✗ 异常：写入了 ${delta} 条记录（应为 0）`)
-    : `✓ 新增 ${delta} 条收据记录`;
+    ? (delta === 0 ? '✓ Correct: Group messages are ignored' : `✗ Exception: ${delta} records written (should be 0)`)
+    : `✓ Add ${delta} receipt records`;
 
   console.log(`  ${tag}`);
   _markNewAsSim(before);
 }
 
-/** 读取 pending_receipts.json 当前记录数 */
+/** Read the current number of records in pending_receipts.json */
 function countRecords() {
   const p = path.join(process.env.DATA_DIR, 'pending_receipts.json');
   if (!fs.existsSync(p)) return 0;
@@ -236,15 +236,15 @@ function countRecords() {
 }
 
 /**
- * 将本次新增的收据记录（索引 0 到 before-1 之后的部分）打上 __simulate 标记
- * receiptStore 按 unshift 写入，最新记录在数组头部
+ * Mark the newly added receipt record (the part after index 0 to before-1) with __simulate
+ * receiptStore is written according to unshift, and the latest record is at the head of the array.
  */
 function _markNewAsSim(countBefore) {
   const p = path.join(process.env.DATA_DIR, 'pending_receipts.json');
   if (!fs.existsSync(p)) return;
   const records = JSON.parse(fs.readFileSync(p, 'utf-8'));
   const newCount = records.length - countBefore;
-  // 头部 newCount 条是本次新增的（unshift 顺序）
+  // The newCount bar in the header is newly added this time (unshift order)
   for (let i = 0; i < newCount; i++) {
     records[i].__simulate = true;
   }
@@ -254,13 +254,13 @@ function _markNewAsSim(countBefore) {
 // ─── --clean ──────────────────────────────────────────────────────────────────
 
 async function clean() {
-  console.log('🧹 清除所有模拟数据（__simulate: true）\n');
+  console.log('🧹 Clear all simulation data (__simulate: true)\\n');
 
   const storePath = path.join(process.env.DATA_DIR, 'pending_receipts.json');
   const imagesDir = path.join(process.env.DATA_DIR, 'images');
 
   if (!fs.existsSync(storePath)) {
-    console.log('  pending_receipts.json 不存在，跳过。');
+    console.log('pending_receipts.json does not exist, skip.');
     return;
   }
 
@@ -272,29 +272,29 @@ async function clean() {
     const imgPath = path.join(imagesDir, r.imageFilename);
     if (fs.existsSync(imgPath)) {
       fs.unlinkSync(imgPath);
-      console.log(`  ✓ 删除图片: ${r.imageFilename}`);
+      console.log(`✓ Delete image: ${r.imageFilename}`);
     }
   }
 
   fs.writeFileSync(storePath, JSON.stringify(toKeep, null, 2), 'utf-8');
-  console.log(`  ✓ 从 pending_receipts.json 删除 ${toDelete.length} 条模拟记录`);
-  console.log('\n注意：Excel 注册记录无法自动删除（ExcelJS 不支持删除行）。');
+  console.log(`✓ Delete ${toDelete.length} mock records from pending_receipts.json`);
+  console.log('\\nNote: Excel registration records cannot be automatically deleted (ExcelJS does not support deleting rows).');
   console.log(`  Excel: ${path.join(process.env.DATA_DIR, 'excel/records.xlsx')}`);
-  console.log('\n✅ 清除完成。');
+  console.log('\\n✅ Clearance completed.');
 }
 
 // ─── --list ───────────────────────────────────────────────────────────────────
 
 function listScenes() {
-  console.log('\n可用场景：\n');
+  console.log('\\nAvailable scenarios:\\n');
   for (const s of SCENES) {
     console.log(`  ${s.name.padEnd(16)} ${s.desc}`);
   }
-  console.log('\n用法：node wa-bot/scripts/wa-simulator.js --scene <名称>');
+  console.log('\\nUsage: node wa-bot/scripts/wa-simulator.js --scene <name>');
   console.log('      node wa-bot/scripts/wa-simulator.js --all\n');
 }
 
-// ─── 初始化（确保目录和文件存在）───────────────────────────────────────────────
+// ─── Initialization (make sure the directory and files exist)────────────────────────────────────────────
 
 async function ensureDataDirs() {
   await excelService.initExcel();
@@ -302,7 +302,7 @@ async function ensureDataDirs() {
   if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
 }
 
-// ─── 命令行入口 ───────────────────────────────────────────────────────────────
+// ───Command line entry ──────────────────────────────────────────────────────────
 
 async function main() {
   const args = process.argv.slice(2);
@@ -310,7 +310,7 @@ async function main() {
   if (args.includes('--list')) { listScenes(); return; }
   if (args.includes('--clean')) { await clean(); return; }
 
-  // 解析可选覆盖参数
+  // Parse optional override parameters
   const overrides = {};
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--phone' && args[i + 1]) overrides.phone = args[++i];
@@ -320,33 +320,33 @@ async function main() {
   await ensureDataDirs();
 
   if (args.includes('--all')) {
-    console.log('🤖 运行全部场景\n');
+    console.log('🤖 Run all scenarios\\n');
     console.log(`  DATA_DIR: ${process.env.DATA_DIR}`);
     for (const scene of SCENES) {
       await runScene(scene, overrides);
     }
-    console.log('\n✅ 全部场景完成。访问 /admin 查看结果。');
+    console.log('\\n✅ All scenes completed. Visit /admin to view the results.');
     return;
   }
 
-  // 指定场景
+  // Specify scene
   const sceneIdx = args.indexOf('--scene');
   const sceneName = sceneIdx !== -1 ? args[sceneIdx + 1] : 'happy-path';
   const scene = SCENES.find((s) => s.name === sceneName);
 
   if (!scene) {
-    console.error(`❌ 未知场景: "${sceneName}"。用 --list 查看可用场景。`);
+    console.error(`❌ Unknown scene: "${sceneName}". Use --list to view available scenarios.`);
     process.exit(1);
   }
 
-  console.log('🤖 用户流程模拟\n');
+  console.log('🤖 User flow simulation\\n');
   console.log(`  DATA_DIR: ${process.env.DATA_DIR}`);
   await runScene(scene, overrides);
-  console.log('\n✅ 完成。访问 /admin 查看结果。');
+  console.log('\\n✅ Complete. Visit /admin to view the results.');
 }
 
 main().catch((err) => {
-  console.error('❌ 模拟失败:', err.message);
+  console.error('❌ Simulation failed:', err.message);
   console.error(err.stack);
   process.exit(1);
 });

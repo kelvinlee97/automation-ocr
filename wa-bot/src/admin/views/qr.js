@@ -3,16 +3,16 @@
 const state = require("../state");
 const { t } = require("../i18n");
 
-function qrPage(lang = "zh") {
+function qrPage(lang = "en") {
   const _waConnected = state.isConnected();
   const _qrBase64 = state.getQR();
-  // 已连接则直接跳转，无需渲染页面
+  // If connected, jump directly without rendering the page.
   if (_waConnected) {
-    return null; // 调用方 302 跳转
+    return null; // Caller 302 jump
   }
 
   const qrContent = _qrBase64
-    ? `<img src="${_qrBase64}" alt="WhatsApp QR 码"
+    ? `<img src="${_qrBase64}" alt="WhatsApp QR code"
             style="width:220px;height:220px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.15)" />`
     : `<div style="width:220px;height:220px;background:#f0f4ff;border-radius:8px;
                    display:flex;align-items:center;justify-content:center;
@@ -37,7 +37,7 @@ function qrPage(lang = "zh") {
       color: #E2E8F0;
     }
 
-    /* 导航：与 htmlLayout 保持一致的玻璃态风格 */
+    /* Navigation: glassy style consistent with htmlLayout */
     nav {
       background: rgba(15, 23, 42, 0.92);
       backdrop-filter: blur(12px);
@@ -79,7 +79,7 @@ function qrPage(lang = "zh") {
     .hint { color: #64748B; font-size: 13px; margin-top: 16px; line-height: 1.6; }
     .hint small { color: #475569; font-size: 12px; }
 
-    /* 玫红脉冲状态点：未连接时提示用户注意 */
+    /* Rose red pulse status point: prompts the user to pay attention when not connected */
     .status-dot {
       display: inline-block; width: 8px; height: 8px; border-radius: 50%;
       background: #F43F5E; margin-right: 6px;
@@ -88,7 +88,7 @@ function qrPage(lang = "zh") {
     }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
 
-    /* ─── Tab 切换 ─────────────────────────────────── */
+    /* ─── Tab switching ───────────────────────────────── */
     .tabs {
       display: flex; gap: 4px;
       background: rgba(15, 23, 42, 0.6);
@@ -111,7 +111,7 @@ function qrPage(lang = "zh") {
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
-    /* ─── 配对码 Tab 专属样式 ─────────────────────────── */
+    /* ─── Matching code Tab exclusive style ──────────────────────────── */
     .phone-input-group {
       display: flex; gap: 8px; margin-bottom: 16px;
     }
@@ -135,7 +135,7 @@ function qrPage(lang = "zh") {
     .btn-pairing:hover { opacity: 0.85; }
     .btn-pairing:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* 配对码展示框 */
+    /* Matching code display box */
     .code-display {
       background: rgba(15, 23, 42, 0.8);
       border: 1px solid rgba(99, 102, 241, 0.3);
@@ -149,14 +149,14 @@ function qrPage(lang = "zh") {
     }
     .code-placeholder { color: #475569; font-size: 14px; }
 
-    /* 错误提示 */
+    /* Error message */
     .error-msg {
       color: #F87171; font-size: 13px; margin-top: 8px;
       background: rgba(248, 113, 113, 0.1); border-radius: 6px;
       padding: 8px 12px; display: none;
     }
 
-    /* 使用说明步骤 */
+    /* Instructions for use */
     .steps {
       text-align: left; margin-top: 16px;
       background: rgba(15, 23, 42, 0.4);
@@ -176,13 +176,13 @@ function qrPage(lang = "zh") {
     <div class="card">
       <h2>📱 ${t('connect_whatsapp', lang)}</h2>
 
-      <!-- Tab 切换按钮 -->
+      <!-- Tab switch button -->
       <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('qr', this)">${t('scan_qr', lang)}</button>
         <button class="tab-btn" onclick="switchTab('pairing', this)">${t('pairing_code', lang)}</button>
       </div>
 
-      <!-- Tab A：QR 码 -->
+      <!-- Tab A: QR code -->
       <div id="tab-qr" class="tab-panel active">
         <div style="margin:0 0 16px;display:flex;justify-content:center">
           ${qrContent}
@@ -193,7 +193,7 @@ function qrPage(lang = "zh") {
         </div>
       </div>
 
-      <!-- Tab B：配对码 -->
+      <!-- Tab B: pairing code -->
       <div id="tab-pairing" class="tab-panel">
         <div class="phone-input-group">
           <input

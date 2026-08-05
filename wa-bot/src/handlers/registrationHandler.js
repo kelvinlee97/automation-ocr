@@ -1,6 +1,6 @@
 /**
- * registrationHandler.js — IC 注册处理器
- * Bot 静默模式：只验证并保存，不向用户发送任何回复
+ * registrationHandler.js — IC registration handler
+ * Bot silent mode: only verifies and saves, does not send any reply to the user
  */
 
 const icParser = require("../utils/icParser");
@@ -9,23 +9,23 @@ const logger = require("../utils/logger");
 const { maskPhone } = require("../utils/maskPhone");
 
 /**
- * 处理用户提交的 IC 号码
- * 验证格式 → 写入 Excel → 更新 session（ic + state）
- * 失败时静默记录日志，不回复用户
+ * Processing of user-submitted IC numbers
+ * Verify format → Write to Excel → Update session (ic + state)
+ * Log silently on failure and do not reply to the user
  *
  * @param {import('whatsapp-web.js').Message} msg
- * @param {Object} session  当前用户 session 对象（来自 sessionManager）
+ * @param {Object} session current user session object (from sessionManager)
  * @param {Object} sessionManager
- * @param {string} phone    真实手机号（已从 LID 解析）
+ * @param {string} phone real mobile phone number (parsed from LID)
  */
 async function handleRegistration(msg, session, sessionManager, phone) {
   const text = msg.body.trim();
-  // validateIC 返回 { valid, normalized, reason }，需解构后使用
+  // validateIC returns { valid, normalized, reason }, which needs to be deconstructed before use
   const { valid, normalized } = icParser.validateIC(text);
 
   if (!valid) {
-    // IC 格式不对，静默忽略（用户可能只是发了普通文字）
-    logger.debug("IC 格式无效，忽略", { phone: maskPhone(phone), text: text.slice(0, 20) });
+    // The IC format is incorrect and will be ignored silently (the user may have just sent ordinary text)
+    logger.debug("IC format is invalid, ignore", { phone: maskPhone(phone), text: text.slice(0, 20) });
     return;
   }
 
@@ -33,18 +33,18 @@ async function handleRegistration(msg, session, sessionManager, phone) {
     const result = await addRegistration(phone, normalized);
 
     if (result.duplicate) {
-      // 重复注册，记录日志，session 仍更新以允许继续提交收据
-      logger.info("重复注册，已允许继续提交收据", { phone: maskPhone(phone) });
+      // Repeated registration, logging, session still updated to allow continued submission of receipts
+      logger.info("Duplicate registration accepted; user may continue submitting receipts", { phone: maskPhone(phone) });
     }
 
-    // 无论首次还是重复注册，都将标准化 IC 写入 session，允许后续提交收据
+    // Regardless of first or repeated registration, the standardized IC is written to the session, allowing subsequent receipt submissions
     session.ic = normalized;
     session.state = "WAITING_RECEIPT";
     await sessionManager.updateSession(phone, session);
-    logger.info("IC 注册完成，等待收据", { phone: maskPhone(phone) });
+    logger.info("IC registration completed, waiting for receipt", { phone: maskPhone(phone) });
 
   } catch (err) {
-    logger.error("IC 注册失败", { phone: maskPhone(phone), error: err.message });
+    logger.error("IC registration failed", { phone: maskPhone(phone), error: err.message });
   }
 }
 

@@ -1,6 +1,6 @@
 /**
- * 日志模块
- * 使用 winston 同时输出到控制台和文件
+ * Log module
+ * Use winston to output to console and file simultaneously
  */
 const winston = require('winston');
 const path = require('path');
@@ -15,7 +15,7 @@ const logger = winston.createLogger({
 		winston.format.json()
 	),
 	transports: [
-		// 控制台输出（彩色，便于开发调试）
+		// Console output (color, convenient for development and debugging)
 		new winston.transports.Console({
 			format: winston.format.combine(
 				winston.format.colorize(),
@@ -25,11 +25,11 @@ const logger = winston.createLogger({
 				})
 			)
 		}),
-		// 文件输出（结构化 JSON，便于生产环境查询）
+		// File output (structured JSON, convenient for production environment query)
 		new winston.transports.File({
 			filename: path.join(LOG_DIR, 'wa-bot.log'),
-			maxsize: 10 * 1024 * 1024,  // 单文件最大 10MB
-			maxFiles: 5,                  // 保留最近 5 个文件
+			maxsize: 10 * 1024 * 1024,  // Maximum single file size 10MB
+			maxFiles: 5,                  // Keep last 5 files
 		}),
 	],
 });

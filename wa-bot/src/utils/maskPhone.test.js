@@ -1,22 +1,22 @@
 const { maskPhone } = require('./maskPhone');
 
 describe('maskPhone', () => {
-  describe('正常脱敏', () => {
-    test('标准 WhatsApp 格式', () => {
+  describe('normal desensitization', () => {
+    test('Standard WhatsApp format', () => {
       expect(maskPhone('60123456789@c.us')).toBe('601****789@c.us');
     });
 
-    test('无后缀格式', () => {
+    test('No suffix format', () => {
       expect(maskPhone('60123456789')).toBe('601****789');
     });
 
-    test('长号码', () => {
+    test('long number', () => {
       expect(maskPhone('6011234567890@c.us')).toBe('601****890@c.us');
     });
   });
 
-  describe('边界情况', () => {
-    test('空字符串', () => {
+  describe('boundary case', () => {
+    test('empty string', () => {
       expect(maskPhone('')).toBe('[unknown]');
     });
 
@@ -28,21 +28,21 @@ describe('maskPhone', () => {
       expect(maskPhone(undefined)).toBe('[unknown]');
     });
 
-    test('短号码 <= 5 位', () => {
+    test('Short number <= 5 digits', () => {
       expect(maskPhone('60123@c.us')).toBe('60***3@c.us');
     });
 
-    test('6位号码', () => {
+    test('6 digit number', () => {
       expect(maskPhone('601234@c.us')).toBe('601****234@c.us');
     });
   });
 
-  describe('格式容错', () => {
-    test('只有后缀无号码', () => {
+  describe('Format tolerance', () => {
+    test('Only suffix and no number', () => {
       expect(maskPhone('@c.us')).toBe('***@c.us');
     });
 
-    test('非标准后缀', () => {
+    test('non-standard suffix', () => {
       expect(maskPhone('60123456789@g.us')).toBe('601****789@g.us');
     });
   });

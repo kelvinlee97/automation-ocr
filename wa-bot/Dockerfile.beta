@@ -1,6 +1,6 @@
-# 本地 Beta 测试专用 Dockerfile
-# 用于 Apple Container 本地测试（不含 Chromium，只运行 Admin 后台）
-# 使用方法（在 wa-bot/ 目录下）：
+# Dockerfile for local beta testing
+# For local testing on Apple Container (without Chromium, only running Admin background)
+# Usage (in the wa-bot/ directory):
 #   container build -t wa-bot:beta -f Dockerfile.beta .
 #   container run --rm -p 3000:3000 -v $(pwd):/app wa-bot:beta
 
@@ -8,18 +8,18 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# 复制 package.json，利用 layer 缓存
-# （如果 package.json 没变，这层缓存命中，不需要重新 npm install）
+# Copy package.json and use layer caching
+# (If package.json has not changed, this layer of cache hits, and there is no need to re-npm install)
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
 
-# 复制应用代码
+# Copy application code
 COPY . .
 
-# 创建 /config → /app/config 符号链接（兼容代码内相对路径）
+# Create /config → /app/config symbolic link (compatible with relative paths within code)
 RUN ln -s /app/config /config
 
-# 暴露端口（Express 默认 3000）
+# Exposed port (Express default 3000)
 EXPOSE 3000
 
 CMD ["node", "index.js"]

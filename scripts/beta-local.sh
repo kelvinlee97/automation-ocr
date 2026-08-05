@@ -2,17 +2,17 @@
 set -e
 
 # ============================================================
-#  beta-local.sh — 本地 Apple Container beta 测试环境
+#  beta-local.sh — Local Apple Container beta testing environment
 # ============================================================
-# 用途：用 Apple Container（container CLI）在本地跑 wa-bot，做 UI beta 测试
-# 依赖：Apple Container（https://github.com/apple/container）—— brew install container
+# Purpose: Use Apple Container (container CLI) to run wa-bot locally for UI beta testing
+# Dependencies: Apple Container (https://github.com/apple/container)—— brew install container
 #
-# 用法：
-#   bash scripts/beta-local.sh                # 正常启动（后台运行，不含 Bot）
-#   bash scripts/beta-local.sh --with-bot    # 启动含 Chromium 的版本（可测试 Bot 功能）
-#   bash scripts/beta-local.sh --clean        # 清旧容器 + node_modules 重建
-#   bash scripts/beta-local.sh --stop        # 只停容器，不删除
-#   bash scripts/beta-local.sh --logs        # 查看运行日志
+# usage:
+#   bash scripts/beta-local.sh # Normal startup (running in the background, excluding Bot)
+#   bash scripts/beta-local.sh --with-bot # Start the version containing Chromium (can test the Bot function)
+#   bash scripts/beta-local.sh --clean # Clean old containers + node_modules rebuild
+#   bash scripts/beta-local.sh --stop # Only stop the container, do not delete it
+#   bash scripts/beta-local.sh --logs # View running logs
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -20,10 +20,10 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 WA_BOT_DIR="$PROJECT_ROOT/wa-bot"
 CONTAINER_NAME="wa-bot-beta"
 IMAGE="docker.io/library/node:20-slim"
-BOT_IMAGE="wa-bot:with-bot"  # 含 Chromium 的本地构建镜像
+BOT_IMAGE="wa-bot:with-bot"  # Locally built image containing Chromium
 HOST_PORT=3000
 
-# ── 颜色输出 ─────────────────────────────────────────────────
+# ── Color output ─────────────────────────────────────────────
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 RED='\033[0;31m'
@@ -33,7 +33,7 @@ info()  { echo -e "${GREEN}[info]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[warn]${NC} $1"; }
 error() { echo -e "${RED}[error]${NC} $1"; }
 
-# ── 参数解析 ───────────────────────────────────────────────────
+# ── Parameter analysis ────────────────────────────────────────────────
 CLEAN_MODE=false
 STOP_MODE=false
 LOGS_MODE=false
@@ -45,91 +45,91 @@ for arg in "$@"; do
     --stop)      STOP_MODE=true ;;
     --logs)      LOGS_MODE=true ;;
     --with-bot)  WITH_BOT=true ;;
-    *)           echo "未知参数: $arg"; exit 1 ;;
+    *) echo "Unknown parameter: $arg"; exit 1 ;;
   esac
 done
 
-# ── --logs：查看日志 ─────────────────────────────────────────────
+# ── --logs: View logs ──────────────────────────────────────────
 if [ "$LOGS_MODE" = "true" ]; then
   if ! container list 2>/dev/null | grep -q "$CONTAINER_NAME"; then
-    error "容器 $CONTAINER_NAME 未运行"
+    error "Container $CONTAINER_NAME is not running"
     exit 1
   fi
-  info "正在追踪 $CONTAINER_NAME 日志（Ctrl+C 退出）..."
+  info "Following $CONTAINER_NAME logs (Ctrl+C to exit)..."
   container logs -f "$CONTAINER_NAME"
   exit 0
 fi
 
-# ── --stop：停容器 ──────────────────────────────────────────
+# ── --stop: Stop the container ───────────────────────────────────────
 if [ "$STOP_MODE" = "true" ]; then
   if container list 2>/dev/null | grep -q "$CONTAINER_NAME"; then
-    info "停止容器 $CONTAINER_NAME..."
+    info "Stop container $CONTAINER_NAME..."
     container stop "$CONTAINER_NAME" 2>/dev/null || true
-    info "删除容器 $CONTAINER_NAME..."
+    info "Delete container $CONTAINER_NAME..."
     container delete "$CONTAINER_NAME" 2>/dev/null || true
-    info "容器已停止并删除"
+    info "Container stopped and deleted"
   else
-    warn "容器 $CONTAINER_NAME 未运行"
-    # 仍然尝试清理残留
+    warn "Container $CONTAINER_NAME is not running"
+    # Still trying to clean up the residue
     container delete "$CONTAINER_NAME" 2>/dev/null || true
-    info "已尝试清理残留容器"
+    info "Attempts have been made to clean the remaining containers"
   fi
   exit 0
 fi
 
-# ── --clean：清理后重建 node_modules ───────────────────────
+# ── --clean: Rebuild node_modules after cleaning ──────────────────────
 if [ "$CLEAN_MODE" = "true" ]; then
-  info "【clean 模式】清理旧容器 + 重建 node_modules..."
+  info "[clean mode] Clean old containers + rebuild node_modules..."
 
-  # 停并删除旧容器
+  # Stop and delete old containers
   container stop "$CONTAINER_NAME" 2>/dev/null || true
   container delete "$CONTAINER_NAME" 2>/dev/null || true
 
-  # 删除容器内的 node_modules（如果存在）
+  # Remove node_modules within the container if present
   if [ -d "$WA_BOT_DIR/node_modules" ]; then
-    # 如果有 macOS 原生模块备份，恢复它
+    # If you have a backup of macOS native modules, restore it
     if [ -d "$WA_BOT_DIR/node_modules.mac" ]; then
-      warn "发现 node_modules.mac（macOS 原生模块），恢复为 node_modules..."
+      warn "Found node_modules.mac (macOS native module), restored to node_modules..."
       rm -rf "$WA_BOT_DIR/node_modules"
       mv "$WA_BOT_DIR/node_modules.mac" "$WA_BOT_DIR/node_modules"
-      info "已恢复 macOS node_modules（用于宿主机直接开发）"
+      info "Restored macOS node_modules (for direct host development)"
     else
-      warn "删除 node_modules（将在容器内重新安装 Linux 版本）..."
+      warn "Remove node_modules (the Linux version will be reinstalled inside the container)..."
       rm -rf "$WA_BOT_DIR/node_modules"
     fi
   fi
 
-  info "清理完成。现在用 'bash scripts/beta-local.sh' 正常启动。"
+  info "Cleanup completed. Now start normally with 'bash scripts/beta-local.sh'."
   exit 0
 fi
 
-# ── --with-bot：检查镜像是否存在 ─────────────────────────
+# ── --with-bot: Check whether the image exists ────────────────────────
 if [ "$WITH_BOT" = "true" ]; then
-  info "【with-bot 模式】将使用含 Chromium 的镜像..."
+  info "[with-bot mode] Images containing Chromium will be used..."
   if ! container image list 2>/dev/null | grep -q "wa-bot.*with-bot"; then
-    warn "镜像 $BOT_IMAGE 不存在，需要先构建："
+    warn "The image $BOT_IMAGE does not exist and needs to be built first:"
     warn "  cd $WA_BOT_DIR && container build -t $BOT_IMAGE -f Dockerfile ."
-    error "请先构建镜像，或去掉 --with-bot 参数运行（只测试 Admin 后台）"
+    error "Please build the image first, or run it without the --with-bot parameter (only test the Admin background)"
     exit 1
   fi
   IMAGE="$BOT_IMAGE"
-  info "使用镜像：$IMAGE"
+  info "Use image: $IMAGE"
 fi
 
-# ── 检查依赖 ─────────────────────────────────────────────────
+# ── Check dependencies ─────────────────────────────────────────────
 if ! command -v container &>/dev/null; then
-  error "Apple Container 未安装。请先运行：brew install container"
+  error "Apple Container is not installed. Please run first: brew install container"
   exit 1
 fi
 
 if ! command -v node &>/dev/null; then
-  error "Node.js 未安装。请先安装 Node.js 20+"
+  error "Node.js is not installed. Please install Node.js 20+ first"
   exit 1
 fi
 
-# ── 准备 .env（如不存在）─────────────────────────────────
+# ── Prepare .env (if not present)───────────────────────────────
 if [ ! -f "$WA_BOT_DIR/.env" ]; then
-  warn ".env 不存在，生成最小配置..."
+  warn ".env does not exist, generate minimum configuration..."
   SESSION_SECRET=$(openssl rand -hex 32 2>/dev/null || python3 -c "import secrets; print(secrets.token_hex(32))")
   cat > "$WA_BOT_DIR/.env" <<EOF
 # Minimal .env for local beta testing
@@ -146,48 +146,48 @@ GITHUB_TOKEN=
 # Optional: data directory (defaults to ./data)
 # DATA_DIR=./data
 EOF
-  info ".env 已生成：$WA_BOT_DIR/.env"
-  info "提示：GEMINI_API_KEY 和 GITHUB_TOKEN 可留空做纯 UI 测试"
+  info ".env generated: $WA_BOT_DIR/.env"
+  info "Tip: GEMINI_API_KEY and GITHUB_TOKEN can be left blank for pure UI testing"
 fi
 
-# ── 处理 node_modules（核心步骤）────────────────────────────
-# 问题：宿主机 npm install 的 native 模块（better-sqlite3 等）是 macOS Mach-O 格式，
-# 不能在 Linux 容器内使用（invalid ELF header）。
-# 解决：把 macOS 的 node_modules 重命名为 node_modules.mac，
-# 让容器内 npm install 生成独立的 Linux 版本（不挂载 node_modules 子目录）。
+# ── Processing node_modules (core steps)───────────────────────────
+# Problem: The native module (better-sqlite3, etc.) of the host npm install is in macOS Mach-O format.
+# Cannot be used inside Linux containers (invalid ELF header).
+# Solution: Rename macOS node_modules to node_modules.mac,
+# Let npm install inside the container generate a standalone Linux version (without mounting the node_modules subdirectory).
 if [ -d "$WA_BOT_DIR/node_modules" ] && [ ! -d "$WA_BOT_DIR/node_modules.mac" ]; then
-  info "检测到 node_modules（macOS 原生模块），重命名为 node_modules.mac..."
+  info "Detected node_modules (macOS native module), renamed to node_modules.mac..."
   mv "$WA_BOT_DIR/node_modules" "$WA_BOT_DIR/node_modules.mac"
-  info "已备份为 node_modules.mac（宿主机开发时可用 'mv node_modules.mac node_modules' 恢复）"
+  info "Backed up as node_modules.mac (can be restored using 'mv node_modules.mac node_modules' during host development)"
 fi
 
-# ── 停止并删除旧容器（如有）───────────────────────────────
+# ── Stop and delete the old container (if any)───────────────────────────────
 if container list 2>/dev/null | grep -q "$CONTAINER_NAME"; then
-  info "发现正在运行的 $CONTAINER_NAME，先停止..."
+  info "Found running $CONTAINER_NAME, stop first..."
   container stop "$CONTAINER_NAME" 2>/dev/null || true
   sleep 1
 fi
 container delete "$CONTAINER_NAME" 2>/dev/null || true
 
-# ── 检查端口占用 ─────────────────────────────────────────────
+# ── Check port occupancy ──────────────────────────────────────────
 if lsof -i :$HOST_PORT 2>/dev/null | grep -q LISTEN; then
-  warn "端口 $HOST_PORT 已被占用："
+  warn "Port $HOST_PORT is already occupied:"
   lsof -i :$HOST_PORT 2>/dev/null | grep LISTEN | head -3
-  error "请先停止占用端口 $HOST_PORT 的进程，或编辑此脚本换端口"
+  error "Please stop the process occupying port $HOST_PORT first, or edit this script to change the port"
   exit 1
 fi
 
-# ── 启动容器 ─────────────────────────────────────────────────
-info "启动 Apple Container：$CONTAINER_NAME（端口 $HOST_PORT → 容器 3000）..."
+# ── Start the container ─────────────────────────────────────────────
+info "Start Apple Container: $CONTAINER_NAME (port $HOST_PORT → container 3000)..."
 if [ "$WITH_BOT" = "true" ]; then
-  info "镜像：$IMAGE（含 Chromium，可测试 Bot 功能）"
+  info "Mirror: $IMAGE (including Chromium, can test Bot function)"
 else
-  info "镜像：$IMAGE（不含 Chromium，只运行 Admin 后台）"
+  info "Mirror: $IMAGE (without Chromium, only runs the Admin background)"
 fi
 echo ""
 
-# 使用 sh -c 先 npm install（在 Linux 容器内编译原生模块），再启动 node
-# 关键：不挂载 node_modules，让容器内独立安装 Linux 版本
+# Use sh -c to first npm install (compile the native module in the Linux container), and then start node
+# Key: Do not mount node_modules and allow the Linux version to be installed independently in the container
 container run \
   --name "$CONTAINER_NAME" \
   -p "$HOST_PORT:3000" \
@@ -197,44 +197,44 @@ container run \
   -e SESSION_SECRET="$(grep SESSION_SECRET "$WA_BOT_DIR/.env" | cut -d= -f2- | tr -d '\r')" \
   --rm \
   "$IMAGE" \
-  sh -c "echo '📦 容器内在安装 npm 依赖（Linux 原生模块）...' && \
+  sh -c "echo '📦 Install npm dependencies (Linux native modules) inside the container...' && \
              npm install --omit=dev 2>&1 | grep -v '^npm WARN' | grep -v '^npm notice' && \
-             echo '✅ npm install 完成' && \
-             echo '🚀 启动 wa-bot...' && \
+             echo '✅ npm install completed' && \
+             echo '🚀 Start wa-bot...' && \
              node index.js" &
 
 CONTAINER_PID=$!
-info "容器已在后台启动（PID: $CONTAINER_PID）"
+info "The container has been started in the background (PID: $CONTAINER_PID)"
 
-# ── 等待服务就绪 ─────────────────────────────────────────────
-info "等待服务在 localhost:$HOST_PORT 就绪（最多 60 秒）..."
+# ──Waiting for the service to be ready──────────────────────────────────────────
+info "Wait for the service to be ready at localhost:$HOST_PORT (up to 60 seconds)..."
 for i in $(seq 1 60); do
   sleep 1
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$HOST_PORT/admin" 2>/dev/null || echo "000")
   if [ "$HTTP_CODE" = "302" ] || [ "$HTTP_CODE" = "200" ]; then
     echo ""
-    info "✅ 服务已就绪！HTTP 状态码：$HTTP_CODE"
+    info "✅ The service is ready! HTTP status code: $HTTP_CODE"
     echo ""
     info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    info "  Beta 测试地址：<a href=\"http://localhost:$HOST_PORT/admin/setup\">http://localhost:$HOST_PORT/admin/setup</a>"
-    info "  1. 首次访问 /admin/setup 创建 admin 账号"
-    info "  2. 登录后访问 /admin/feedback 查看重新设计的 feedback 页面"
+    info "Beta test address: <a href=\"http://localhost:$HOST_PORT/admin/setup\">http://localhost:$HOST_PORT/admin/setup</a>"
+    info "1. Visit /admin/setup for the first time to create an admin account"
+    info "2. After logging in, visit /admin/feedback to view the redesigned feedback page"
     if [ "$WITH_BOT" = "true" ]; then
-      info "  3. Bot 功能已启用（Chromium 已安装）"
+      info "3. Bot function is enabled (Chromium is installed)"
     else
-      info "  3. Bot 功能未启用（用 --with-bot 参数可启用）"
+      info "3. The Bot function is not enabled (can be enabled with the --with-bot parameter)"
     fi
     info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    info "查看实时日志：bash scripts/beta-local.sh --logs"
-    info "停止容器：     bash scripts/beta-local.sh --stop"
-    info "清理重建：       bash scripts/beta-local.sh --clean"
+    info "View real-time logs: bash scripts/beta-local.sh --logs"
+    info "Stop the container: bash scripts/beta-local.sh --stop"
+    info "Clean and rebuild: bash scripts/beta-local.sh --clean"
     exit 0
   fi
   printf "."
 done
 
 echo ""
-error "服务在 60 秒内未就绪，请运行以下命令查看日志："
+error "The service is not ready within 60 seconds, please run the following command to view the log:"
 error "  bash scripts/beta-local.sh --logs"
 exit 1

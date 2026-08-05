@@ -1,15 +1,15 @@
 /**
- * simulation.test.js — 端对端用户流程模拟测试
+ * simulation.test.js — End-to-end user process simulation testing
  *
- * 模拟完整的 WhatsApp 用户交互：发手机号 → 发 IC → 发收据截图
- * mock 边界：excelService（Excel 写入）、receiptStore（文件持久化）、logger
- * 真实跑：messageHandler → handler 逻辑链 + sessionManager 状态流转
+ * Simulate complete WhatsApp user interaction: send mobile phone number → send IC → send screenshot of receipt
+ * Mock boundaries: excelService (Excel writing), receiptStore (file persistence), logger
+ * Real run: messageHandler → handler logical chain + sessionManager state flow
  *
- * 可复用性：通过 createMockMessage() 工厂函数构造不同场景的消息对象，
- * 每个 describe 块代表一种用户行为场景，可独立运行
+ * Reusability: Construct message objects for different scenarios through the createMockMessage() factory function.
+ * Each describe block represents a user behavior scenario and can be run independently
  */
 
-// ─── mock 系统边界：文件 I/O ──────────────────────────────────────────────────
+// ─── mock system boundary: file I/O ───────────────────────────────────────────────
 
 jest.mock('./utils/logger', () => ({
   info:  jest.fn(),
@@ -30,7 +30,7 @@ jest.mock('./services/receiptStore', () => ({
   getActiveCampaign: jest.fn().mockReturnValue(null),
 }));
 
-// db mock：Phase 2 迁移后 sessionManager 依赖 SQLite，测试中替换为内存 mock
+// db mock: After Phase 2 migration, sessionManager depends on SQLite and is replaced with memory mock during testing.
 jest.mock('./db', () => {
   const sessions = {};
   const stmt = (sql) => ({
@@ -53,7 +53,7 @@ jest.mock('./db', () => {
   };
 });
 
-// ─── fs mock：内存模拟文件系统（复用 sessionManager.test.js 的模式）────────
+// ─── fs mock: memory simulation file system (reusing sessionManager.test.js mode)────────
 
 const path = require('path');
 const PROJECT_ROOT = path.resolve(__dirname, '../../');
@@ -75,13 +75,13 @@ jest.mock('js-yaml', () => ({
   load: jest.fn(() => ({ bot: { session_timeout_minutes: 30, max_receipts_per_day: 5 } })),
 }));
 
-// ─── 工厂函数 ─────────────────────────────────────────────────────────────────
+// ───Factory function ────────────────────────────────────────────────────────────
 
 /**
- * 构造模拟 WhatsApp 文字消息
+ * Constructing a simulated WhatsApp text message
  * @param {Object} opts
- * @param {string} opts.from    - 发送方号码，默认测试号码
- * @param {string} opts.body    - 消息文本
+ * @param {string} opts.from - sender number, default test number
+ * @param {string} opts.body - message text
  * @returns {Object} mock message
  */
 function createTextMessage({ from = '60123456789@c.us', body } = {}) {
@@ -97,11 +97,11 @@ function createTextMessage({ from = '60123456789@c.us', body } = {}) {
 }
 
 /**
- * 构造模拟 WhatsApp 图片消息（收据截图）
+ * Constructing a simulated WhatsApp picture message (receipt screenshot)
  * @param {Object} opts
- * @param {string} opts.from       - 发送方号码
- * @param {string} opts.base64     - 图片 Base64 数据（不含 data: 前缀）
- * @param {string} opts.mimeType   - MIME 类型，默认 image/jpeg
+ * @param {string} opts.from - Sender number
+ * @param {string} opts.base64 - Image Base64 data (without data: prefix)
+ * @param {string} opts.mimeType - MIME type, default image/jpeg
  * @returns {Object} mock message
  */
 function createImageMessage({ from = '60123456789@c.us', base64 = MOCK_RECEIPT_BASE64, mimeType = 'image/jpeg' } = {}) {
@@ -117,7 +117,7 @@ function createImageMessage({ from = '60123456789@c.us', base64 = MOCK_RECEIPT_B
   };
 }
 
-// 最小有效 1x1 像素 JPEG 的 Base64（用于测试，不需要真实收据）
+// Minimum valid 1x1 pixel JPEG of Base64 (for testing, no real receipt required)
 const MOCK_RECEIPT_BASE64 =
   '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a' +
   'HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIy' +
@@ -126,26 +126,26 @@ const MOCK_RECEIPT_BASE64 =
   'FABAQAAAAAAAAAAAAAAAAAAAAP/EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIRAxEAPwCwABmS' +
   'lJRXoV5rNj//2Q==';
 
-// 有效的马来西亚 IC 号码（测试用）
+// Valid Malaysian IC number (for testing)
 const VALID_IC = '930101-01-1234';
 const TEST_PHONE = '60123456789@c.us';
 
-// ─── 测试套件 ─────────────────────────────────────────────────────────────────
+// ───Test Suite────────────────────────────────────────────────────────────
 
-describe('用户流程模拟', () => {
+describe('User flow simulation', () => {
 
   beforeEach(() => {
-    // 重置模块，确保 sessionManager 内部状态不跨测试污染
+    // Reset the module to ensure sessionManager internal state is not polluted across tests
     jest.resetModules();
 
-    // 重置 mock 文件系统
+    // Reset mock file system
     Object.keys(mockFiles).forEach((k) => delete mockFiles[k]);
     mockDirs.clear();
 
-    // 初始化 sessionManager 依赖的目录和文件
+    // Initialize the directories and files that sessionManager depends on
     mockDirs.add(`${PROJECT_ROOT}/data`);
     mockFiles[`${PROJECT_ROOT}/data/sessions.json`] = '{}';
-    // sessionManager 从 wa-bot/config/config.yaml 读取配置
+    // sessionManager reads configuration from wa-bot/config/config.yaml
     mockDirs.add(`${PROJECT_ROOT}/config`);
     mockFiles[`${PROJECT_ROOT}/config/config.yaml`] = 'bot:\n  session_timeout_minutes: 30\n  max_receipts_per_day: 5';
   });
@@ -154,10 +154,10 @@ describe('用户流程模拟', () => {
     jest.clearAllMocks();
   });
 
-  // ── 场景一：正常完整流程 ─────────────────────────────────────────────────────
+  // ── Scenario 1: Normal complete process ─────────────────────────────────────────────────
 
-  describe('场景一：IC 注册 → 提交收据截图', () => {
-    test('发送有效 IC，session 状态流转为 WAITING_RECEIPT', async () => {
+  describe('Scenario 1: IC registration → Submit screenshot of receipt', () => {
+    test('Send a valid IC and the session status changes to WAITING_RECEIPT', async () => {
       const { handleMessage } = require('./messageHandler');
       const sessionManager    = require('./sessionManager');
       const excelService      = require('./services/excelService');
@@ -165,43 +165,43 @@ describe('用户流程模拟', () => {
       const msg = createTextMessage({ body: VALID_IC });
       await handleMessage(msg, TEST_PHONE);
 
-      // session 应记录 IC 并等待收据
+      // The session should log the IC and wait for the receipt
       const session = sessionManager.getOrCreateSession(TEST_PHONE);
       expect(session.ic).toBe(VALID_IC);
       expect(session.state).toBe('WAITING_RECEIPT');
 
-      // Excel 写入应被调用一次，传入标准化后的 IC 字符串
+      // Excel write should be called once, passing in the normalized IC string
       expect(excelService.addRegistration).toHaveBeenCalledWith(TEST_PHONE, VALID_IC);
     });
 
-    test('IC 注册后发送图片，收据成功保存', async () => {
+    test('After IC registration, pictures are sent and the receipt is successfully saved.', async () => {
       const { handleMessage } = require('./messageHandler');
       const receiptStore      = require('./services/receiptStore');
 
-      // 先发 IC
+      // first-issue IC
       const icMsg = createTextMessage({ body: VALID_IC });
       await handleMessage(icMsg, TEST_PHONE);
 
-      // 再发收据图片
+      // Reissue receipt picture
       const imgMsg = createImageMessage();
       await handleMessage(imgMsg, TEST_PHONE);
 
-      // 收据应带上已注册的 IC
+      // Receipt should bring registered IC
       expect(receiptStore.addPendingReceipt).toHaveBeenCalledWith(
         TEST_PHONE,
         MOCK_RECEIPT_BASE64,
         'image/jpeg',
-        VALID_IC,   // session.ic 应传入
+        VALID_IC,   // session.ic should be passed in
         null,       // name
         null,       // campaignId
       );
     });
   });
 
-  // ── 场景二：先发图片（跳过 IC 注册）────────────────────────────────────────
+  // ── Scenario 2: Send pictures first (skip IC registration)───────────────────────────────────────
 
-  describe('场景二：未注册 IC 直接提交收据', () => {
-    test('图片仍应保存，ic 字段为 null', async () => {
+  describe('Scenario 2: Submit receipt directly without registering IC', () => {
+    test('The image should still be saved, the ic field is null', async () => {
       const { handleMessage } = require('./messageHandler');
       const receiptStore      = require('./services/receiptStore');
 
@@ -212,69 +212,69 @@ describe('用户流程模拟', () => {
         TEST_PHONE,
         MOCK_RECEIPT_BASE64,
         'image/jpeg',
-        null,   // 未注册 IC，传 null
+        null,   // IC is not registered, pass null
         null,   // name
         null,   // campaignId
       );
     });
   });
 
-  // ── 场景三：无效 IC 格式 ────────────────────────────────────────────────────
+  // ── Scenario 3: Invalid IC format ─────────────────────────────────────────────────
 
-  describe('场景三：发送无效 IC 格式', () => {
-    test('无效 IC 被静默忽略，session 保持 WAITING_IC 状态', async () => {
+  describe('Scenario 3: Sending invalid IC format', () => {
+    test('Invalid ICs are silently ignored and the session remains in WAITING_IC state.', async () => {
       const { handleMessage } = require('./messageHandler');
       const sessionManager    = require('./sessionManager');
       const excelService      = require('./services/excelService');
 
-      const msg = createTextMessage({ body: '不是身份证号码 hello' });
+      const msg = createTextMessage({ body: 'Not an ID number hello' });
       await handleMessage(msg, TEST_PHONE);
 
       const session = sessionManager.getOrCreateSession(TEST_PHONE);
-      expect(session.state).toBe('WAITING_IC');  // 状态不变
+      expect(session.state).toBe('WAITING_IC');  // Status unchanged
       expect(excelService.addRegistration).not.toHaveBeenCalled();
     });
 
-    test('纯数字但位数不对的输入被忽略', async () => {
+    test('Inputs that are purely numeric but have the wrong number of digits are ignored.', async () => {
       const { handleMessage } = require('./messageHandler');
       const excelService      = require('./services/excelService');
 
-      const msg = createTextMessage({ body: '12345678' });  // 只有 8 位，不是 12 位
+      const msg = createTextMessage({ body: '12345678' });  // Only 8 bits, not 12 bits
       await handleMessage(msg, TEST_PHONE);
 
       expect(excelService.addRegistration).not.toHaveBeenCalled();
     });
   });
 
-  // ── 场景四：重复注册同一 IC ─────────────────────────────────────────────────
+  // ── Scenario 4: Repeated registration of the same IC ──────────────────────────────────────────────
 
-  describe('场景四：重复注册', () => {
-    test('重复发送 IC，仍允许继续提交收据', async () => {
+  describe('Scenario 4: Repeated registration', () => {
+    test('Send IC repeatedly and still allow receipt submissions to continue', async () => {
       const { handleMessage } = require('./messageHandler');
       const sessionManager    = require('./sessionManager');
       const excelService      = require('./services/excelService');
 
-      // excelService 返回 duplicate: true
+      // excelService returns duplicate: true
       excelService.addRegistration.mockResolvedValue({ duplicate: true });
 
       const msg = createTextMessage({ body: VALID_IC });
       await handleMessage(msg, TEST_PHONE);
 
       const session = sessionManager.getOrCreateSession(TEST_PHONE);
-      // 重复注册也应更新 session，允许继续提交收据
+      // Repeated registrations should also update the session, allowing continued submission of receipts
       expect(session.state).toBe('WAITING_RECEIPT');
     });
   });
 
-  // ── 场景五：群组消息和 Status 广播应被忽略 ──────────────────────────────────
+  // ── Scenario 5: Group messages and Status broadcasts should be ignored ──────────────────────────────────
 
-  describe('场景五：非私聊消息过滤', () => {
-    test('群组消息被忽略，不创建 session', async () => {
+  describe('Scenario 5: Non-private message filtering', () => {
+    test('Group messages are ignored and no session is created', async () => {
       const { handleMessage } = require('./messageHandler');
       const receiptStore      = require('./services/receiptStore');
       const excelService      = require('./services/excelService');
 
-      // 构造群组消息（isGroup = true）
+      // Construct group message (isGroup = true)
       const groupMsg = createTextMessage({ body: VALID_IC });
       groupMsg.getChat = jest.fn().mockResolvedValue({ isGroup: true, id: { _serialized: 'group-id@g.us' } });
 
@@ -284,7 +284,7 @@ describe('用户流程模拟', () => {
       expect(receiptStore.addPendingReceipt).not.toHaveBeenCalled();
     });
 
-    test('WhatsApp Status 广播被忽略', async () => {
+    test('WhatsApp Status broadcast ignored', async () => {
       const { handleMessage } = require('./messageHandler');
 
       const statusMsg = createTextMessage({ from: 'status@broadcast', body: VALID_IC });
@@ -295,10 +295,10 @@ describe('用户流程模拟', () => {
     });
   });
 
-  // ── 场景六：多用户并发提交（各自 session 隔离） ──────────────────────────────
+  // ── Scenario 6: Concurrent submission by multiple users (each session is isolated) ──────────────────────────────
 
-  describe('场景六：多用户 session 独立不干扰', () => {
-    test('两个用户各自完成注册，session 互不影响', async () => {
+  describe('Scenario 6: Multi-user sessions are independent and do not interfere with each other', () => {
+    test('The two users complete the registration independently, and the sessions do not affect each other.', async () => {
       const { handleMessage } = require('./messageHandler');
       const sessionManager    = require('./sessionManager');
 
