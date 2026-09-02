@@ -1,4 +1,6 @@
-# DigitalOcean deployment architecture
+# Archived DigitalOcean deployment architecture
+
+> This document describes the legacy `wa-bot` + Docker deployment only. It is not the default production path. The target path is documented in [rebuild-v1.md](rebuild-v1.md): Vercel + Supabase + a standalone Node Worker.
 
 ## Current status
 

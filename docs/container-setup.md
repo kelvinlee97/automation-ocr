@@ -1,4 +1,6 @@
-# Containerization Deployment Guide
+# Legacy Containerization Deployment Guide
+
+> This guide is retained for rollback and local legacy testing. Docker is optional for the new runtime; follow [rebuild-v1.md](rebuild-v1.md) for the target architecture.
 
 This project adopts a **dual-track containerization strategy**: the production environment uses Docker Compose to deploy to DigitalOcean, and the local beta test uses Apple Container to run on macOS.
 
@@ -22,7 +24,7 @@ Best for: Quickly iteratively test Admin backend and Feedback functionality on m
 
 - macOS 15+
 - Install Apple Container: `brew install container`
-- Node.js 20+ (for local development, the Linux version needs to be reinstalled in the container)
+- Node.js 22.12+ (for local development, the Linux version needs to be reinstalled in the container)
 
 ### One click start
 
@@ -33,7 +35,7 @@ bash scripts/beta-local.sh
 The script will automatically:
 1. Check if `container` CLI is available
 2. Backup macOS `node_modules` → `node_modules.mac` (avoid ELF header errors)
-3. Start Apple Container (official `node:20-slim` image)
+3. Start Apple Container (official `node:22-slim` image)
 4. Mount the `wa-bot/` directory to the container `/app`
 5. Re-run `npm install` in the container (generate Linux native module)
 6. Wait for `localhost:3000` to be ready and then print the access address
@@ -75,7 +77,7 @@ bash scripts/beta-local.sh
 
 **Phenomenon**: The log shows `Failed to launch the browser process`, but the Admin background starts normally.
 
-**Reason**: The `node:20-slim` used by the local beta does not contain Chromium dependencies.
+**Reason**: The `node:22-slim` used by the local beta does not contain Chromium dependencies.
 
 **Scope of impact**: Only affects the WhatsApp Bot function; the Admin background and Feedback page are completely normal.
 
@@ -156,7 +158,7 @@ docker compose logs -f --tail=100 wa-bot
 | variable | production(`.env`) | Local Beta (`.env`) | illustrate |
 |------|------------------|----------------------|------|
 | `NODE_ENV` | `production` | `development` | |
-| `GEMINI_API_KEY` | **Required** | Optional (can be left blank) | AI OCR recognition |
+| `OPENAI_API_KEY` | **Required** | Optional (can be left blank) | GPT-5.6 Luna receipt extraction |
 | `GITHUB_TOKEN` | Optional | Optional (can be left blank) | Feedback → GitHub Issues |
 | `SESSION_SECRET` | **Required** | Automatically generated | Session encryption key |
 | `DOMAIN` | **Required** | unnecessary | Caddy domain name configuration |
@@ -174,7 +176,7 @@ docker compose logs -f --tail=100 wa-bot
 | environment | Mirror source | How to build |
 |------|----------|----------|
 | Production | `ghcr.io/kelvinlee97/claimflow:latest` | `wa-bot/Dockerfile` (including Chromium) |
-| Local Beta | `docker.io/library/node:20-slim` | Official image, `npm install` in the container |
+| Local Beta | `docker.io/library/node:22-slim` | Official image, `npm install` in the container |
 
 ---
 

@@ -6,15 +6,18 @@ const { escapeHtml } = require("./escapeHtml");
 
 function _renderAiResult(aiResult, lang = "en") {
   if (!aiResult) return '<span style="color:#aaa;font-size:12px">—</span>';
+  const confidence = typeof aiResult.confidence === "number" ? `${Math.round(aiResult.confidence * 100)}%` : "—";
   return `<div class="ai-result">
     <strong>${t('ai_amount', lang)}:</strong>RM ${escapeHtml(aiResult.amount ?? "—")}<br>
+    <strong>${t('ai_brand', lang)}:</strong>${escapeHtml(aiResult.brand || "—")}<br>
+    <strong>${t('ai_confidence', lang)}:</strong>${confidence}<br>
     <strong>${t('ai_summary', lang)}:</strong>${escapeHtml(aiResult.summary || "—")}
   </div>`;
 }
 
 function renderInlineActions(r, lang = "en") {
   if (r.status === "pending_review") {
-    return `<button class="btn btn-ai" onclick="aiExtract('${r.id}', this)">🤖 ${t('ai_extract', lang)}</button>`;
+    return `<button class="btn btn-ai" onclick="aiExtract('${r.id}', this)">${t('ai_extract', lang)}</button>`;
   }
   return `<form class="send-form" id="send-form-${r.id}" onsubmit="return handleSend(event, '${r.id}')">
     <textarea name="message" id="send-msg-${r.id}" placeholder="${t('message_placeholder', lang)}" required rows="2"></textarea>
@@ -28,10 +31,13 @@ function buildExpandPanel(r, lang = "en") {
 
   // AI result area
   if (r.aiResult) {
+    const confidence = typeof r.aiResult.confidence === "number" ? `${Math.round(r.aiResult.confidence * 100)}%` : "—";
     html += `<div class="expand-section">
-      <div class="expand-label">🤖 ${t('ai_summary', lang)}</div>
+      <div class="expand-label">${t('ai_summary', lang)}</div>
       <div class="ai-result">
         <strong>${t('ai_amount', lang)}</strong> RM ${escapeHtml(r.aiResult.amount ?? "—")}<br>
+        <strong>${t('ai_brand', lang)}</strong> ${escapeHtml(r.aiResult.brand || "—")}<br>
+        <strong>${t('ai_confidence', lang)}</strong> ${confidence}<br>
         ${escapeHtml(r.aiResult.summary || "—")}
       </div>
     </div>`;
@@ -443,7 +449,8 @@ function receiptsPage(receipts, lang = "en", currentPage = 1, totalPages = 1, se
       // ── AI extraction (use toast instead of alert) ───────────────────────
       window.aiExtract = async function(id, btn) {
         btn.disabled = true;
-        btn.textContent = '⏳ ' + ${JSON.stringify(t('extracting', lang))};
+        btn.setAttribute('aria-busy', 'true');
+        btn.textContent = ${JSON.stringify(t('extracting', lang))};
         try {
           const res = await fetch('/admin/receipts/' + id + '/ai-extract', {
             method: 'POST',
@@ -454,7 +461,8 @@ function receiptsPage(receipts, lang = "en", currentPage = 1, totalPages = 1, se
             try { const d = await res.json(); errMsg = d.error || errMsg; } catch (_) {}
             showToast(${JSON.stringify(t('ai_extract_failed', lang))} + errMsg, 'error');
             btn.disabled = false;
-            btn.textContent = '🤖 ' + ${JSON.stringify(t('ai_extract', lang))};
+            btn.removeAttribute('aria-busy');
+            btn.textContent = ${JSON.stringify(t('ai_extract', lang))};
             return;
           }
           const data = await res.json();
@@ -463,7 +471,8 @@ function receiptsPage(receipts, lang = "en", currentPage = 1, totalPages = 1, se
         } catch (e) {
           showToast(${JSON.stringify(t('network_error_retry', lang))}, 'error');
           btn.disabled = false;
-          btn.textContent = '🤖 ' + ${JSON.stringify(t('ai_extract', lang))};
+          btn.removeAttribute('aria-busy');
+          btn.textContent = ${JSON.stringify(t('ai_extract', lang))};
         }
       };
 

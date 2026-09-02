@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  lint:
-    name: Lint
+  legacy-lint:
+    name: Legacy lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -16,7 +16,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.12.0
           cache: npm
           cache-dependency-path: wa-bot/package-lock.json
 
@@ -28,8 +28,12 @@ jobs:
         working-directory: wa-bot
         run: npm run lint
 
-  test:
-    name: Test
+      - name: Audit legacy runtime dependencies
+        working-directory: wa-bot
+        run: npm audit --audit-level=high
+
+  legacy-test:
+    name: Legacy test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -37,7 +41,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.12.0
           cache: npm
           cache-dependency-path: wa-bot/package-lock.json
 
@@ -49,24 +53,34 @@ jobs:
         working-directory: wa-bot
         run: npm test
         env:
-          # The test environment does not require real keys, geminiService will be mocked during testing
-          GEMINI_API_KEY: test-placeholder
+          # The test environment does not require a real key; the AI service is mocked during testing
+          OPENAI_API_KEY: test-placeholder
           NODE_ENV: test
 
-  docker-build:
-    name: Docker Build
+  new-runtime:
+    name: Primary runtime
     runs-on: ubuntu-latest
-    # Only verify the build after lint and test pass to avoid wasting build time
-    needs: [lint, test]
     steps:
       - uses: actions/checkout@v6
 
-      - name: Build Docker image
-        run: docker build -t claimflow-ci ./wa-bot
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
 
-      - name: Verify image startup (smoke test)
-        run: |
-          docker run --rm \
-            -e GEMINI_API_KEY=test-placeholder \
-            -e NODE_ENV=test \
-            claimflow-ci node -e "console.log('smoke ok')"
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Check shared domain
+        run: npm --workspace packages/domain run typecheck
+
+      - name: Check worker
+        run: npm --workspace apps/worker run typecheck && npm run worker:test
+
+      - name: Check admin
+        run: npm run admin:lint && npm --workspace apps/admin run typecheck && npm run admin:build
+
+      - name: Audit new runtime dependencies
+        run: npm audit --audit-level=high

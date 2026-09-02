@@ -140,20 +140,15 @@
 
 ## AI Recognition
 
-**Definition**: The behavior automatically triggered by the Bot after the Receipt is submitted - calling the Google Gemini Vision API on the Receipt image and returning structured recognition results (amount, date, merchant, receipt number, etc.).
+**Definition**: The behavior automatically triggered by the Bot after the Receipt is submitted - calling OpenAI Responses API with GPT-5.6 Luna on the Receipt image and returning four structured fields: amount, brand, summary, and confidence.
 
 **boundary**:
 - Bot automatically calls AI recognition after the consumer submits the receipt image (no need for Admin to trigger manually)
-- The recognition results are stored in the `ai_result_json` field of Receipt
-- **Warning automatic detection**: The system automatically detects the following problems and displays a warning mark:
-  - W1: The receipt image is blurry
-  - W2: Incomplete receipt information (missing key fields such as merchant name/date/amount)
-  - W3: Missing IC (Receipt.ic = null or Session.ic = null)
-  - W4: Missing receipt number (AI cannot recognize the order number/reference number on the receipt)
-- Warning is automatic and does not require manual marking by Admin.
-- Failure in identification does not affect the business process, and Admin can manually review (approve/reject)
+- The recognition results are stored in the `ai_result` field of Receipt.
+- v1 only supports `amount`, `brand`, `summary`, and `confidence`. Date, merchant, order number, and W1-W4 warning detection are explicitly out of scope.
+- If extraction fails, Admin can retry it or manually verify the receipt before rejecting it. Approval remains disabled until extraction completes.
 - AI recognition is an auxiliary means, and the final review decision rests with the manual operation of the Admin
-- **All AI recognition fields can be edited**: Admin clicks the "Edit" button on the Receipt list page to pop up a form modification (IC, name, amount, merchant name/brand, receipt date, receipt number)
+- Admin can correct `amount` and `brand` before review. `summary` and `confidence` are read-only advisory output.
 
 ---
 

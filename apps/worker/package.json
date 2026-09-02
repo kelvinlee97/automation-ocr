@@ -1,0 +1,22 @@
+{
+  "name": "@claimflow/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/worker.ts",
+    "start": "tsx src/worker.ts",
+    "test": "node --import tsx --test src/*.test.ts src/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@claimflow/domain": "0.1.0",
+    "@supabase/supabase-js": "^2.50.0",
+    "zod": "^4.3.6",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.3"
+  }
+}

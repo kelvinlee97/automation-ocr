@@ -46,6 +46,7 @@ function createSessionMiddleware(sessionStore) {
     cookie: {
       httpOnly: true,
       secure: "auto",
+      sameSite: "lax",
       maxAge: SESSION_TTL_SECONDS * 1000,
     },
   });

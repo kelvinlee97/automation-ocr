@@ -4,7 +4,7 @@
 #   container build -t wa-bot:beta -f Dockerfile.beta .
 #   container run --rm -p 3000:3000 -v $(pwd):/app wa-bot:beta
 
-FROM node:20-slim
+FROM node:22-slim
 
 WORKDIR /app
 

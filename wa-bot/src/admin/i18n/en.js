@@ -94,6 +94,8 @@ module.exports = {
   "status_waiting_user_reply": "Waiting Reply",
   "ai_extract": "AI Extract",
   "ai_amount": "Amount",
+  "ai_brand": "Brand",
+  "ai_confidence": "Confidence",
   "ai_summary": "Summary",
   "extracting": "Processing…",
   "ai_extract_failed": "AI extraction failed: ",

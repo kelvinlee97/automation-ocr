@@ -1,11 +1,13 @@
-# Local Beta Testing Environment (Apple Container)
+# Legacy Local Beta Testing Environment (Apple Container)
+
+> This document targets the archived `wa-bot` runtime. It is not required for the new Next.js + Supabase + Node Worker path.
 
 ## Why do we need two sets of container configurations?
 
 |  | Production Deployment (DO) | Local beta testing (macOS) |
 |---|---|---|
 | tool | Docker Compose | Apple Container (`container` CLI) |
-| mirror | Self-build (`docker build`) | Official `node:20-slim` |
+| mirror | Self-build (`docker build`) | Official `node:22-slim` |
 | `node_modules` | In the image `npm ci` | Mount the local directory and re-run `npm install` in the container |
 | port | 80/443 (Caddy agent) | 3000 (direct access) |
 | SQLite data | `/opt/claimflow/data` | `wa-bot/data/` (mount) |
@@ -24,7 +26,7 @@ bash scripts/beta-local.sh
 The first run will automatically:
 1. Check if Apple Container is installed (`brew install container`)
 2. Backup macOS native `node_modules` → `node_modules.mac`
-3. Pull the `docker.io/library/node:20-slim` image (about 200MB)
+3. Pull the `docker.io/library/node:22-slim` image (about 200MB)
 4. `npm install` inside the container (compile the Linux version of the native module)
 5. Wait for `localhost:3000` to return the HTTP status code, then print the access address
 
@@ -61,11 +63,11 @@ bash scripts/beta-local.sh
 
 **Phenomenon**: The container log shows `Failed to launch the browser process`, but the `admin panel has been started, listening on port 3000`.
 
-**Cause**: Chromium is not installed in the local beta test (the `node:20-slim` image does not contain Chromium dependencies).
+**Cause**: Chromium is not installed in the local beta test (the `node:22-slim` image does not contain Chromium dependencies).
 
 **Scope of impact**: Only the AI automatic recognition function of receipt amount is affected; the Admin background and feedback page are completely normal.
 
-**If you really need Puppeteer**: Use the complete `node:20` image (about 1GB+) instead, and add `--cap-add=SYS_PTRACE` and other parameters when `container run`.
+**If you really need Puppeteer**: Use the complete `node:22` image (about 1GB+) instead, and add `--cap-add=SYS_PTRACE` and other parameters when `container run`.
 
 ### 4. How to restart after modifying the code?
 

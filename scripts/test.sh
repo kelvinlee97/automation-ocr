@@ -1,48 +1,26 @@
 #!/usr/bin/env bash
-# test.sh - test related commands
-# usage:
-#   bash scripts/test.sh #Run all tests (80 test cases, about 1 second)
-#   bash scripts/test.sh watch # Monitor file changes and automatically rerun
-#   bash scripts/test.sh coverage # Generate coverage report (output to coverage/)
-#   bash scripts/test.sh file <path> # Only run a certain test file
-#   bash scripts/test.sh name <keyword> # Filter use cases by name
-#   bash scripts/test.sh verbose # Verbose output
-#
-# NOTE: All tests are done using mocks, no real network/database/WhatsApp account is required.
+# Test the new runtime by default.
+#   bash scripts/test.sh          # New-runtime checks plus legacy tests
+#   bash scripts/test.sh legacy   # Archived wa-bot tests only
 
 set -e
 
-# Switch to the wa-bot/ sub-project directory (the root directory cannot be run)
-cd "$(dirname "$0")/../wa-bot"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
 
 case "${1:-}" in
   "")
-    # Default: run all tests
-    npm test
+    npm run worker:test
+    npm run test:legacy
+    npm run admin:lint
+    npm --workspace apps/admin run typecheck
     ;;
-  watch)
-    # Monitor file changes and automatically rerun (always open a terminal during development)
-    npm run test:watch
-    ;;
-  coverage)
-    # Generate test coverage report (report located in wa-bot/coverage/)
-    npm run test:coverage
-    ;;
-  file)
-    # Only run test files in the specified path, used when debugging a single test
-    npx jest "$2"
-    ;;
-  name)
-    # Filter by use case name keywords
-    npx jest -t "$2"
-    ;;
-  verbose)
-    # Output more detailed test information
-    npx jest --verbose
+  legacy)
+    npm run test:legacy
     ;;
   *)
     echo "Unknown subcommand: $1"
-    echo "Available: (null) | watch | coverage | file <path> | name <keyword> | verbose"
+    echo "Available: (null) | legacy"
     exit 1
     ;;
 esac

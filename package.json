@@ -2,10 +2,24 @@
   "name": "claimflow",
   "version": "1.0.0",
   "description": "WhatsApp-powered promotional claim management with AI-assisted receipt review.",
+  "private": true,
+  "workspaces": [
+    "apps/admin",
+    "apps/worker",
+    "packages/domain"
+  ],
   "main": "index.js",
   "scripts": {
-    "test": "cd wa-bot && npm test",
-    "lint": "cd wa-bot && npm run lint"
+    "test": "npm run worker:test",
+    "test:legacy": "cd wa-bot && npm test",
+    "lint": "npm run admin:lint",
+    "lint:legacy": "cd wa-bot && npm run lint",
+    "admin:dev": "npm --workspace apps/admin run dev",
+    "admin:build": "npm --workspace apps/admin run build",
+    "admin:lint": "npm --workspace apps/admin run lint",
+    "worker:dev": "npm --workspace apps/worker run dev",
+    "worker:test": "npm --workspace apps/worker test",
+    "test:all": "npm test && npm run test:legacy"
   },
   "keywords": [],
   "author": "",

@@ -2,6 +2,12 @@
 
 > WhatsApp-driven promotion claim management platform: consumers submit receipts, AI-assisted identification, and staff review efficiently.
 
+## Rebuild v1
+
+The new runtime is being built under `apps/admin`, `apps/worker`, `packages/domain`, and `supabase/migrations` using Next.js, Supabase, the official WhatsApp Cloud API, and a small Node worker. The existing `wa-bot/` app remains the rollback/archive path until the Cloud API cutover is validated. See [docs/rebuild-v1.md](docs/rebuild-v1.md).
+
+The sections below describe the product behavior inherited from the archived runtime. During the cutover, the new Runtime is the source of truth; legacy Docker/WhatsApp Web commands are manual rollback tools only.
+
 ---
 
 ## System introduction
@@ -70,7 +76,7 @@ In the admin panel, you will see the review status of each receipt:
 
 | state | meaning | Next steps |
 |------|------|-----------|
-| 🟡To be extracted by AI | The consumer has submitted the receipt and is waiting for AI recognition | Wait for the system to process it automatically (usually completed within a few seconds) |
+| 🟡To be extracted by AI | The consumer has submitted the receipt and is waiting for GPT-5.6 Luna extraction | Wait for the system to process it automatically (usually completed within a few seconds) |
 | 🔵 Message to be sent | AI recognition has been completed and is waiting for staff review | View the recognition results, enter review comments and send |
 | 🟢 Sent | Reviewed and approved, consumers have been notified | No action required, the record has been archived |
 | 🔴Rejected | Reviewed but not passed, the consumer has been notified | No action required, you can view the reasons for rejection |
@@ -103,7 +109,7 @@ The system maintains two Excel tables to record all activity data:
 | table name | Record content | use |
 |---------|---------|------|
 | **Registrations** | All users participating in the event: mobile phone number, ID number, registration time | Count the number of participants and user information |
-| **Receipts** | All submitted receipts: document number, brand, amount, review results, AI recognition accuracy | Financial reconciliation and activity effect analysis |
+| **Receipts** | All submitted receipts: brand, amount, extraction summary/confidence, review results | Financial reconciliation and activity effect analysis |
 
 ### 📁 Data backup
 

@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
-# setup.sh - initialize the environment after pulling the code for the first time
-# Usage: bash scripts/setup.sh
+# Initialize the new runtime after pulling the code.
+# Usage: bash scripts/setup.sh [legacy]
 
 set -e
 
-# Enter the sub-project directory (99% of development commands are run under wa-bot/)
-cd "$(dirname "$0")/../wa-bot"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
 
-# Install dependencies (you only need to do this once, or run it again after changing package.json)
-npm install
+if [ "${1:-}" = "legacy" ]; then
+  cd "$ROOT_DIR/wa-bot"
+  npm ci
+  npm test
+  exit 0
+fi
 
-# Run the test again and confirm that the environment is OK (see "Tests: 80 passed" means the environment is normal)
-npm test
+npm ci
+npm run admin:lint
+npm --workspace apps/admin run typecheck
+npm --workspace apps/worker run typecheck
+npm run worker:test

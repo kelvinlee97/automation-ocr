@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# check.sh - One-click self-check before submission: run test + lint
-# Usage: bash scripts/check.sh
-#
-# Pass both → feel free to submit; fail either → revise first, don’t submit.
+# One-click self-check for the new runtime.
 
 set -e
 
-# Switch to the wa-bot/ sub-project directory and execute test and lint consecutively (exit immediately if any of them fails)
-cd "$(dirname "$0")/../wa-bot" && npm test && npm run lint
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
+
+npm run worker:test
+npm --workspace apps/worker run typecheck
+npm --workspace apps/admin test
+npm run admin:lint
+npm --workspace apps/admin run typecheck
+npm run admin:build

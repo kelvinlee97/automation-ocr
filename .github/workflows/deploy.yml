@@ -1,8 +1,9 @@
-name: Deploy
+name: Legacy Deploy
+
+# This workflow deploys the archived WhatsApp Web runtime only.
+# The new runtime is deployed as Vercel + Supabase + a separate Node worker.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 # Only one deployment task is allowed to run at the same time
@@ -11,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Job 1: Build the image and push it to GHCR (completed on GitHub runner)
+  # Job 1: Build the legacy image and push it to GHCR.
   build-and-push:
     runs-on: ubuntu-latest
     permissions:

@@ -13,6 +13,13 @@
 
 set -e
 
+if [ "${CLAIMFLOW_LEGACY_DEPLOY:-}" != "1" ]; then
+  echo "This script controls the archived wa-bot runtime only."
+  echo "Use docker-compose.new.yml only when you intentionally containerize the new worker."
+  echo "For rollback operations, rerun with CLAIMFLOW_LEGACY_DEPLOY=1."
+  exit 2
+fi
+
 # Switch to the project root directory (docker compose must be run in the root directory, not wa-bot/)
 cd "$(dirname "$0")/.."
 

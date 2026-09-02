@@ -1,30 +1,38 @@
 #!/usr/bin/env bash
-# start.sh - Start Bot locally
-# usage:
-#   bash scripts/start.sh # Normal startup
-#   bash scripts/start.sh dev # Development mode (automatic restart after file changes)
-#
-# Prerequisites:
-#   1. wa-bot/.env contains at least GEMINI_API_KEY=xxx
-#   2. When starting up for the first time, a WhatsApp QR code will pop up. You need to scan the code with your mobile phone to log in.
+# Start ClaimFlow locally.
+#   bash scripts/start.sh          # New Admin runtime
+#   bash scripts/start.sh worker   # New Worker runtime
+#   bash scripts/start.sh legacy   # Archived WhatsApp Web runtime
 
 set -e
 
-# Switch to the wa-bot/ subproject directory
-cd "$(dirname "$0")/../wa-bot"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
 
-case "${1:-}" in
-  "")
-    # Normal startup
-    npm start
+case "${1:-admin}" in
+  admin)
+    exec npm run admin:dev
     ;;
-  dev)
-    # Development mode: monitor code changes and automatically restart
-    npm run dev
+  worker)
+    if [ -f apps/worker/.env ]; then
+      set -a
+      . apps/worker/.env
+      set +a
+    fi
+    exec npm run worker:dev
+    ;;
+  legacy)
+    cd "$ROOT_DIR/wa-bot"
+    if [ -f .env ]; then
+      set -a
+      . ./.env
+      set +a
+    fi
+    exec npm start
     ;;
   *)
     echo "Unknown subcommand: $1"
-    echo "Available: (null) | dev"
+    echo "Available: admin | worker | legacy"
     exit 1
     ;;
 esac

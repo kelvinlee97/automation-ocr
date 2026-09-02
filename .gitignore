@@ -30,13 +30,20 @@ logs/*.log
 
 # ── Test coverage products ────────────────────────────
 wa-bot/coverage/
+apps/admin/.next/
+apps/admin/next-env.d.ts
+apps/admin/.vercel/
+*.tsbuildinfo
 
 # ── System/Environment ─────────────────────────────
 .DS_Store
 *.env
+.env.*
+!.env.example
+!apps/admin/.env.example
+!apps/worker/.env.example
 
 # ── CI/CD temporary files ─────────────────────────────
-.gemini/
 gha-creds-*.json
 
 # ── Git worktrees ──────────────────────────────

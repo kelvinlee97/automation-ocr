@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const receiptStore = require("../../services/receiptStore");
-const { processReceipt } = require("../../services/aiService");
+const { MAX_IMAGE_BYTES, processReceipt } = require("../../services/aiService");
 const logger = require("../../utils/logger");
 const state = require("../state");
 const { requireAuth, requireSetup } = require("../middleware/auth");
@@ -72,6 +72,10 @@ function registerReceiptRoutes(app) {
 
     try {
       const imagePath = receiptStore.getImagePath(record.imageFilename);
+      const imageStats = fs.statSync(imagePath);
+      if (imageStats.size > MAX_IMAGE_BYTES) {
+        return res.status(413).json({ error: "Receipt image exceeds the 10 MB limit" });
+      }
       const imageBuffer = fs.readFileSync(imagePath);
       const base64Image = imageBuffer.toString("base64");
 
@@ -84,10 +88,11 @@ function registerReceiptRoutes(app) {
         return res.status(502).json({ error: t('ai_recognition_fail', lang) + aiResult.message });
       }
 
-      receiptStore.saveAiResult(id, aiResult);
+      const { success: _success, ...extraction } = aiResult;
+      receiptStore.saveAiResult(id, extraction);
       logger.info("AI extraction completed", { id, amount: aiResult.amount });
 
-      res.json({ ok: true, aiResult });
+      res.json({ ok: true, aiResult: extraction });
     } catch (err) {
       logger.error("AI extraction failed", { id, error: err.message });
       res.status(500).json({ error: err.message });

@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 WA_BOT_DIR="$PROJECT_ROOT/wa-bot"
 CONTAINER_NAME="wa-bot-beta"
-IMAGE="docker.io/library/node:20-slim"
+IMAGE="docker.io/library/node:22-slim"
 BOT_IMAGE="wa-bot:with-bot"  # Locally built image containing Chromium
 HOST_PORT=3000
 
@@ -123,7 +123,7 @@ if ! command -v container &>/dev/null; then
 fi
 
 if ! command -v node &>/dev/null; then
-  error "Node.js is not installed. Please install Node.js 20+ first"
+  error "Node.js 22.12+ is required. Please install a supported Node.js version first"
   exit 1
 fi
 
@@ -137,8 +137,8 @@ if [ ! -f "$WA_BOT_DIR/.env" ]; then
 
 SESSION_SECRET=$SESSION_SECRET
 
-# OPTIONAL: Gemini API Key (for OCR) — leave empty to skip AI recognition
-GEMINI_API_KEY=
+# OPTIONAL: OpenAI API Key (for receipt extraction) — leave empty to skip AI recognition
+OPENAI_API_KEY=
 
 # OPTIONAL: GitHub Token (for feedback → GitHub Issue) — leave empty to skip GitHub integration
 GITHUB_TOKEN=
@@ -147,7 +147,7 @@ GITHUB_TOKEN=
 # DATA_DIR=./data
 EOF
   info ".env generated: $WA_BOT_DIR/.env"
-  info "Tip: GEMINI_API_KEY and GITHUB_TOKEN can be left blank for pure UI testing"
+  info "Tip: OPENAI_API_KEY and GITHUB_TOKEN can be left blank for pure UI testing"
 fi
 
 # ── Processing node_modules (core steps)───────────────────────────
@@ -195,6 +195,7 @@ container run \
   -w /app \
   -e NODE_ENV=development \
   -e SESSION_SECRET="$(grep SESSION_SECRET "$WA_BOT_DIR/.env" | cut -d= -f2- | tr -d '\r')" \
+  -e OPENAI_API_KEY="$(grep '^OPENAI_API_KEY=' "$WA_BOT_DIR/.env" | cut -d= -f2- | tr -d '\r')" \
   --rm \
   "$IMAGE" \
   sh -c "echo '📦 Install npm dependencies (Linux native modules) inside the container...' && \

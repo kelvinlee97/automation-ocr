@@ -9,9 +9,16 @@
 # Precondition (only once):
 #   - Ubuntu 24.04 LTS, executed with root or sudo privileges
 #   - The SSH key has been configured on the Droplet
-#   - Prepare GEMINI_API_KEY, SESSION_SECRET, DOMAIN
+#   - Prepare OPENAI_API_KEY, SESSION_SECRET, DOMAIN
 #
 set -e
+
+if [ "${CLAIMFLOW_LEGACY_DEPLOY:-}" != "1" ]; then
+  echo "This script deploys the archived wa-bot runtime only."
+  echo "Use the new Vercel + Supabase + Node Worker deployment path."
+  echo "For an intentional rollback, rerun with CLAIMFLOW_LEGACY_DEPLOY=1."
+  exit 2
+fi
 
 # ============================================================
 # global constants
@@ -159,20 +166,20 @@ do_deploy() {
   if [ ! -f .env ]; then
     log_err "$APP_DIR/.env does not exist, please create it first and fill in:"
     cat >&2 <<'EOF'
-  GEMINI_API_KEY=<your Gemini key>
+  OPENAI_API_KEY=<your OpenAI API key>
   SESSION_SECRET=<a long random string, e.g. openssl rand -hex 32>
   DOMAIN=<your domain, e.g. admin.example.com>
   # Optional: IMAGE_URI=ghcr.io/kelvinlee97/claimflow:latest
 EOF
     exit 1
   fi
-  for key in GEMINI_API_KEY SESSION_SECRET DOMAIN; do
+  for key in OPENAI_API_KEY SESSION_SECRET DOMAIN; do
     if ! grep -qE "^${key}=.+" .env; then
       log_err ".env is missing required $key (value cannot be empty)"
       exit 1
     fi
   done
-  log_skip ".env has all required fields (GEMINI_API_KEY / SESSION_SECRET / DOMAIN)"
+  log_skip ".env has all required fields (OPENAI_API_KEY / SESSION_SECRET / DOMAIN)"
 
   # 2.3 Data directory
   if [ -d data/wwebjs_auth ]; then

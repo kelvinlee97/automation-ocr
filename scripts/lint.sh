@@ -1,26 +1,23 @@
 #!/usr/bin/env bash
-# lint.sh - code style checking
-# usage:
-#   bash scripts/lint.sh # Check code style (no output = pass)
-#   bash scripts/lint.sh fix # Automatically repair the repairable parts
+# Check code style for the new runtime by default.
+#   bash scripts/lint.sh          # Admin lint
+#   bash scripts/lint.sh legacy   # Archived wa-bot lint
 
 set -e
 
-# Switch to the wa-bot/ subproject directory
-cd "$(dirname "$0")/../wa-bot"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
 
 case "${1:-}" in
   "")
-    # Only checks, does not modify files
-    npm run lint
+    npm run admin:lint
     ;;
-  fix)
-    # Automatically repair the repairable parts (the rest can be modified manually according to the error message)
-    npx eslint src --ext .js --fix
+  legacy)
+    npm run lint:legacy
     ;;
   *)
     echo "Unknown subcommand: $1"
-    echo "Available: (null) | fix"
+    echo "Available: (null) | legacy"
     exit 1
     ;;
 esac
